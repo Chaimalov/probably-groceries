@@ -33,6 +33,14 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 
 The repository starts with decisions and issues. The Xcode project is the first implementation task. Keep dependencies small, ship to a personal device early, and change the model when actual household usage disproves it.
 
+## First device build
+
+The first SwiftUI slice is in `App/`: quick add, local list, purchase check-off, undo, and a conservative recurring suggestion. Data is saved on this device. Widgets, CloudKit and Jev remain subsequent issues.
+
+On a Mac with Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen generate`, open `ProbablyGroceries.xcodeproj`, set your signing team in the app target, and run on your iPhone. The generated project and Info.plist are ignored by git. GitHub Actions runs an unsigned iPhone simulator build on macOS after each push; it cannot produce an installable iPhone build without signing.
+
+To check membership, sign in at [Apple Developer Account](https://developer.apple.com/account/) using the Apple Account you enrolled with. An active Apple Developer Program membership enables TestFlight and iCloud capabilities; a free Personal Team can run a personal build from Xcode but requires periodic reprovisioning. Do not put signing certificates, keys or provisioning files in the repository.
+
 ## Working rules
 
 No purchase history is inferred from merely tapping “add.” Check-off means purchased. Record an explicit outcome for rejected/deferred suggestions so the same candidate does not instantly return. Avoid claiming numeric confidence to the user before it is calibrated. Never commit API keys or personal purchase data.
