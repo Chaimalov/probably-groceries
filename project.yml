@@ -1,0 +1,22 @@
+name: ProbablyGroceries
+options:
+  bundleIdPrefix: com.chaimalov
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  ProbablyGroceries:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Probably
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chaimalov.probablygroceries
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 1
+        CODE_SIGN_STYLE: Automatic
