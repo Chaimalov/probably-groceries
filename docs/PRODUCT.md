@@ -2,7 +2,7 @@
 
 ## Job to be done
 
-Before a grocery trip, see a list that remembers recurring needs without requiring anyone to manage a home inventory. During the trip, checking off purchases creates the history that improves the next list. Two household members should eventually see the same list.
+Before a grocery trip, the user and his wife see one shared list that remembers recurring needs without requiring anyone to manage a home inventory. During the trip, checking off purchases creates the history that improves the next list. The user also sees it on his iPhone and iPad through iCloud.
 
 ## v1 flow
 
@@ -14,20 +14,22 @@ Before a grocery trip, see a list that remembers recurring needs without requiri
 
 ## Rules
 
-- One canonical product identity per household; case/whitespace normalization for initial autocomplete, manual merge later if needed.
+- One canonical product identity per household list; case/whitespace normalization for initial autocomplete, manual merge later if needed.
 - Quantity is a positive integer in v1. Keep display names human-readable, including Hebrew.
 - A product can have an active manual/list row, a suggestion, or be recently purchased. Do not show duplicate active rows.
 - Predictions never commit a purchase event. Only user check-off does.
 - Respect deferral and do not re-add immediately after a rejection.
-- Local shopping works offline. Cloud sync and Jev are enhancements, not prerequisites.
+- Local shopping works offline. Personal iCloud sync catches up after connectivity returns; a sync error must not block local edits.
+- The user's iPhone and iPad sync through his iCloud account; his wife joins the same list from her separate Apple Account through CloudKit sharing.
 
 ## Acceptance for personal v1
 
 - Can complete one real grocery trip on an iPhone, including add, check-off, quantity, undo and correction.
 - After a few repeat purchases, plausible recurring products appear without manual stock maintenance.
-- The app remains useful when predictions are missing, Jev is unavailable or the network is offline.
+- The app remains useful when predictions are missing, Jev is unavailable, iCloud is unavailable or the network is offline.
 - A widget shows current context and performs at least one action whose outcome appears in the app.
-- The household sync branch is accepted after real two-device edit and offline reconciliation, if chosen for the first personal release.
+- Personal iCloud sync is accepted after initial sync and offline add/check-off/undo converge between the user's iPhone and iPad.
+- Household sharing is accepted after the wife accepts an invite on her Apple Account and both accounts converge on add/check-off/undo, including offline edits.
 
 ## Learn from use
 
