@@ -1,18 +1,21 @@
 name: iOS build
-on:
+"on":
   push:
   pull_request:
   workflow_dispatch:
 
 jobs:
   simulator-build:
-    runs-on: macos-15
+    # Xcode 27 is needed to compile against the iOS 27 SDK.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
+      - name: Verify Xcode version
+        run: xcodebuild -version
       - name: Build for iPhone simulator
         run: |
           xcodebuild -project ProbablyGroceries.xcodeproj \
