@@ -1,4 +1,4 @@
-# Pantry (working title)
+# Probably Groceries (working title)
 
 A personal iPhone shopping list that learns from purchases and quietly suggests what the household may need next. Native SwiftUI, interactive widgets, and an optional Jev judgment layer.
 
