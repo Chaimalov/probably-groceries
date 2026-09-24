@@ -13,11 +13,12 @@ The app must be useful with zero history. Predictions improve through ordinary s
 
 ## v1 scope
 
-- Native iPhone app in SwiftUI, local persistence, fast add, shopping and purchased states, purchase history.
+- Native iPhone and iPad app in SwiftUI targeting iOS/iPadOS 27, with local persistence, fast add, shopping and purchased states, and purchase history.
+- iCloud sync across the user's iPhone and iPad, plus a shared household list with his wife's separate Apple Account. Local-first behavior keeps shopping usable offline.
 - Deterministic offline predictions with conservative cold-start behavior and transparent debug data.
 - Small and medium WidgetKit widgets; one useful App Intent action (add or defer a suggestion) from the widget.
 - Optional Jev integration for a narrow judgment, guarded by a local fallback and an opt-in API key stored on device.
-- Household sharing via CloudKit is a later v1 branch once the local loop works on a device.
+- Household sharing uses a CloudKit share accepted by the wife's Apple Account; personal device sync and household sharing are separate implementation tasks.
 - Hebrew and English text with RTL support; design starts from the approved calm iOS prototype direction.
 
 Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, recipe import, commercial accounts, analytics SDKs, subscriptions, and an App Store launch.
@@ -31,15 +32,15 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 - [Jev spike](docs/JEV.md)
 - [v1 dependency graph](docs/ROADMAP.md)
 
-The repository starts with decisions and issues. The Xcode project is the first implementation task. Keep dependencies small, ship to a personal device early, and change the model when actual household usage disproves it.
+The repository starts with decisions and issues. The Xcode project is the first implementation task. Keep dependencies small, ship to personal devices early, and change the model when actual use disproves it.
 
 ## First device build
 
-The first SwiftUI slice is in `App/`: quick add, local list, purchase check-off, undo, and a conservative recurring suggestion. Data is saved on this device. Widgets, CloudKit and Jev remain subsequent issues.
+The first SwiftUI slice is in `App/`: quick add, local list, purchase check-off, undo, and a conservative recurring suggestion. Data currently stays on this device; personal CloudKit sync is tracked in issue #11 and household sharing with the wife's Apple Account in issue #8.
 
-On a Mac with Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen generate`, open `ProbablyGroceries.xcodeproj`, set your signing team in the app target, and run on your iPhone. The generated project and Info.plist are ignored by git. GitHub Actions runs an unsigned iPhone simulator build on macOS after each push; it cannot produce an installable iPhone build without signing.
+The app targets iOS/iPadOS 27 and CI uses the Xcode 27 GitHub-hosted runner. On a compatible Mac with Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen generate`, open `ProbablyGroceries.xcodeproj`, set your signing team in the app target, and run on your iPhone or iPad. The generated project and Info.plist are ignored by git. GitHub Actions runs an unsigned iPhone simulator build after each push; it cannot produce an installable device build without signing.
 
-To check membership, sign in at [Apple Developer Account](https://developer.apple.com/account/) using the Apple Account you enrolled with. An active Apple Developer Program membership enables TestFlight and iCloud capabilities; a free Personal Team can run a personal build from Xcode but requires periodic reprovisioning. Do not put signing certificates, keys or provisioning files in the repository.
+To check membership, sign in at [Apple Developer Account](https://developer.apple.com/account/) using the Apple Account you enrolled with. An active Apple Developer Program membership with admin access is required to enable the iCloud/CloudKit capability for this app. A free Personal Team can run a personal build from Xcode but requires periodic reprovisioning. Do not put signing certificates, keys or provisioning files in the repository.
 
 ## Working rules
 
