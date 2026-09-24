@@ -1,6 +1,6 @@
 # Working notes for coding agents
 
-Read README.md and docs/PRODUCT.md before implementing. This is a personal iPhone app: choose the shortest path to a build that can be used on device, and revise freely from real shopping trips.
+Read README.md and docs/PRODUCT.md before implementing. This is a personal iPhone and iPad app with a list shared across the user's and wife's Apple Accounts: choose the shortest path to a build that can be used on device, and revise freely from real shopping trips.
 
 - Keep native SwiftUI and WidgetKit. Never introduce a web shell or inventory bookkeeping.
 - One check-off creates a purchase event; undo/correction removes its learning effect. An accepted suggestion alone is not a purchase.
