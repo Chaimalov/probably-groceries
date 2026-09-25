@@ -16,16 +16,16 @@ struct QuantityEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Stepper("Quantity: \(quantity)", value: $quantity, in: 1...9999)
+                Stepper("כמות: \(quantity)", value: $quantity, in: 1...9999)
                     .accessibilityIdentifier("quantityStepper")
             }
             .navigationTitle(name)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("ביטול") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("שמירה") {
                         onSave(quantity)
                         dismiss()
                     }
