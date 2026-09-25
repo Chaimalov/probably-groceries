@@ -12,7 +12,7 @@ The selected reference shows a small date and overflow control above a short hea
 - Active items first, suggested items next, compact purchased rows last. Keep the shopping state obvious.
 - A thumb-reachable quick-add action that opens a native entry field and suggestions from history.
 - Each row shows name and quantity. Completion is generous to tap and supported by VoiceOver.
-- A small store picker switches lists. A menu toggles category grouping; urgent items show a flag in place without moving in the list.
+- A small store picker switches lists. A menu toggles department and category grouping; urgent items show a flag in place without moving in the list.
 - Detailed why/when and history live behind a tap; the first screen stays quiet.
 
 ## Interaction language
