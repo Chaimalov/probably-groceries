@@ -29,12 +29,12 @@ struct ShoppingView: View {
                     }
 
                     if !store.items.isEmpty {
-                        sectionTitle("Your list", count: store.items.count)
+                        sectionTitle("הרשימה שלי", count: store.items.count)
                         if groupByCategory {
                             ForEach(categoryNames, id: \.self) { name in
                                 sectionTitle(name)
                                 itemRows(store.items.filter {
-                                    (store.product(for: $0.productID)?.category ?? "Other") == name
+                                    (store.product(for: $0.productID)?.category ?? "אחר") == name
                                 })
                             }
                         } else {
@@ -42,12 +42,12 @@ struct ShoppingView: View {
                         }
                     }
 
-                    suggestionSection("You'll probably need", items: likely)
-                    suggestionSection("Maybe", items: maybe)
+                    suggestionSection("כנראה תצטרכו", items: likely)
+                    suggestionSection("אולי", items: maybe)
 
                     if !store.recentPurchases.isEmpty {
-                        sectionTitle("Recently bought")
-                        Button("See all purchases") { showingHistory = true }
+                        sectionTitle("נקנו לאחרונה")
+                        Button("לכל הקניות") { showingHistory = true }
                             .font(.subheadline)
                         ForEach(store.recentPurchases) { purchase in
                             if let product = store.product(for: purchase.productID) {
@@ -56,7 +56,7 @@ struct ShoppingView: View {
                                         .foregroundStyle(.tertiary)
                                     Text(product.name).foregroundStyle(.secondary)
                                     Spacer()
-                                    Button("Undo") { withAnimation { store.undo(purchase) } }
+                                    Button("ביטול") { withAnimation { store.undo(purchase) } }
                                         .font(.subheadline)
                                 }
                                 .padding(.vertical, 4)
@@ -76,7 +76,7 @@ struct ShoppingView: View {
             .sheet(isPresented: $showingInsights) { PredictionDebugView(store: store) }
             .sheet(isPresented: $showingSettings) { SettingsView() }
             .sheet(item: $editingItem) { item in
-                QuantityEditor(name: store.product(for: item.productID)?.name ?? "Item",
+                QuantityEditor(name: store.product(for: item.productID)?.name ?? "מוצר",
                                quantity: item.quantity) { quantity in
                     store.updateQuantity(of: item, to: quantity)
                 }
@@ -84,15 +84,15 @@ struct ShoppingView: View {
             .sheet(item: $editingCategory) { product in
                 CategoryEditor(store: store, product: product)
             }
-            .alert("New store list", isPresented: $showingNewList) {
-                TextField("Store name", text: $listName)
-                Button("Create") { store.addList(name: listName) }
-                Button("Cancel", role: .cancel) {}
+            .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
+                TextField("שם החנות", text: $listName)
+                Button("יצירה") { store.addList(name: listName) }
+                Button("ביטול", role: .cancel) {}
             }
-            .alert("Rename list", isPresented: $showingRenameList) {
-                TextField("Store name", text: $listName)
-                Button("Save") { store.renameCurrentList(to: listName) }
-                Button("Cancel", role: .cancel) {}
+            .alert("שינוי שם הרשימה", isPresented: $showingRenameList) {
+                TextField("שם החנות", text: $listName)
+                Button("שמירה") { store.renameCurrentList(to: listName) }
+                Button("ביטול", role: .cancel) {}
             }
         }
         .tint(Theme.accent)
@@ -101,7 +101,7 @@ struct ShoppingView: View {
     private var categoryNames: [String] {
         var seen = Set<String>()
         return store.items.compactMap { item in
-            let name = store.product(for: item.productID)?.category ?? "Other"
+            let name = store.product(for: item.productID)?.category ?? "אחר"
             return seen.insert(name).inserted ? name : nil
         }
     }
@@ -121,17 +121,17 @@ struct ShoppingView: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 32, height: 48)
                         }
-                        .accessibilityLabel("Bought \(product.name)")
+                        .accessibilityLabel("נקנה \(product.name)")
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 5) {
                                 Text(product.name).font(.body.weight(.medium)).lineLimit(2)
                                 if item.isUrgent {
                                     Image(systemName: "flag.fill")
                                         .foregroundStyle(.orange)
-                                        .accessibilityLabel("Urgent")
+                                        .accessibilityLabel("דחוף")
                                 }
                             }
-                            Text(product.category ?? "On your list")
+                            Text(product.category ?? "ברשימה")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         }
@@ -142,23 +142,23 @@ struct ShoppingView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
-                            .accessibilityLabel("Edit quantity for \(product.name)")
-                            .accessibilityValue("Quantity \(item.quantity)")
+                            .accessibilityLabel("עריכת כמות עבור \(product.name)")
+                            .accessibilityValue("כמות \(item.quantity)")
                         Menu {
-                            Button("Edit quantity", systemImage: "number") { editingItem = item }
-                            Button("Category", systemImage: "square.grid.2x2") { editingCategory = product }
-                            Button(item.isUrgent ? "Not urgent" : "Mark urgent",
+                            Button("עריכת כמות", systemImage: "number") { editingItem = item }
+                            Button("קטגוריה", systemImage: "square.grid.2x2") { editingCategory = product }
+                            Button(item.isUrgent ? "הסרת דגל דחוף" : "סימון כדחוף",
                                    systemImage: item.isUrgent ? "flag.slash" : "flag") {
                                 store.toggleUrgent(item)
                             }
-                            Button("Remove", systemImage: "trash", role: .destructive) { store.remove(item) }
+                            Button("הסרה", systemImage: "trash", role: .destructive) { store.remove(item) }
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .frame(width: 30, height: 44)
                         }
-                        .accessibilityLabel("More actions for \(product.name)")
+                        .accessibilityLabel("פעולות נוספות עבור \(product.name)")
                     }
                     .padding(.vertical, 8)
                     if item.id != items.last?.id { Divider().padding(.leading, 44) }
@@ -175,18 +175,18 @@ struct ShoppingView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Menu {
-                    Button(groupByCategory ? "Use shopping route" : "Group by category",
+                    Button(groupByCategory ? "מיון לפי מסלול הקנייה" : "קיבוץ לפי קטגוריה",
                            systemImage: "square.grid.2x2") { groupByCategory.toggle() }
-                    Button("History", systemImage: "clock") { showingHistory = true }
-                    Button("Insights", systemImage: "chart.bar") { showingInsights = true }
-                    Button("Settings", systemImage: "gearshape") { showingSettings = true }
+                    Button("היסטוריה", systemImage: "clock") { showingHistory = true }
+                    Button("תובנות", systemImage: "chart.bar") { showingInsights = true }
+                    Button("הגדרות", systemImage: "gearshape") { showingSettings = true }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.title3.weight(.medium))
                         .frame(width: 40, height: 40)
                         .glassEffect(.regular, in: Circle())
                 }
-                .accessibilityLabel("More options")
+                .accessibilityLabel("אפשרויות נוספות")
             }
             Menu {
                 ForEach(store.data.lists) { list in
@@ -195,11 +195,11 @@ struct ShoppingView: View {
                     }
                 }
                 Divider()
-                Button("New store list", systemImage: "plus") {
+                Button("רשימה חדשה לחנות", systemImage: "plus") {
                     listName = ""
                     showingNewList = true
                 }
-                Button("Rename current list", systemImage: "pencil") {
+                Button("שינוי שם הרשימה", systemImage: "pencil") {
                     listName = store.currentList.name
                     showingRenameList = true
                 }
@@ -207,15 +207,15 @@ struct ShoppingView: View {
                 Label(store.currentList.name, systemImage: "storefront")
                     .font(.subheadline.weight(.medium))
             }
-            .accessibilityLabel("Choose store list, \(store.currentList.name)")
+            .accessibilityLabel("בחירת חנות, \(store.currentList.name)")
             Text(store.items.isEmpty && store.suggestions.isEmpty
-                 ? "A little less to remember."
-                 : store.items.isEmpty ? "You'll probably need" : "Your shopping list")
+                 ? "קצת פחות לזכור."
+                 : store.items.isEmpty ? "כנראה תצטרכו" : "רשימת הקניות")
                 .font(.system(.largeTitle, design: .default, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
             Text(store.items.isEmpty && store.suggestions.isEmpty
-                 ? "Add what you need. Your purchases will help this list learn."
-                 : store.suggestions.isEmpty ? "Ready for your next trip." : "Based on your past purchases")
+                 ? "מוסיפים מה שצריך. הקניות יעזרו לרשימה ללמוד."
+                 : store.suggestions.isEmpty ? "מוכנים לקנייה הבאה." : "לפי הקניות הקודמות שלכם")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -227,9 +227,9 @@ struct ShoppingView: View {
             Image(systemName: "basket")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("Nothing on the list yet")
+            Text("הרשימה עדיין ריקה")
                 .font(.title3.weight(.medium))
-            Text("Start with a few things you need today.")
+            Text("אפשר להתחיל עם כמה דברים שצריך היום.")
                 .foregroundStyle(.secondary)
         }
         .padding(24)
@@ -249,9 +249,9 @@ struct ShoppingView: View {
     private func suggestionSection(_ title: String, items: [Suggestion]) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                if title == "Maybe" {
+                if title == "אולי" {
                     HStack {
-                        Text("MAYBE")
+                        Text("אולי")
                             .font(.caption.weight(.medium))
                             .tracking(2)
                             .foregroundStyle(.secondary)
@@ -271,17 +271,17 @@ struct ShoppingView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(suggestion.product.name).font(.body.weight(.medium))
                             Text(suggestion.quantity > 1
-                                 ? "Usually ×\(suggestion.quantity)" : "From your history")
+                                 ? "בדרך כלל ×\(suggestion.quantity)" : "מהקניות הקודמות")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 4)
-                        Button("Not yet") { store.deferSuggestion(suggestion) }
+                        Button("לא עכשיו") { store.deferSuggestion(suggestion) }
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Button { store.add(suggestion) } label: {
                             Image(systemName: "plus.circle.fill").font(.title2)
                         }
-                        .accessibilityLabel("Add \(suggestion.product.name) to list")
+                        .accessibilityLabel("הוספת \(suggestion.product.name) לרשימה")
                     }
                     .padding(.vertical, 7)
                 }
@@ -298,7 +298,7 @@ struct ShoppingView: View {
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 28)
                         .background(Theme.accent, in: Circle())
-                    Text("Add an item...").foregroundStyle(.secondary)
+                    Text("הוספת מוצר...").foregroundStyle(.secondary)
                     Spacer()
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 }
@@ -307,13 +307,13 @@ struct ShoppingView: View {
                 .frame(height: 50)
                 .glassEffect(.regular, in: Capsule())
             }
-            .accessibilityLabel("Add item")
+            .accessibilityLabel("הוספת מוצר")
 
             HStack {
-                tab("List", icon: "cart.fill", selected: true) {}
-                tab("History", icon: "clock") { showingHistory = true }
-                tab("Insights", icon: "chart.bar") { showingInsights = true }
-                tab("Settings", icon: "gearshape") { showingSettings = true }
+                tab("רשימה", icon: "cart.fill", selected: true) {}
+                tab("היסטוריה", icon: "clock") { showingHistory = true }
+                tab("תובנות", icon: "chart.bar") { showingInsights = true }
+                tab("הגדרות", icon: "gearshape") { showingSettings = true }
             }
             .padding(.vertical, 10)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25))
