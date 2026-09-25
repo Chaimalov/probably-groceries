@@ -18,23 +18,23 @@ struct PurchaseHistoryView: View {
                         }
                         Spacer()
                         Button("×\(purchase.quantity)") { editingPurchase = purchase }
-                            .accessibilityLabel("Edit purchased quantity for \(product.name)")
-                            .accessibilityValue("Quantity \(purchase.quantity)")
-                        Button("Undo purchase") { store.undo(purchase) }
+                            .accessibilityLabel("עריכת כמות שנקנתה עבור \(product.name)")
+                            .accessibilityValue("כמות \(purchase.quantity)")
+                        Button("ביטול קנייה") { store.undo(purchase) }
                             .font(.subheadline)
                     }
                     .buttonStyle(.borderless)
                 }
             }
-            .navigationTitle("Purchase history")
+            .navigationTitle("היסטוריית קניות")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("סיום") { dismiss() }
                 }
             }
         }
         .sheet(item: $editingPurchase) { purchase in
-            QuantityEditor(name: store.product(for: purchase.productID)?.name ?? "Item",
+            QuantityEditor(name: store.product(for: purchase.productID)?.name ?? "מוצר",
                            quantity: purchase.quantity) { quantity in
                 store.correctQuantity(of: purchase, to: quantity)
             }
