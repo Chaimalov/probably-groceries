@@ -21,6 +21,8 @@ Target iOS 27. Keep a local store as the responsive source for app actions and u
 
 Use stable identifiers and explicit timestamps. For a mistaken check-off, reverse or delete the corresponding event and restore the list entry; rederive predictions. Avoid merging separate purchases on the same day without an explicit rule. Make actions idempotent by event ID so widget and app interactions cannot double record.
 
+The exact check-off timestamps also teach aisle order: derive relative order within each shopping trip from `PurchaseEvent.purchasedAt`, then sort list entries and suggestions using recent trip positions. This is derived data, not a separate order field to sync.
+
 ## Data flow
 
 ```mermaid
