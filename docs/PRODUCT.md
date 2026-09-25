@@ -11,7 +11,7 @@ Before a grocery trip, the user and his wife see one shared list that remembers 
 3. **Shop:** tap to check off a row. Persist a purchase event and move it to a compact purchased section. Undo immediately if tapped by mistake.
 4. **Return:** candidate suggestions appear in “You'll probably need” and “Maybe”; one tap adds to the list. A “Not yet” action defers a candidate until a reasonable later date. Manual removal is not silently treated as a purchase.
 5. **Review:** a simple per-item history and a way to correct a mistaken purchase or quantity. Predictions derive from the corrected event log.
-6. **Organize:** create separate lists for stores; each keeps its own active items, purchase history, route order, and predictions. Give products optional free-form categories and switch between shopping-route order and grouped categories. Mark an urgent item with a flag without changing its position.
+6. **Organize:** create separate lists for stores; each keeps its own active items, purchase history, route order, and predictions. Give products optional free-form departments and categories and switch between shopping-route order and grouping by department, then category. Mark an urgent item with a flag without changing its position.
 
 ## Rules
 
@@ -22,7 +22,7 @@ Before a grocery trip, the user and his wife see one shared list that remembers 
 - Respect deferral and do not re-add immediately after a rejection.
 - Local shopping works offline. Personal iCloud sync catches up after connectivity returns; a sync error must not block local edits.
 - The user's iPhone and iPad sync through his iCloud account; his wife joins the same list from her separate Apple Account through CloudKit sharing.
-- Existing local shopping data belongs to the default “קניות” list after the multi-store update. Category is shared by the product across stores; urgency belongs to the active item in one store.
+- Existing local shopping data belongs to the default “קניות” list after the multi-store update. Department and category are shared by the product across stores; urgency belongs to the active item in one store.
 - The app interface is Hebrew and right-to-left, including add/edit forms, list switching, history, predictions, settings, and accessibility labels. Product and store names typed by the user can be in any language.
 
 ## Acceptance for personal v1
