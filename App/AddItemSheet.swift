@@ -6,6 +6,8 @@ struct AddItemSheet: View {
     @FocusState private var nameFocused: Bool
     @State private var name = ""
     @State private var quantity = 1
+    @State private var category = ""
+    @State private var urgent = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,16 @@ struct AddItemSheet: View {
                         .focused($nameFocused)
                         .onSubmit(save)
                     Stepper("Quantity: \(quantity)", value: $quantity, in: 1...99)
+                    TextField("Category (optional)", text: $category)
+                    Toggle("Urgent", isOn: $urgent)
+                }
+
+                if !store.categories.isEmpty {
+                    Section("Categories") {
+                        ForEach(store.categories, id: \.self) { existing in
+                            Button(existing) { category = existing }
+                        }
+                    }
                 }
 
                 if !name.isEmpty {
@@ -27,6 +39,7 @@ struct AddItemSheet: View {
                                 Button(product.name) {
                                     name = product.name
                                     quantity = product.usualQuantity
+                                    category = product.category ?? ""
                                 }
                             }
                         }
@@ -52,7 +65,7 @@ struct AddItemSheet: View {
 
     private func save() {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        store.add(name: name, quantity: quantity)
+        store.add(name: name, quantity: quantity, category: category, urgent: urgent)
         dismiss()
     }
 }
