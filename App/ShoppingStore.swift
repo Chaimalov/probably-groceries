@@ -18,7 +18,19 @@ final class ShoppingStore: ObservableObject {
         }
     }
 
-    var items: [ShoppingItem] { data.items.sorted { $0.addedAt < $1.addedAt } }
+    var items: [ShoppingItem] {
+        let positions = ShoppingRouteOrder.positions(from: data.purchases)
+        return data.items.sorted { left, right in
+            switch (positions[left.productID], positions[right.productID]) {
+            case let (a?, b?) where a != b: return a < b
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default:
+                if left.addedAt != right.addedAt { return left.addedAt < right.addedAt }
+                return left.id.uuidString < right.id.uuidString
+            }
+        }
+    }
     var purchases: [Purchase] { data.purchases.sorted { $0.purchasedAt > $1.purchasedAt } }
     var recentPurchases: [Purchase] {
         Array(purchases.prefix(5))
@@ -113,7 +125,17 @@ final class ShoppingStore: ObservableObject {
     var predictionEvaluations: [PredictionEvaluation] { PredictionEngine.evaluate(data) }
 
     var suggestions: [Suggestion] {
-        predictionEvaluations.compactMap(\.suggestion).sorted { $0.progress > $1.progress }
+        let positions = ShoppingRouteOrder.positions(from: data.purchases)
+        return predictionEvaluations.compactMap(\.suggestion).sorted { left, right in
+            switch (positions[left.id], positions[right.id]) {
+            case let (a?, b?) where a != b: return a < b
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default:
+                if left.progress != right.progress { return left.progress > right.progress }
+                return left.product.name.localizedStandardCompare(right.product.name) == .orderedAscending
+            }
+        }
     }
 
     private static func normalize(_ name: String) -> String {
