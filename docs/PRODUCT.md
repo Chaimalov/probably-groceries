@@ -22,7 +22,8 @@ Before a grocery trip, the user and his wife see one shared list that remembers 
 - Respect deferral and do not re-add immediately after a rejection.
 - Local shopping works offline. Personal iCloud sync catches up after connectivity returns; a sync error must not block local edits.
 - The user's iPhone and iPad sync through his iCloud account; his wife joins the same list from her separate Apple Account through CloudKit sharing.
-- Existing local shopping data belongs to the default Groceries list after the multi-store update. Category is shared by the product across stores; urgency belongs to the active item in one store.
+- Existing local shopping data belongs to the default “קניות” list after the multi-store update. Category is shared by the product across stores; urgency belongs to the active item in one store.
+- The app interface is Hebrew and right-to-left, including add/edit forms, list switching, history, predictions, settings, and accessibility labels. Product and store names typed by the user can be in any language.
 
 ## Acceptance for personal v1
 
