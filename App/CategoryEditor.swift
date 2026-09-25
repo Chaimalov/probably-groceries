@@ -15,24 +15,24 @@ struct CategoryEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Category", text: $categoryName)
+                TextField("קטגוריה", text: $categoryName)
                 if !store.categories.isEmpty {
-                    Section("Existing categories") {
+                    Section("קטגוריות קיימות") {
                         ForEach(store.categories, id: \.self) { name in
                             Button(name) { categoryName = name }
                         }
                     }
                 }
-                Button("No category") { categoryName = "" }
+                Button("ללא קטגוריה") { categoryName = "" }
             }
             .navigationTitle(product.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("ביטול") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("שמירה") {
                         store.setCategory(for: product.id, to: categoryName)
                         dismiss()
                     }
