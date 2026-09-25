@@ -30,6 +30,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["אפשרויות נוספות"].tap()
         app.buttons["קיבוץ לפי מחלקה וקטגוריה"].tap()
         XCTAssertTrue(app.staticTexts["Dairy"].exists)
+        capture("רשימה בעברית עם מחלקה ודגל", in: app)
 
         labeledButton(app, prefix: "בחירת חנות", containing: "קניות").tap()
         app.buttons["רשימה חדשה לחנות"].tap()
