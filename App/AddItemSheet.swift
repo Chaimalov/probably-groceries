@@ -71,7 +71,7 @@ struct AddItemSheet: View {
             }
             .onAppear { nameFocused = true }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
     }
 
     private func save() {
