@@ -3,6 +3,8 @@ import SwiftUI
 struct ShoppingView: View {
     @StateObject private var store = ShoppingStore()
     @State private var showingAdd = false
+    @State private var showingHistory = false
+    @State private var editingItem: ShoppingItem?
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
@@ -31,9 +33,9 @@ struct ShoppingView: View {
                                         .accessibilityLabel("Bought \(product.name)")
                                         Text(product.name).font(.body)
                                         Spacer()
-                                        if item.quantity > 1 {
-                                            Text("×\(item.quantity)").foregroundStyle(.secondary)
-                                        }
+                                        Button("×\(item.quantity)") { editingItem = item }
+                                            .foregroundStyle(.secondary)
+                                            .accessibilityLabel("Edit quantity for \(product.name)")
                                         Button(role: .destructive) { store.remove(item) } label: {
                                             Image(systemName: "xmark").font(.caption)
                                         }
@@ -52,6 +54,8 @@ struct ShoppingView: View {
 
                     if !store.recentPurchases.isEmpty {
                         sectionTitle("Recently bought")
+                        Button("See all purchases") { showingHistory = true }
+                            .font(.subheadline)
                         ForEach(store.recentPurchases) { purchase in
                             if let product = store.product(for: purchase.productID) {
                                 HStack {
@@ -87,6 +91,13 @@ struct ShoppingView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAdd) { AddItemSheet(store: store) }
+            .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
+            .sheet(item: $editingItem) { item in
+                QuantityEditor(name: store.product(for: item.productID)?.name ?? "Item",
+                               quantity: item.quantity) { quantity in
+                    store.updateQuantity(of: item, to: quantity)
+                }
+            }
         }
         .tint(.primary)
     }
