@@ -6,22 +6,22 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Your data") {
-                    Label("Saved on this device", systemImage: "iphone")
-                    Text("iCloud sync and sharing are coming later.")
+                Section("הנתונים שלך") {
+                    Label("שמורים במכשיר הזה", systemImage: "iphone")
+                    Text("סנכרון ושיתוף באמצעות iCloud יתווספו בהמשך.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Section("About") {
-                    Text("Probably Groceries")
-                    Text("A little less to remember.")
+                Section("אודות") {
+                    Text("רשימת הקניות")
+                    Text("קצת פחות לזכור.")
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("הגדרות")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("סיום") { dismiss() }
                 }
             }
         }
