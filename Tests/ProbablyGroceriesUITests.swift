@@ -3,6 +3,7 @@ import XCTest
 final class ProbablyGroceriesUITests: XCTestCase {
     func testAddBuyUndoAndPersistence() {
         let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
         app.launch()
 
         let name = "Milk \(UUID().uuidString.prefix(8))"
@@ -23,5 +24,45 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 10))
         app.buttons["Undo"].tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
+    }
+
+    func testEditQuantityCorrectPurchaseAndUndoFromHistory() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+
+        let name = "Eggs \(UUID().uuidString.prefix(8))"
+        app.buttons["Add item"].tap()
+        let field = app.textFields["What do you need?"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText(name)
+        app.buttons["Add"].tap()
+
+        let editItem = app.buttons["Edit quantity for \(name)"]
+        XCTAssertTrue(editItem.waitForExistence(timeout: 10))
+        editItem.tap()
+        let stepper = app.steppers["quantityStepper"]
+        XCTAssertTrue(stepper.waitForExistence(timeout: 10))
+        stepper.buttons["Increment"].tap()
+        app.buttons["Save"].tap()
+
+        app.buttons["Bought \(name)"].tap()
+        app.buttons["See all purchases"].tap()
+        let editPurchase = app.buttons["Edit purchased quantity for \(name)"]
+        XCTAssertTrue(editPurchase.waitForExistence(timeout: 10))
+        XCTAssertEqual(editPurchase.value as? String, "Quantity 2")
+        editPurchase.tap()
+        let purchaseStepper = app.steppers["quantityStepper"]
+        XCTAssertTrue(purchaseStepper.waitForExistence(timeout: 10))
+        purchaseStepper.buttons["Increment"].tap()
+        app.buttons["Save"].tap()
+        XCTAssertEqual(editPurchase.value as? String, "Quantity 3")
+
+        app.buttons["Undo purchase"].firstMatch.tap()
+        XCTAssertFalse(editPurchase.exists)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Bought \(name)"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["Edit quantity for \(name)"].value as? String, "Quantity 3")
     }
 }
