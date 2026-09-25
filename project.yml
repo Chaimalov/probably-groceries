@@ -12,7 +12,8 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Probably
+        CFBundleDisplayName: קניות
+        CFBundleDevelopmentRegion: he
         UILaunchScreen: {}
     settings:
       base:
