@@ -46,9 +46,11 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(stepper.waitForExistence(timeout: 10))
         stepper.buttons["quantityStepper-Increment"].tap()
         app.buttons["Save"].tap()
+        capture("Shopping list with quantity", in: app)
 
         app.buttons["Bought \(name)"].tap()
         app.buttons["See all purchases"].tap()
+        capture("Purchase history", in: app)
         let editPurchase = app.buttons["Edit purchased quantity for \(name)"]
         XCTAssertTrue(editPurchase.waitForExistence(timeout: 10))
         XCTAssertEqual(editPurchase.value as? String, "Quantity 2")
@@ -56,6 +58,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let purchaseStepper = app.steppers["quantityStepper"]
         XCTAssertTrue(purchaseStepper.waitForExistence(timeout: 10))
         purchaseStepper.buttons["quantityStepper-Increment"].tap()
+        capture("Correcting a purchase", in: app)
         app.buttons["Save"].tap()
         XCTAssertEqual(editPurchase.value as? String, "Quantity 3")
 
@@ -64,5 +67,12 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Bought \(name)"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["Edit quantity for \(name)"].value as? String, "Quantity 3")
+    }
+
+    private func capture(_ name: String, in app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
