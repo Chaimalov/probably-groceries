@@ -20,6 +20,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         categoryField.tap()
         categoryField.typeText("Pantry")
         app.switches["דחוף"].tap()
+        XCTAssertEqual(app.switches["דחוף"].value as? String, "1")
         app.buttons["הוספה"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
         labeledButton(app, prefix: "פעולות נוספות", containing: item).tap()
