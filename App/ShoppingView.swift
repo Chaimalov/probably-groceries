@@ -40,7 +40,6 @@ struct ShoppingView: View {
                                                 .frame(width: 32, height: 48)
                                         }
                                         .accessibilityLabel("Bought \(product.name)")
-                                        ProductIcon(name: product.name)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(product.name)
                                                 .font(.body.weight(.medium))
@@ -70,7 +69,7 @@ struct ShoppingView: View {
                                         .accessibilityLabel("More actions for \(product.name)")
                                     }
                                     .padding(.vertical, 8)
-                                    if item.id != store.items.last?.id { Divider().padding(.leading, 88) }
+                                    if item.id != store.items.last?.id { Divider().padding(.leading, 44) }
                                 }
                             }
                         }
@@ -116,7 +115,7 @@ struct ShoppingView: View {
                 }
             }
         }
-        .tint(Color(red: 0.10, green: 0.48, blue: 0.91))
+        .tint(Theme.accent)
     }
 
     private var header: some View {
@@ -134,7 +133,7 @@ struct ShoppingView: View {
                     Image(systemName: "ellipsis")
                         .font(.title3.weight(.medium))
                         .frame(width: 40, height: 40)
-                        .background(Color(uiColor: .secondarySystemBackground), in: Circle())
+                        .glassEffect(.regular, in: Circle())
                 }
                 .accessibilityLabel("More options")
             }
@@ -193,8 +192,11 @@ struct ShoppingView: View {
                 }
                 ForEach(items) { suggestion in
                     HStack(spacing: 12) {
-                        ProductIcon(name: suggestion.product.name)
-                            .padding(.leading, 44)
+                        Image(systemName: "circle")
+                            .font(.system(size: 24, weight: .light))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 32, height: 48)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(suggestion.product.name).font(.body.weight(.medium))
                             Text(suggestion.quantity > 1
@@ -224,7 +226,7 @@ struct ShoppingView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 28)
-                        .background(Color.accentColor, in: Circle())
+                        .background(Theme.accent, in: Circle())
                     Text("Add an item...").foregroundStyle(.secondary)
                     Spacer()
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -232,7 +234,7 @@ struct ShoppingView: View {
                 .font(.subheadline)
                 .padding(.horizontal, 16)
                 .frame(height: 50)
-                .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+                .glassEffect(.regular, in: Capsule())
             }
             .accessibilityLabel("Add item")
 
@@ -242,11 +244,12 @@ struct ShoppingView: View {
                 tab("Insights", icon: "chart.bar") { showingInsights = true }
                 tab("Settings", icon: "gearshape") { showingSettings = true }
             }
+            .padding(.vertical, 10)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25))
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 4)
-        .background(.regularMaterial)
     }
 
     private func tab(_ title: String, icon: String, selected: Bool = false,
@@ -256,7 +259,7 @@ struct ShoppingView: View {
                 Image(systemName: icon).font(.system(size: 19))
                 Text(title).font(.caption2)
             }
-            .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            .foregroundStyle(selected ? Theme.accent : Color.secondary)
             .frame(maxWidth: .infinity)
         }
     }
