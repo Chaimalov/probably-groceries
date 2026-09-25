@@ -13,6 +13,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(nameField.waitForExistence(timeout: 10))
         nameField.tap()
         nameField.typeText(item)
+        let departmentField = app.textFields["מחלקה (לא חובה)"]
+        departmentField.tap()
+        departmentField.typeText("Dairy")
         let categoryField = app.textFields["קטגוריה (לא חובה)"]
         categoryField.tap()
         categoryField.typeText("Pantry")
@@ -20,6 +23,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["הוספה"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["דחוף"].exists)
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["קיבוץ לפי מחלקה וקטגוריה"].tap()
+        XCTAssertTrue(app.staticTexts["Dairy"].exists)
 
         app.buttons["בחירת חנות, קניות"].tap()
         app.buttons["רשימה חדשה לחנות"].tap()
@@ -33,6 +39,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["בחירת חנות, \(storeName)"].tap()
         app.buttons["קניות"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["מיון לפי מסלול הקנייה"].tap()
     }
 
     func testAddBuyUndoAndPersistence() {
