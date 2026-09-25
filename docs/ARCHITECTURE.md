@@ -13,15 +13,18 @@ Target iOS 27. Keep a local store as the responsive source for app actions and u
 
 | Entity | Key fields | Purpose |
 | --- | --- | --- |
-| Product | stable ID, display name, normalized name, default quantity | Household identity and autocomplete |
-| ListEntry | ID, product ID, quantity, origin, createdAt, status | Active user-owned shopping intent |
-| PurchaseEvent | ID, product ID, quantity, purchasedAt, source entry ID | Immutable-ish learning signal; corrections remain possible |
+| StoreList | stable ID, display name | Separate shopping destination, default Groceries for legacy data |
+| Product | stable ID, display name, normalized name, default quantity, optional category | Household identity and autocomplete |
+| ListEntry | ID, store ID, product ID, quantity, urgent, createdAt, status | Active user-owned shopping intent |
+| PurchaseEvent | ID, store ID, product ID, quantity, purchasedAt, source entry ID | Immutable-ish learning signal; corrections remain possible |
 | SuggestionFeedback | ID, product ID, action, timestamp, snoozeUntil | Accept/defer/dismiss outcome |
 | PredictionSnapshot | product ID, score, tier, quantity, generatedAt, source | Derived cache for app and widget; never source of truth |
 
 Use stable identifiers and explicit timestamps. For a mistaken check-off, reverse or delete the corresponding event and restore the list entry; rederive predictions. Avoid merging separate purchases on the same day without an explicit rule. Make actions idempotent by event ID so widget and app interactions cannot double record.
 
 The exact check-off timestamps also teach aisle order: derive relative order within each shopping trip from `PurchaseEvent.purchasedAt`, then sort list entries and suggestions using recent trip positions. This is derived data, not a separate order field to sync.
+
+Store IDs scope list entries, purchases, deferrals, predictions and route order. Category lives on the shared product, urgency on the active entry; undo restores urgency from the purchase event. Decode records without new fields into the default Groceries list so existing on-device data survives updates. The category grouping switch changes only presentation, leaving route order available.
 
 ## Data flow
 
