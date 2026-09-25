@@ -19,6 +19,7 @@ struct PurchaseHistoryView: View {
                         Spacer()
                         Button("×\(purchase.quantity)") { editingPurchase = purchase }
                             .accessibilityLabel("Edit purchased quantity for \(product.name)")
+                            .accessibilityValue("Quantity \(purchase.quantity)")
                         Button("Undo purchase") { store.undo(purchase) }
                             .font(.subheadline)
                     }
