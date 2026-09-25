@@ -22,21 +22,26 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.switches["דחוף"].tap()
         app.buttons["הוספה"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.images["דחוף"].exists)
+        labeledButton(app, prefix: "פעולות נוספות", containing: item).tap()
+        XCTAssertTrue(app.buttons["הסרת דגל דחוף"].exists)
+        app.buttons["הסרת דגל דחוף"].tap()
+        labeledButton(app, prefix: "פעולות נוספות", containing: item).tap()
+        app.buttons["סימון כדחוף"].tap()
         app.buttons["אפשרויות נוספות"].tap()
         app.buttons["קיבוץ לפי מחלקה וקטגוריה"].tap()
         XCTAssertTrue(app.staticTexts["Dairy"].exists)
 
-        app.buttons["בחירת חנות, קניות"].tap()
+        labeledButton(app, prefix: "בחירת חנות", containing: "קניות").tap()
         app.buttons["רשימה חדשה לחנות"].tap()
         let alert = app.alerts["רשימה חדשה לחנות"]
         XCTAssertTrue(alert.waitForExistence(timeout: 10))
         alert.textFields["שם החנות"].typeText(storeName)
         alert.buttons["יצירה"].tap()
-        XCTAssertTrue(app.buttons["בחירת חנות, \(storeName)"].waitForExistence(timeout: 10))
+        XCTAssertTrue(labeledButton(app, prefix: "בחירת חנות", containing: storeName)
+            .waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts[item].exists)
 
-        app.buttons["בחירת חנות, \(storeName)"].tap()
+        labeledButton(app, prefix: "בחירת חנות", containing: storeName).tap()
         app.buttons["קניות"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
         app.buttons["אפשרויות נוספות"].tap()
@@ -56,7 +61,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.typeText(name)
         app.buttons["הוספה"].tap()
 
-        let buy = app.buttons["נקנה \(name)"]
+        let buy = labeledButton(app, prefix: "נקנה", containing: name)
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
@@ -81,7 +86,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.typeText(name)
         app.buttons["הוספה"].tap()
 
-        let editItem = app.buttons["עריכת כמות עבור \(name)"]
+        let editItem = labeledButton(app, prefix: "עריכת כמות עבור", containing: name)
         XCTAssertTrue(editItem.waitForExistence(timeout: 10))
         editItem.tap()
         let stepper = app.steppers["quantityStepper"]
@@ -91,10 +96,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.swipeDown()
         capture("Shopping list with quantity", in: app)
 
-        app.buttons["נקנה \(name)"].tap()
+        labeledButton(app, prefix: "נקנה", containing: name).tap()
         app.buttons["לכל הקניות"].tap()
         capture("Purchase history", in: app)
-        let editPurchase = app.buttons["עריכת כמות שנקנתה עבור \(name)"]
+        let editPurchase = labeledButton(app, prefix: "עריכת כמות שנקנתה עבור", containing: name)
         XCTAssertTrue(editPurchase.waitForExistence(timeout: 10))
         XCTAssertEqual(editPurchase.value as? String, "כמות 2")
         editPurchase.tap()
@@ -108,8 +113,16 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["ביטול קנייה"].firstMatch.tap()
         XCTAssertFalse(editPurchase.exists)
         app.buttons["סיום"].tap()
-        XCTAssertTrue(app.buttons["נקנה \(name)"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons["עריכת כמות עבור \(name)"].value as? String, "כמות 3")
+        XCTAssertTrue(labeledButton(app, prefix: "נקנה", containing: name)
+            .waitForExistence(timeout: 10))
+        XCTAssertEqual(labeledButton(app, prefix: "עריכת כמות עבור", containing: name)
+            .value as? String, "כמות 3")
+    }
+
+    private func labeledButton(_ app: XCUIApplication, prefix: String,
+                               containing value: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@",
+                                         prefix, value)).firstMatch
     }
 
     private func capture(_ name: String, in app: XCUIApplication) {
