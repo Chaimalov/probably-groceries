@@ -5,6 +5,7 @@ struct Product: Codable, Identifiable, Hashable {
     var name: String
     var usualQuantity: Int
     var category: String? = nil
+    var department: String? = nil
 }
 
 struct ShoppingList: Codable, Identifiable, Hashable {
