@@ -34,7 +34,7 @@ struct ShoppingData: Codable {
 }
 
 struct Suggestion: Identifiable {
-    enum Tier { case likely, maybe }
+    enum Tier: Equatable { case likely, maybe }
 
     var product: Product
     var quantity: Int
@@ -42,4 +42,23 @@ struct Suggestion: Identifiable {
     var progress: Double
 
     var id: UUID { product.id }
+}
+
+struct PredictionEvaluation: Identifiable {
+    var product: Product
+    var purchaseCount: Int
+    var distinctTripCount: Int
+    var intervalDays: Double?
+    var daysSincePurchase: Double?
+    var quantity: Int
+    var progress: Double?
+    var tier: Suggestion.Tier?
+    var reason: String
+
+    var id: UUID { product.id }
+
+    var suggestion: Suggestion? {
+        guard let tier, let progress else { return nil }
+        return Suggestion(product: product, quantity: quantity, tier: tier, progress: progress)
+    }
 }
