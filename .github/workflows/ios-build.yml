@@ -6,6 +6,7 @@ name: iOS build
 
 jobs:
   simulator-build:
+    # Xcode 27 is needed to compile against the iOS 27 SDK.
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +51,21 @@ jobs:
         with:
           name: simulator-screenshot
           path: ${{ runner.temp }}/probably-smoke.png
+          if-no-files-found: ignore
+      - name: Export test screenshots
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/TestResults.xcresult" ]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/TestResults.xcresult" \
+              --output-path "$RUNNER_TEMP/ui-screenshots"
+          fi
+      - name: Upload test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopping-flow-screenshots
+          path: ${{ runner.temp }}/ui-screenshots
           if-no-files-found: ignore
       - name: Upload UI test results
         if: always()
