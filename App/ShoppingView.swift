@@ -17,8 +17,6 @@ struct ShoppingView: View {
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
-    private var urgentItems: [ShoppingItem] { store.items.filter(\.isUrgent) }
-    private var regularItems: [ShoppingItem] { store.items.filter { !$0.isUrgent } }
 
     var body: some View {
         NavigationStack {
@@ -32,19 +30,15 @@ struct ShoppingView: View {
 
                     if !store.items.isEmpty {
                         sectionTitle("Your list", count: store.items.count)
-                        if !urgentItems.isEmpty {
-                            sectionTitle("Urgent")
-                            itemRows(urgentItems)
-                        }
                         if groupByCategory {
                             ForEach(categoryNames, id: \.self) { name in
                                 sectionTitle(name)
-                                itemRows(regularItems.filter {
+                                itemRows(store.items.filter {
                                     (store.product(for: $0.productID)?.category ?? "Other") == name
                                 })
                             }
                         } else {
-                            itemRows(regularItems)
+                            itemRows(store.items)
                         }
                     }
 
@@ -106,7 +100,7 @@ struct ShoppingView: View {
 
     private var categoryNames: [String] {
         var seen = Set<String>()
-        return regularItems.compactMap { item in
+        return store.items.compactMap { item in
             let name = store.product(for: item.productID)?.category ?? "Other"
             return seen.insert(name).inserted ? name : nil
         }
@@ -129,14 +123,15 @@ struct ShoppingView: View {
                         }
                         .accessibilityLabel("Bought \(product.name)")
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(product.name).font(.body.weight(.medium)).lineLimit(2)
                             HStack(spacing: 5) {
+                                Text(product.name).font(.body.weight(.medium)).lineLimit(2)
                                 if item.isUrgent {
-                                    Image(systemName: "exclamationmark.circle.fill")
+                                    Image(systemName: "flag.fill")
                                         .foregroundStyle(.orange)
+                                        .accessibilityLabel("Urgent")
                                 }
-                                Text(product.category ?? (item.isUrgent ? "Urgent" : "On your list"))
                             }
+                            Text(product.category ?? "On your list")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         }
