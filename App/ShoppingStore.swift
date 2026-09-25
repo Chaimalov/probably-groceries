@@ -86,7 +86,8 @@ final class ShoppingStore: ObservableObject {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
-    func add(name: String, quantity: Int, category: String? = nil, urgent: Bool = false) {
+    func add(name: String, quantity: Int, category: String? = nil,
+             department: String? = nil, urgent: Bool = false) {
         let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !displayName.isEmpty else { return }
         let normalized = Self.normalize(displayName)
@@ -97,9 +98,14 @@ final class ShoppingStore: ObservableObject {
                let index = data.products.firstIndex(where: { $0.id == productID }) {
                 data.products[index].category = category.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+            if let department, !department.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let index = data.products.firstIndex(where: { $0.id == productID }) {
+                data.products[index].department = department.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
         } else {
             let product = Product(id: UUID(), name: displayName, usualQuantity: max(1, quantity),
-                                  category: category?.trimmingCharacters(in: .whitespacesAndNewlines))
+                                  category: category?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  department: department?.trimmingCharacters(in: .whitespacesAndNewlines))
             data.products.append(product)
             productID = product.id
         }
@@ -126,10 +132,12 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    func setCategory(for productID: UUID, to name: String?) {
+    func setGrouping(for productID: UUID, department: String?, category: String?) {
         guard let index = data.products.firstIndex(where: { $0.id == productID }) else { return }
-        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        data.products[index].category = trimmed?.isEmpty == false ? trimmed : nil
+        let trimmedCategory = category?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDepartment = department?.trimmingCharacters(in: .whitespacesAndNewlines)
+        data.products[index].category = trimmedCategory?.isEmpty == false ? trimmedCategory : nil
+        data.products[index].department = trimmedDepartment?.isEmpty == false ? trimmedDepartment : nil
         persist()
     }
 
@@ -141,6 +149,11 @@ final class ShoppingStore: ObservableObject {
 
     var categories: [String] {
         Array(Set(data.products.compactMap(\.category)))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    var departments: [String] {
+        Array(Set(data.products.compactMap(\.department)))
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
