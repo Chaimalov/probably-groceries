@@ -22,20 +22,21 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/ProbablyDerived" \
             CODE_SIGNING_ALLOWED=NO build
-      - name: Run shopping flow on iPhone simulator
+      - name: Install and launch on iPhone simulator
+        timeout-minutes: 10
         run: |
           DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in devices.items() if "iOS-27" in runtime for d in group if d["name"].startswith("iPhone")))')
-          xcodebuild -project ProbablyGroceries.xcodeproj \
-            -scheme ProbablyGroceries \
-            -configuration Debug \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO test
-      - name: Upload simulator test results
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl install "$DEVICE_ID" "$RUNNER_TEMP/ProbablyDerived/Build/Products/Debug-iphonesimulator/ProbablyGroceries.app"
+          xcrun simctl launch "$DEVICE_ID" com.chaimalov.probablygroceries
+          xcrun simctl io "$DEVICE_ID" screenshot "$RUNNER_TEMP/probably-smoke.png"
+      - name: Upload simulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: simulator-test-results
-          path: TestResults.xcresult
+          name: simulator-screenshot
+          path: ${{ runner.temp }}/probably-smoke.png
           if-no-files-found: ignore
