@@ -4,6 +4,10 @@ name: iOS build
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   simulator-build:
     # Xcode 27 is needed to compile against the iOS 27 SDK.
