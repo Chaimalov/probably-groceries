@@ -14,7 +14,7 @@ Target iOS 27. Keep a local store as the responsive source for app actions and u
 | Entity | Key fields | Purpose |
 | --- | --- | --- |
 | StoreList | stable ID, display name | Separate shopping destination, default “קניות” for legacy data |
-| Product | stable ID, display name, normalized name, default quantity, optional category | Household identity and autocomplete |
+| Product | stable ID, display name, normalized name, default quantity, optional department/category | Household identity and autocomplete |
 | ListEntry | ID, store ID, product ID, quantity, urgent, createdAt, status | Active user-owned shopping intent |
 | PurchaseEvent | ID, store ID, product ID, quantity, purchasedAt, source entry ID | Immutable-ish learning signal; corrections remain possible |
 | SuggestionFeedback | ID, product ID, action, timestamp, snoozeUntil | Accept/defer/dismiss outcome |
@@ -24,7 +24,7 @@ Use stable identifiers and explicit timestamps. For a mistaken check-off, revers
 
 The exact check-off timestamps also teach aisle order: derive relative order within each shopping trip from `PurchaseEvent.purchasedAt`, then sort list entries and suggestions using recent trip positions. This is derived data, not a separate order field to sync.
 
-Store IDs scope list entries, purchases, deferrals, predictions and route order. Category lives on the shared product, urgency on the active entry; urgency displays a flag and never changes sorting. Undo restores urgency from the purchase event. Decode records without new fields into the default “קניות” list so existing on-device data survives updates. The category grouping switch changes only presentation, leaving route order available.
+Store IDs scope list entries, purchases, deferrals, predictions and route order. Department and category live on the shared product, urgency on the active entry; urgency displays a flag and never changes sorting. Undo restores urgency from the purchase event. Decode records without new fields into the default “קניות” list so existing on-device data survives updates. The grouping switch groups by department and category for presentation, leaving route order available.
 
 ## Data flow
 
