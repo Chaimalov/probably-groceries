@@ -11,6 +11,10 @@
 
 Initial thresholds are tunable constants, not claims about calibrated probabilities. Keep features and threshold decisions available in a local debug view. Avoid displaying a percent in the consumer UI.
 
+## Shopping route order
+
+Record every check-off at its exact `purchasedAt` timestamp. Group consecutive purchases less than 12 hours apart into a shopping trip, then calculate each product's relative position within that trip. Average recent observed positions with more weight for recent trips. Sort active items and suggested items by this learned route, regardless of the order they were added or their prediction scores; keep the existing order for products without history. Two check-offs of the same product on one trip count as one position. Correcting quantity preserves the event time; undoing a check-off removes its ordering signal. The ordering is local and derived from purchase events, so it can be recalculated after iCloud sync.
+
 ## Feedback semantics
 
 - **Purchase:** strongest positive timing signal.
