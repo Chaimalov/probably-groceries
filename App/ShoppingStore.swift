@@ -53,7 +53,6 @@ final class ShoppingStore: ObservableObject {
     var items: [ShoppingItem] {
         let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
         return data.items.filter { $0.listID == selectedListID }.sorted { left, right in
-            if left.isUrgent != right.isUrgent { return left.isUrgent }
             switch (positions[left.productID], positions[right.productID]) {
             case let (a?, b?) where a != b: return a < b
             case (_?, nil): return true
