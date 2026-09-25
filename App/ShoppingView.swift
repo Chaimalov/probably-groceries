@@ -36,6 +36,7 @@ struct ShoppingView: View {
                                         Button("×\(item.quantity)") { editingItem = item }
                                             .foregroundStyle(.secondary)
                                             .accessibilityLabel("Edit quantity for \(product.name)")
+                                            .accessibilityValue("Quantity \(item.quantity)")
                                         Button(role: .destructive) { store.remove(item) } label: {
                                             Image(systemName: "xmark").font(.caption)
                                         }
