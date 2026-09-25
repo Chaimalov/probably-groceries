@@ -1,6 +1,40 @@
 import XCTest
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testStoreListsUrgencyAndCategories() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+
+        let item = "Oats \(UUID().uuidString.prefix(8))"
+        let storeName = "Corner \(UUID().uuidString.prefix(6))"
+        app.buttons["Add item"].tap()
+        let nameField = app.textFields["What do you need?"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 10))
+        nameField.tap()
+        nameField.typeText(item)
+        let categoryField = app.textFields["Category (optional)"]
+        categoryField.tap()
+        categoryField.typeText("Pantry")
+        app.switches["Urgent"].tap()
+        app.buttons["Add"].tap()
+        XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.images["Urgent"].exists)
+
+        app.buttons["Choose store list, Groceries"].tap()
+        app.buttons["New store list"].tap()
+        let alert = app.alerts["New store list"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        alert.textFields["Store name"].typeText(storeName)
+        alert.buttons["Create"].tap()
+        XCTAssertTrue(app.buttons["Choose store list, \(storeName)"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts[item].exists)
+
+        app.buttons["Choose store list, \(storeName)"].tap()
+        app.buttons["Groceries"].tap()
+        XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
+    }
+
     func testAddBuyUndoAndPersistence() {
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
