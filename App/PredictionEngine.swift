@@ -1,10 +1,13 @@
 import Foundation
 
 enum PredictionEngine {
-    static func evaluate(_ data: ShoppingData, now: Date = .now) -> [PredictionEvaluation] {
-        let activeIDs = Set(data.items.map(\.productID))
+    static func evaluate(_ data: ShoppingData, now: Date = .now,
+                         listID: UUID = ShoppingList.defaultID) -> [PredictionEvaluation] {
+        let activeIDs = Set(data.items.filter { $0.listID == listID }.map(\.productID))
         return data.products.map { product in
-            let purchases = data.purchases.filter { $0.productID == product.id && $0.purchasedAt <= now }
+            let purchases = data.purchases.filter {
+                $0.listID == listID && $0.productID == product.id && $0.purchasedAt <= now
+            }
                 .sorted { $0.purchasedAt < $1.purchasedAt }
             let recentQuantities = purchases.suffix(5).map(\.quantity).filter { $0 > 0 }.sorted()
             let quantity = recentQuantities.isEmpty
@@ -32,7 +35,9 @@ enum PredictionEngine {
             if activeIDs.contains(product.id) {
                 reason = "Already on the list"
                 tier = nil
-            } else if let deferred = data.deferrals.first(where: { $0.productID == product.id && $0.until > now }) {
+            } else if let deferred = data.deferrals.first(where: {
+                $0.listID == listID && $0.productID == product.id && $0.until > now
+            }) {
                 reason = "Deferred until \(deferred.until.formatted(date: .abbreviated, time: .omitted))"
                 tier = nil
             } else if trips.count < 3 {
