@@ -40,6 +40,7 @@ targets:
       - Tests/PredictionEngineTests.swift
       - App/Models.swift
       - App/PredictionEngine.swift
+      - App/ShoppingRouteOrder.swift
     dependencies:
       - target: ProbablyGroceries
     settings:
