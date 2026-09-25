@@ -7,6 +7,7 @@ struct AddItemSheet: View {
     @State private var name = ""
     @State private var quantity = 1
     @State private var category = ""
+    @State private var department = ""
     @State private var urgent = false
 
     var body: some View {
@@ -19,8 +20,17 @@ struct AddItemSheet: View {
                         .focused($nameFocused)
                         .onSubmit(save)
                     Stepper("כמות: \(quantity)", value: $quantity, in: 1...99)
+                    TextField("מחלקה (לא חובה)", text: $department)
                     TextField("קטגוריה (לא חובה)", text: $category)
                     Toggle("דחוף", isOn: $urgent)
+                }
+
+                if !store.departments.isEmpty {
+                    Section("מחלקות") {
+                        ForEach(store.departments, id: \.self) { existing in
+                            Button(existing) { department = existing }
+                        }
+                    }
                 }
 
                 if !store.categories.isEmpty {
@@ -40,6 +50,7 @@ struct AddItemSheet: View {
                                     name = product.name
                                     quantity = product.usualQuantity
                                     category = product.category ?? ""
+                                    department = product.department ?? ""
                                 }
                             }
                         }
@@ -65,7 +76,8 @@ struct AddItemSheet: View {
 
     private func save() {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        store.add(name: name, quantity: quantity, category: category, urgent: urgent)
+        store.add(name: name, quantity: quantity, category: category,
+                  department: department, urgent: urgent)
         dismiss()
     }
 }
