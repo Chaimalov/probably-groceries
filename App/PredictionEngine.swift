@@ -33,24 +33,24 @@ enum PredictionEngine {
             let reason: String
             let tier: Suggestion.Tier?
             if activeIDs.contains(product.id) {
-                reason = "Already on the list"
+                reason = "כבר ברשימה"
                 tier = nil
             } else if let deferred = data.deferrals.first(where: {
                 $0.listID == listID && $0.productID == product.id && $0.until > now
             }) {
-                reason = "Deferred until \(deferred.until.formatted(date: .abbreviated, time: .omitted))"
+                reason = "נדחה עד \(deferred.until.formatted(date: .abbreviated, time: .omitted))"
                 tier = nil
             } else if trips.count < 3 {
-                reason = "Needs three separate shopping trips"
+                reason = "נדרשות שלוש קניות נפרדות"
                 tier = nil
             } else if let progress, progress >= 1.05 {
-                reason = "Recurring purchase is due"
+                reason = "מועד הקנייה החוזרת הגיע"
                 tier = .likely
             } else if let progress, progress >= 0.8 {
-                reason = "Recurring purchase is approaching"
+                reason = "מועד הקנייה החוזרת מתקרב"
                 tier = .maybe
             } else {
-                reason = "Not due yet"
+                reason = "עדיין לא הגיע הזמן"
                 tier = nil
             }
             return PredictionEvaluation(product: product, purchaseCount: purchases.count,
