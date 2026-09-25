@@ -84,14 +84,14 @@ struct Deferral: Codable, Hashable {
 }
 
 struct ShoppingData: Codable {
-    var lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "Groceries")]
+    var lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")]
     var products: [Product] = []
     var items: [ShoppingItem] = []
     var purchases: [Purchase] = []
     var deferrals: [Deferral] = []
 
     enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals }
-    init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "Groceries")],
+    init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")],
          products: [Product] = [], items: [ShoppingItem] = [],
          purchases: [Purchase] = [], deferrals: [Deferral] = []) {
         self.lists = lists; self.products = products; self.items = items
@@ -100,7 +100,7 @@ struct ShoppingData: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         lists = try c.decodeIfPresent([ShoppingList].self, forKey: .lists)
-            ?? [ShoppingList(id: ShoppingList.defaultID, name: "Groceries")]
+            ?? [ShoppingList(id: ShoppingList.defaultID, name: "קניות")]
         products = try c.decodeIfPresent([Product].self, forKey: .products) ?? []
         items = try c.decodeIfPresent([ShoppingItem].self, forKey: .items) ?? []
         purchases = try c.decodeIfPresent([Purchase].self, forKey: .purchases) ?? []
