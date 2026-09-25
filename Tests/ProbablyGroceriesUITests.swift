@@ -44,7 +44,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         editItem.tap()
         let stepper = app.steppers["quantityStepper"]
         XCTAssertTrue(stepper.waitForExistence(timeout: 10))
-        stepper.buttons["Increment"].tap()
+        stepper.buttons["quantityStepper-Increment"].tap()
         app.buttons["Save"].tap()
 
         app.buttons["Bought \(name)"].tap()
@@ -55,7 +55,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         editPurchase.tap()
         let purchaseStepper = app.steppers["quantityStepper"]
         XCTAssertTrue(purchaseStepper.waitForExistence(timeout: 10))
-        purchaseStepper.buttons["Increment"].tap()
+        purchaseStepper.buttons["quantityStepper-Increment"].tap()
         app.buttons["Save"].tap()
         XCTAssertEqual(editPurchase.value as? String, "Quantity 3")
 
