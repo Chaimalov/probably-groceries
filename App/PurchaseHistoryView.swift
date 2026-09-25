@@ -23,6 +23,7 @@ struct PurchaseHistoryView: View {
                         Button("Undo purchase") { store.undo(purchase) }
                             .font(.subheadline)
                     }
+                    .buttonStyle(.borderless)
                 }
             }
             .navigationTitle("Purchase history")
