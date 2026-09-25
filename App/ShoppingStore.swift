@@ -10,17 +10,21 @@ final class ShoppingStore: ObservableObject {
 
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        fileURL = directory.appendingPathComponent("shopping.json")
-        if let bytes = try? Data(contentsOf: fileURL),
+        let path = directory.appendingPathComponent("shopping.json")
+        fileURL = path
+        let loadedData: ShoppingData
+        if let bytes = try? Data(contentsOf: path),
            let saved = try? JSONDecoder().decode(ShoppingData.self, from: bytes) {
-            data = saved
+            loadedData = saved
         } else {
-            data = ShoppingData()
+            loadedData = ShoppingData()
         }
         let savedID = UserDefaults.standard.string(forKey: "selectedShoppingListID")
             .flatMap(UUID.init(uuidString:))
-        selectedListID = data.lists.contains(where: { $0.id == savedID })
-            ? savedID! : data.lists.first?.id ?? ShoppingList.defaultID
+        let listID = loadedData.lists.contains(where: { $0.id == savedID })
+            ? savedID! : loadedData.lists.first?.id ?? ShoppingList.defaultID
+        data = loadedData
+        selectedListID = listID
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
         }) {
