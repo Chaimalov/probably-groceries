@@ -31,11 +31,20 @@ struct ShoppingView: View {
                     if !store.items.isEmpty {
                         sectionTitle("הרשימה שלי", count: store.items.count)
                         if groupByCategory {
-                            ForEach(categoryNames, id: \.self) { name in
-                                sectionTitle(name)
-                                itemRows(store.items.filter {
-                                    (store.product(for: $0.productID)?.category ?? "אחר") == name
-                                })
+                            ForEach(departmentNames, id: \.self) { department in
+                                sectionTitle(department)
+                                ForEach(categoryNames(in: department), id: \.self) { category in
+                                    if category != "כללי" {
+                                        Text(category)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    itemRows(store.items.filter { item in
+                                        let product = store.product(for: item.productID)
+                                        return (product?.department ?? "אחר") == department
+                                            && (product?.category ?? "כללי") == category
+                                    })
+                                }
                             }
                         } else {
                             itemRows(store.items)
@@ -98,12 +107,27 @@ struct ShoppingView: View {
         .tint(Theme.accent)
     }
 
-    private var categoryNames: [String] {
+    private var departmentNames: [String] {
         var seen = Set<String>()
         return store.items.compactMap { item in
-            let name = store.product(for: item.productID)?.category ?? "אחר"
+            let name = store.product(for: item.productID)?.department ?? "אחר"
             return seen.insert(name).inserted ? name : nil
         }
+    }
+
+    private func categoryNames(in department: String) -> [String] {
+        var seen = Set<String>()
+        return store.items.compactMap { item in
+            guard let product = store.product(for: item.productID),
+                  (product.department ?? "אחר") == department else { return nil }
+            let name = product.category ?? "כללי"
+            return seen.insert(name).inserted ? name : nil
+        }
+    }
+
+    private func details(for product: Product) -> String {
+        let parts = [product.department, product.category].compactMap { $0 }
+        return parts.isEmpty ? "ברשימה" : parts.joined(separator: " · ")
     }
 
     private func itemRows(_ items: [ShoppingItem]) -> some View {
@@ -131,7 +155,7 @@ struct ShoppingView: View {
                                         .accessibilityLabel("דחוף")
                                 }
                             }
-                            Text(product.category ?? "ברשימה")
+                            Text(details(for: product))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         }
@@ -146,7 +170,7 @@ struct ShoppingView: View {
                             .accessibilityValue("כמות \(item.quantity)")
                         Menu {
                             Button("עריכת כמות", systemImage: "number") { editingItem = item }
-                            Button("קטגוריה", systemImage: "square.grid.2x2") { editingCategory = product }
+                            Button("מחלקה וקטגוריה", systemImage: "square.grid.2x2") { editingCategory = product }
                             Button(item.isUrgent ? "הסרת דגל דחוף" : "סימון כדחוף",
                                    systemImage: item.isUrgent ? "flag.slash" : "flag") {
                                 store.toggleUrgent(item)
@@ -175,7 +199,7 @@ struct ShoppingView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Menu {
-                    Button(groupByCategory ? "מיון לפי מסלול הקנייה" : "קיבוץ לפי קטגוריה",
+                    Button(groupByCategory ? "מיון לפי מסלול הקנייה" : "קיבוץ לפי מחלקה וקטגוריה",
                            systemImage: "square.grid.2x2") { groupByCategory.toggle() }
                     Button("היסטוריה", systemImage: "clock") { showingHistory = true }
                     Button("תובנות", systemImage: "chart.bar") { showingInsights = true }
