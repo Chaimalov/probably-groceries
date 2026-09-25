@@ -2,7 +2,7 @@
 
 The preferred prototype is the calm left-hand concept: large native typography, generous breathing room, clear list rows, subtle warmth borrowed from the middle concept, and minimal explanation of the prediction machinery. Use “Maybe” for uncertainty. Do not repeat “Likely” on every row or show raw percentages by default.
 
-The selected reference shows a small date and overflow control above a short headline, an airy white list with circular check-off controls, compact product imagery, a secondary quantity line, and a restrained “Maybe” divider. A pill-shaped quick-add field and a four-destination bottom bar anchor the screen. Our functional prototype keeps active items ahead of predictions; the same row language applies to both. Icons can stand in for product imagery until a coherent set of product assets is ready. History, insights, and settings must open working screens rather than decorative destinations.
+The selected reference shows a small date and overflow control above a short headline, an airy white list with circular check-off controls, a secondary quantity line, and a restrained “Maybe” divider. A pill-shaped quick-add field and a four-destination bottom bar anchor the screen. Our functional prototype keeps active items ahead of predictions; the same row language applies to both. Do not depend on product photographs or category illustrations: household products can be highly specific. History, insights, and settings must open working screens rather than decorative destinations.
 
 ## Screen anatomy
 
@@ -22,7 +22,7 @@ The selected reference shows a small date and overflow control above a short hea
 
 ## Materials and color
 
-Use system typography, SF Symbols and semantic colors. Preserve readable content surfaces. Apply current system materials to navigation and controls where appropriate; avoid glass on every row. Use warmth sparingly in accent and empty states, with strong contrast in light and dark appearances.
+Use system typography, SF Symbols and semantic colors. The accent is a legible green with light and dark variants. Preserve readable content surfaces. Lean on the system's Liquid Glass for navigation and floating controls; keep list rows plain so shopping content stays readable. Check both appearances and increased contrast.
 
 ## Widgets
 
