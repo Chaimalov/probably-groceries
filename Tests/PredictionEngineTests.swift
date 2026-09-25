@@ -1,6 +1,34 @@
 import XCTest
 
 final class PredictionEngineTests: XCTestCase {
+    func testLegacyShoppingDataKeepsItemsInDefaultList() throws {
+        let legacy = """
+        {"products":[],"items":[{"id":"00000000-0000-0000-0000-000000000011",
+        "productID":"00000000-0000-0000-0000-000000000012","quantity":2,
+        "addedAt":0}],"purchases":[],"deferrals":[]}
+        """
+        let restored = try JSONDecoder().decode(ShoppingData.self, from: Data(legacy.utf8))
+        XCTAssertEqual(restored.lists.first?.id, ShoppingList.defaultID)
+        XCTAssertEqual(restored.items.first?.listID, ShoppingList.defaultID)
+        XCTAssertEqual(restored.items.first?.isUrgent, false)
+    }
+
+    func testPredictionsStayWithinTheirStore() {
+        let anotherList = UUID()
+        let product = Product(id: UUID(), name: "Milk", usualQuantity: 1)
+        var data = ShoppingData()
+        data.products = [product]
+        for day in [0, 7, 14] {
+            data.purchases.append(Purchase(id: UUID(), productID: product.id,
+                                           quantity: 1, purchasedAt: date(Double(day)),
+                                           sourceItemID: UUID(), listID: anotherList))
+        }
+        XCTAssertEqual(PredictionEngine.evaluate(data, now: date(22),
+                                                 listID: ShoppingList.defaultID)[0].purchaseCount, 0)
+        XCTAssertEqual(PredictionEngine.evaluate(data, now: date(22),
+                                                 listID: anotherList)[0].purchaseCount, 3)
+    }
+
     func testShoppingRouteUsesExactCheckOffOrderAcrossTrips() {
         let milk = UUID(), bread = UUID(), eggs = UUID()
         let start = Date(timeIntervalSince1970: 1_700_000_000)
