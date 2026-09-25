@@ -11,7 +11,7 @@ Before a grocery trip, the user and his wife see one shared list that remembers 
 3. **Shop:** tap to check off a row. Persist a purchase event and move it to a compact purchased section. Undo immediately if tapped by mistake.
 4. **Return:** candidate suggestions appear in “You'll probably need” and “Maybe”; one tap adds to the list. A “Not yet” action defers a candidate until a reasonable later date. Manual removal is not silently treated as a purchase.
 5. **Review:** a simple per-item history and a way to correct a mistaken purchase or quantity. Predictions derive from the corrected event log.
-6. **Organize:** create separate lists for stores; each keeps its own active items, purchase history, route order, and predictions. Give products optional free-form categories and switch between shopping-route order and grouped categories. Mark any active item urgent to keep it first.
+6. **Organize:** create separate lists for stores; each keeps its own active items, purchase history, route order, and predictions. Give products optional free-form categories and switch between shopping-route order and grouped categories. Mark an urgent item with a flag without changing its position.
 
 ## Rules
 
