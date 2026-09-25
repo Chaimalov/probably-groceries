@@ -1,10 +1,14 @@
 import SwiftUI
+import UIKit
 
 struct ShoppingView: View {
     @StateObject private var store = ShoppingStore()
     @State private var showingAdd = false
     @State private var showingHistory = false
+    @State private var showingInsights = false
+    @State private var showingSettings = false
     @State private var editingItem: ShoppingItem?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
@@ -12,7 +16,7 @@ struct ShoppingView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
 
                     if store.items.isEmpty && store.suggestions.isEmpty {
@@ -24,27 +28,49 @@ struct ShoppingView: View {
                         VStack(spacing: 0) {
                             ForEach(store.items) { item in
                                 if let product = store.product(for: item.productID) {
-                                    HStack(spacing: 16) {
-                                        Button { withAnimation(.smooth) { store.buy(item) } } label: {
+                                    HStack(spacing: 12) {
+                                        Button {
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            if reduceMotion { store.buy(item) }
+                                            else { withAnimation(.smooth) { store.buy(item) } }
+                                        } label: {
                                             Image(systemName: "circle")
-                                                .font(.title2)
+                                                .font(.system(size: 24, weight: .light))
                                                 .foregroundStyle(.secondary)
+                                                .frame(width: 32, height: 48)
                                         }
                                         .accessibilityLabel("Bought \(product.name)")
-                                        Text(product.name).font(.body)
-                                        Spacer()
+                                        ProductIcon(name: product.name)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(product.name)
+                                                .font(.body.weight(.medium))
+                                                .lineLimit(2)
+                                            Text("On your list")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 4)
                                         Button("×\(item.quantity)") { editingItem = item }
+                                            .font(.subheadline)
                                             .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
                                             .accessibilityLabel("Edit quantity for \(product.name)")
                                             .accessibilityValue("Quantity \(item.quantity)")
-                                        Button(role: .destructive) { store.remove(item) } label: {
-                                            Image(systemName: "xmark").font(.caption)
+                                        Menu {
+                                            Button("Edit quantity", systemImage: "number") { editingItem = item }
+                                            Button("Remove", systemImage: "trash", role: .destructive) { store.remove(item) }
+                                        } label: {
+                                            Image(systemName: "ellipsis")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                                .frame(width: 30, height: 44)
                                         }
-                                        .tint(.secondary)
-                                        .accessibilityLabel("Remove \(product.name)")
+                                        .accessibilityLabel("More actions for \(product.name)")
                                     }
-                                    .padding(.vertical, 13)
-                                    Divider()
+                                    .padding(.vertical, 8)
+                                    if item.id != store.items.last?.id { Divider().padding(.leading, 88) }
                                 }
                             }
                         }
@@ -73,26 +99,16 @@ struct ShoppingView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 34)
-                .padding(.bottom, 32)
+                .padding(.top, 22)
+                .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemBackground))
-            .safeAreaInset(edge: .bottom) {
-                Button { showingAdd = true } label: {
-                    Label("Add item", systemImage: "plus")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                }
-                .buttonStyle(.borderedProminent)
-                .clipShape(Capsule())
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
-                .background(.regularMaterial)
-            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAdd) { AddItemSheet(store: store) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
+            .sheet(isPresented: $showingInsights) { PredictionDebugView(store: store) }
+            .sheet(isPresented: $showingSettings) { SettingsView() }
             .sheet(item: $editingItem) { item in
                 QuantityEditor(name: store.product(for: item.productID)?.name ?? "Item",
                                quantity: item.quantity) { quantity in
@@ -100,19 +116,36 @@ struct ShoppingView: View {
                 }
             }
         }
-        .tint(.primary)
+        .tint(Color(red: 0.10, green: 0.48, blue: 0.91))
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PROBABLY")
-                .font(.caption.weight(.semibold))
-                .tracking(3)
-                .foregroundStyle(.secondary)
-            Text("A little less\nto remember.")
-                .font(.system(size: 38, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(Date.now, format: .dateTime.weekday(.wide).month(.abbreviated).day())
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    Button("History", systemImage: "clock") { showingHistory = true }
+                    Button("Insights", systemImage: "chart.bar") { showingInsights = true }
+                    Button("Settings", systemImage: "gearshape") { showingSettings = true }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 40, height: 40)
+                        .background(Color(uiColor: .secondarySystemBackground), in: Circle())
+                }
+                .accessibilityLabel("More options")
+            }
+            Text(store.items.isEmpty && store.suggestions.isEmpty
+                 ? "A little less to remember."
+                 : store.items.isEmpty ? "You'll probably need" : "Your shopping list")
+                .font(.system(.largeTitle, design: .default, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Your next grocery trip starts here.")
+            Text(store.items.isEmpty && store.suggestions.isEmpty
+                 ? "Add what you need. Your purchases will help this list learn."
+                 : store.suggestions.isEmpty ? "Ready for your next trip." : "Based on your past purchases")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -120,13 +153,13 @@ struct ShoppingView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             Image(systemName: "basket")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.secondary)
             Text("Nothing on the list yet")
                 .font(.title3.weight(.medium))
-            Text("Add what you need. Checking things off when you buy them helps this list learn your rhythm.")
+            Text("Start with a few things you need today.")
                 .foregroundStyle(.secondary)
         }
         .padding(24)
@@ -136,7 +169,7 @@ struct ShoppingView: View {
 
     private func sectionTitle(_ title: String, count: Int? = nil) -> some View {
         HStack {
-            Text(title).font(.title3.weight(.semibold))
+            Text(title).font(.headline)
             Spacer()
             if let count { Text("\(count)").foregroundStyle(.secondary) }
         }
@@ -145,22 +178,34 @@ struct ShoppingView: View {
     @ViewBuilder
     private func suggestionSection(_ title: String, items: [Suggestion]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionTitle(title)
+            VStack(alignment: .leading, spacing: 4) {
+                if title == "Maybe" {
+                    HStack {
+                        Text("MAYBE")
+                            .font(.caption.weight(.medium))
+                            .tracking(2)
+                            .foregroundStyle(.secondary)
+                        Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
+                    }
+                    .padding(.bottom, 4)
+                } else {
+                    sectionTitle(title).padding(.bottom, 4)
+                }
                 ForEach(items) { suggestion in
                     HStack(spacing: 12) {
+                        ProductIcon(name: suggestion.product.name)
+                            .padding(.leading, 44)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(suggestion.product.name)
-                            if suggestion.quantity > 1 {
-                                Text("Usually ×\(suggestion.quantity)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
+                            Text(suggestion.product.name).font(.body.weight(.medium))
+                            Text(suggestion.quantity > 1
+                                 ? "Usually ×\(suggestion.quantity)" : "From your history")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Button("Not yet") { withAnimation { store.deferSuggestion(suggestion) } }
+                        Spacer(minLength: 4)
+                        Button("Not yet") { store.deferSuggestion(suggestion) }
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button { withAnimation { store.add(suggestion) } } label: {
+                        Button { store.add(suggestion) } label: {
                             Image(systemName: "plus.circle.fill").font(.title2)
                         }
                         .accessibilityLabel("Add \(suggestion.product.name) to list")
@@ -168,6 +213,51 @@ struct ShoppingView: View {
                     .padding(.vertical, 7)
                 }
             }
+        }
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 10) {
+            Button { showingAdd = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.accentColor, in: Circle())
+                    Text("Add an item...").foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 16)
+                .frame(height: 50)
+                .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+            }
+            .accessibilityLabel("Add item")
+
+            HStack {
+                tab("List", icon: "cart.fill", selected: true) {}
+                tab("History", icon: "clock") { showingHistory = true }
+                tab("Insights", icon: "chart.bar") { showingInsights = true }
+                tab("Settings", icon: "gearshape") { showingSettings = true }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .background(.regularMaterial)
+    }
+
+    private func tab(_ title: String, icon: String, selected: Bool = false,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 19))
+                Text(title).font(.caption2)
+            }
+            .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            .frame(maxWidth: .infinity)
         }
     }
 }
