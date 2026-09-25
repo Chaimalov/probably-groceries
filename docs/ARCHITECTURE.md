@@ -24,7 +24,7 @@ Use stable identifiers and explicit timestamps. For a mistaken check-off, revers
 
 The exact check-off timestamps also teach aisle order: derive relative order within each shopping trip from `PurchaseEvent.purchasedAt`, then sort list entries and suggestions using recent trip positions. This is derived data, not a separate order field to sync.
 
-Store IDs scope list entries, purchases, deferrals, predictions and route order. Category lives on the shared product, urgency on the active entry; undo restores urgency from the purchase event. Decode records without new fields into the default Groceries list so existing on-device data survives updates. The category grouping switch changes only presentation, leaving route order available.
+Store IDs scope list entries, purchases, deferrals, predictions and route order. Category lives on the shared product, urgency on the active entry; urgency displays a flag and never changes sorting. Undo restores urgency from the purchase event. Decode records without new fields into the default Groceries list so existing on-device data survives updates. The category grouping switch changes only presentation, leaving route order available.
 
 ## Data flow
 
