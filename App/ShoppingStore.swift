@@ -21,11 +21,17 @@ final class ShoppingStore: ObservableObject {
             .flatMap(UUID.init(uuidString:))
         selectedListID = data.lists.contains(where: { $0.id == savedID })
             ? savedID! : data.lists.first?.id ?? ShoppingList.defaultID
+        if let index = data.lists.firstIndex(where: {
+            $0.id == ShoppingList.defaultID && $0.name == "Groceries"
+        }) {
+            data.lists[index].name = "קניות"
+            persist()
+        }
     }
 
     var currentList: ShoppingList {
         data.lists.first { $0.id == selectedListID }
-            ?? ShoppingList(id: ShoppingList.defaultID, name: "Groceries")
+            ?? ShoppingList(id: ShoppingList.defaultID, name: "קניות")
     }
 
     func selectList(_ id: UUID) {
