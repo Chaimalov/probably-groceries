@@ -2,6 +2,8 @@
 
 The preferred prototype is the calm left-hand concept: large native typography, generous breathing room, clear list rows, subtle warmth borrowed from the middle concept, and minimal explanation of the prediction machinery. Use “Maybe” for uncertainty. Do not repeat “Likely” on every row or show raw percentages by default.
 
+The selected reference shows a small date and overflow control above a short headline, an airy white list with circular check-off controls, compact product imagery, a secondary quantity line, and a restrained “Maybe” divider. A pill-shaped quick-add field and a four-destination bottom bar anchor the screen. Our functional prototype keeps active items ahead of predictions; the same row language applies to both. Icons can stand in for product imagery until a coherent set of product assets is ready. History, insights, and settings must open working screens rather than decorative destinations.
+
 ## Screen anatomy
 
 - One primary list screen, with a short human headline and visible item count.
