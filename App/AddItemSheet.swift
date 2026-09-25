@@ -13,18 +13,18 @@ struct AddItemSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("What do you need?", text: $name)
+                    TextField("מה צריך לקנות?", text: $name)
                         .textInputAutocapitalization(.sentences)
                         .submitLabel(.done)
                         .focused($nameFocused)
                         .onSubmit(save)
-                    Stepper("Quantity: \(quantity)", value: $quantity, in: 1...99)
-                    TextField("Category (optional)", text: $category)
-                    Toggle("Urgent", isOn: $urgent)
+                    Stepper("כמות: \(quantity)", value: $quantity, in: 1...99)
+                    TextField("קטגוריה (לא חובה)", text: $category)
+                    Toggle("דחוף", isOn: $urgent)
                 }
 
                 if !store.categories.isEmpty {
-                    Section("Categories") {
+                    Section("קטגוריות") {
                         ForEach(store.categories, id: \.self) { existing in
                             Button(existing) { category = existing }
                         }
@@ -34,7 +34,7 @@ struct AddItemSheet: View {
                 if !name.isEmpty {
                     let matches = store.matchingProducts(name)
                     if !matches.isEmpty {
-                        Section("From your history") {
+                        Section("מהקניות הקודמות") {
                             ForEach(matches.prefix(6)) { product in
                                 Button(product.name) {
                                     name = product.name
@@ -46,14 +46,14 @@ struct AddItemSheet: View {
                     }
                 }
             }
-            .navigationTitle("Add item")
+            .navigationTitle("הוספת מוצר")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("ביטול") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", action: save)
+                    Button("הוספה", action: save)
                         .fontWeight(.semibold)
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
