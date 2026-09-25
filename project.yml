@@ -33,3 +33,18 @@ targets:
         SWIFT_VERSION: 5.0
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
+  ProbablyGroceriesPredictionTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/PredictionEngineTests.swift
+      - App/Models.swift
+      - App/PredictionEngine.swift
+    dependencies:
+      - target: ProbablyGroceries
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chaimalov.probablygroceries.predictiontests
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
