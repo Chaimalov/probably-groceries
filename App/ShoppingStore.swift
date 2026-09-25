@@ -93,28 +93,10 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    var predictionEvaluations: [PredictionEvaluation] { PredictionEngine.evaluate(data) }
+
     var suggestions: [Suggestion] {
-        let now = Date.now
-        let activeIDs = Set(data.items.map(\.productID))
-        return data.products.compactMap { product -> Suggestion? in
-            guard !activeIDs.contains(product.id),
-                  !data.deferrals.contains(where: { $0.productID == product.id && $0.until > now })
-            else { return nil }
-            let dates = data.purchases.filter { $0.productID == product.id }
-                .map(\.purchasedAt).sorted()
-            guard dates.count >= 3, let latest = dates.last else { return nil }
-            let intervals = zip(dates.dropFirst(), dates).map { pair in
-                pair.0.timeIntervalSince(pair.1) / 86_400
-            }.filter { $0 >= 0.5 }
-            guard !intervals.isEmpty else { return nil }
-            let ordered = intervals.sorted()
-            let typical = ordered[ordered.count / 2]
-            let progress = now.timeIntervalSince(latest) / 86_400 / max(typical, 1)
-            guard progress >= 0.8 else { return nil }
-            return Suggestion(product: product, quantity: product.usualQuantity,
-                              tier: progress >= 1.05 ? .likely : .maybe,
-                              progress: progress)
-        }.sorted { $0.progress > $1.progress }
+        predictionEvaluations.compactMap(\.suggestion).sorted { $0.progress > $1.progress }
     }
 
     private static func normalize(_ name: String) -> String {
