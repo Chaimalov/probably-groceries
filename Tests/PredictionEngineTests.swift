@@ -1,6 +1,34 @@
 import XCTest
 
 final class PredictionEngineTests: XCTestCase {
+    func testShoppingRouteUsesExactCheckOffOrderAcrossTrips() {
+        let milk = UUID(), bread = UUID(), eggs = UUID()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        func purchase(_ product: UUID, day: Int, minute: Int) -> Purchase {
+            Purchase(id: UUID(), productID: product, quantity: 1,
+                     purchasedAt: start.addingTimeInterval(Double(day * 86_400 + minute * 60)),
+                     sourceItemID: UUID())
+        }
+        let events = [
+            purchase(eggs, day: 8, minute: 22),
+            purchase(bread, day: 0, minute: 15),
+            purchase(milk, day: 8, minute: 3),
+            purchase(eggs, day: 0, minute: 21),
+            purchase(bread, day: 8, minute: 12),
+            purchase(milk, day: 0, minute: 2)
+        ]
+        let order = ShoppingRouteOrder.positions(from: events)
+        XCTAssertLessThan(order[milk]!, order[bread]!)
+        XCTAssertLessThan(order[bread]!, order[eggs]!)
+
+        // Removing a mistaken check-off removes that observation from the learned route.
+        let corrected = ShoppingRouteOrder.positions(from: events.filter {
+            $0.productID != eggs || $0.purchasedAt < start.addingTimeInterval(86_400)
+        })
+        XCTAssertNotNil(corrected[eggs])
+        XCTAssertLessThan(corrected[milk]!, corrected[eggs]!)
+    }
+
     private let origin = Date(timeIntervalSince1970: 1_767_225_600)
 
     func testWeeklyStapleUsesRecentMedianQuantity() {
