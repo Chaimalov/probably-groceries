@@ -6,7 +6,6 @@ name: iOS build
 
 jobs:
   simulator-build:
-    # Xcode 27 is needed to compile against the iOS 27 SDK.
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
@@ -24,3 +23,19 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build
+      - name: Run shopping flow on iPhone simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in devices.items() if "iOS-27" in runtime for d in group if d["name"].startswith("iPhone")))')
+          xcodebuild -project ProbablyGroceries.xcodeproj \
+            -scheme ProbablyGroceries \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO test
+      - name: Upload simulator test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-test-results
+          path: TestResults.xcresult
+          if-no-files-found: ignore
