@@ -46,6 +46,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(stepper.waitForExistence(timeout: 10))
         stepper.buttons["quantityStepper-Increment"].tap()
         app.buttons["Save"].tap()
+        app.swipeDown()
         capture("Shopping list with quantity", in: app)
 
         app.buttons["Bought \(name)"].tap()
