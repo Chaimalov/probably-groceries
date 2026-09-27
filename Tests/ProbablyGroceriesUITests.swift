@@ -13,12 +13,14 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         field.typeText(first + "\n")
-        XCTAssertTrue(app.buttons["נקנה \(first)"].waitForExistence(timeout: 10))
+        let buy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", first)).firstMatch
+        XCTAssertTrue(buy.waitForExistence(timeout: 10))
         XCTAssertTrue(field.exists, "Enter should keep inline add available")
         field.typeText(second + "\n")
-        XCTAssertTrue(app.buttons["נקנה \(second)"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", second)).firstMatch.waitForExistence(timeout: 10))
 
-        app.buttons["עריכת כמות והערות עבור \(first)"].tap()
+        let details = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "עריכת כמות", first)).firstMatch
+        details.tap()
         app.buttons["הגדלת כמות"].tap()
         XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
         let note = app.descendants(matching: .any)["itemNoteField"]
@@ -27,9 +29,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        let buy = app.buttons["נקנה \(first)"]
         XCTAssertTrue(buy.waitForExistence(timeout: 10), "Items should survive relaunch")
-        app.buttons["עריכת כמות והערות עבור \(first)"].tap()
+        details.tap()
         XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
         XCTAssertTrue(app.descendants(matching: .any)["itemNoteField"].exists)
         buy.tap()
