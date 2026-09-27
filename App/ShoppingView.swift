@@ -18,6 +18,7 @@ struct ShoppingView: View {
     @State private var sectionName = ""
     @State private var collapsedSections: Set<String> = []
     @State private var selectedItemIDs: Set<UUID> = []
+    @State private var itemFrames: [UUID: CGRect] = [:]
     @State private var editMode: EditMode = .inactive
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
@@ -110,6 +111,25 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
+                .overlay {
+                    TwoFingerSelectionGesture { from, to in
+                        let crossed = store.items.compactMap { item -> UUID? in
+                            guard let frame = itemFrames[item.id],
+                                  frame.minY <= max(from.y, to.y),
+                                  frame.maxY >= min(from.y, to.y),
+                                  frame.minX <= to.x, frame.maxX >= to.x else { return nil }
+                            return item.id
+                        }
+                        guard !crossed.isEmpty else { return }
+                        if !editMode.isEditing {
+                            addFocused = false
+                            editMode = .active
+                        }
+                        selectedItemIDs.formUnion(crossed)
+                    }
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+                }
                 .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(.compact)
@@ -207,6 +227,7 @@ struct ShoppingView: View {
                     collapsedSections.removeAll()
                     isAdding = false
                     selectedItemIDs.removeAll()
+                    itemFrames.removeAll()
                     editMode = .inactive
                 }
             }
@@ -393,6 +414,9 @@ struct ShoppingView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .tag(item.id)
+            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
+                itemFrames[item.id] = frame
+            }
         }
     }
 
