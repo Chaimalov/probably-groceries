@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class ShoppingStore: ObservableObject {
@@ -139,6 +140,49 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ item: ShoppingItem) {
         data.items.removeAll { $0.id == item.id }
+        if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
+        persist()
+    }
+
+    func updateNote(of item: ShoppingItem, to value: String) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        data.items[index].note = value.isEmpty ? nil : value
+        persist()
+    }
+
+    private var photoDirectory: URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("ItemPhotos", isDirectory: true)
+    }
+
+    func photoURL(for item: ShoppingItem) -> URL? {
+        guard let name = item.photoFilename else { return nil }
+        return photoDirectory.appendingPathComponent(name)
+    }
+
+    func setPhoto(_ bytes: Data, for item: ShoppingItem) {
+        guard let image = UIImage(data: bytes),
+              let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, 1200 / max(longest, 1))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: size).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.78) else { return }
+        do {
+            try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
+            let name = "\(item.id.uuidString).jpg"
+            try jpeg.write(to: photoDirectory.appendingPathComponent(name), options: .atomic)
+            data.items[index].photoFilename = name
+            persist()
+        } catch { return }
+    }
+
+    func removePhoto(from item: ShoppingItem) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }),
+              let name = data.items[index].photoFilename else { return }
+        data.items[index].photoFilename = nil
+        try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
         persist()
     }
 
@@ -236,6 +280,8 @@ final class ShoppingStore: ObservableObject {
                                        quantity: current.quantity, purchasedAt: .now,
                                        sourceItemID: current.id, listID: current.listID,
                                        wasUrgent: current.isUrgent))
+        data.purchases[data.purchases.count - 1].note = current.note
+        data.purchases[data.purchases.count - 1].photoFilename = current.photoFilename
         updateUsualQuantity(for: current.productID)
         persist()
     }
@@ -256,11 +302,15 @@ final class ShoppingStore: ObservableObject {
         }) {
             data.items[index].quantity += current.quantity
             data.items[index].isUrgent = data.items[index].isUrgent || current.wasUrgent
+            data.items[index].note = data.items[index].note ?? current.note
+            data.items[index].photoFilename = data.items[index].photoFilename ?? current.photoFilename
         } else {
             data.items.append(ShoppingItem(id: current.sourceItemID,
                                            productID: current.productID,
                                            quantity: current.quantity, addedAt: .now,
                                            listID: current.listID, isUrgent: current.wasUrgent))
+            data.items[data.items.count - 1].note = current.note
+            data.items[data.items.count - 1].photoFilename = current.photoFilename
         }
         updateUsualQuantity(for: current.productID)
         persist()

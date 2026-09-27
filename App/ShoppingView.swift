@@ -1,12 +1,13 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct ShoppingView: View {
     @StateObject private var store = ShoppingStore()
     @State private var isAdding = false
     @State private var newName = ""
     @State private var editedName = ""
-    @State private var editingItem: ShoppingItem?
+    @State private var expandedItemID: UUID?
     @State private var editingCategory: Product?
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
@@ -123,10 +124,6 @@ struct ShoppingView: View {
                 ToolbarItem(placement: .topBarLeading) { listPicker }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
-            .sheet(item: $editingItem) { item in
-                QuantityEditor(name: store.product(for: item.productID)?.name ?? "מוצר",
-                               quantity: item.quantity) { store.updateQuantity(of: item, to: $0) }
-            }
             .sheet(item: $editingCategory) { CategoryEditor(store: store, product: $0) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
@@ -227,6 +224,7 @@ struct ShoppingView: View {
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
         if let product = store.product(for: item.productID) {
+            VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -267,15 +265,26 @@ struct ShoppingView: View {
                     if let category = product.category {
                         Text(category).font(.caption).foregroundStyle(.secondary)
                     }
+                    if let note = item.note, !note.isEmpty, expandedItemID != item.id {
+                        Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 4)
-                if item.quantity > 1 {
-                    Button("×\(item.quantity)") { editingItem = item }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("עריכת כמות עבור \(product.name)")
-                        .accessibilityValue("כמות \(item.quantity)")
+                if item.photoFilename != nil, expandedItemID != item.id {
+                    Image(systemName: "photo").foregroundStyle(.secondary)
                 }
+                Button("×\(item.quantity)") {
+                    expandedItemID = expandedItemID == item.id ? nil : item.id
+                }
+                .font(.subheadline.weight(.medium))
+                .buttonStyle(.bordered)
+                .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
+                .accessibilityValue("כמות \(item.quantity)")
+            }
+            if expandedItemID == item.id {
+                ItemInlineDetails(store: store, item: item)
+                    .padding(.leading, 42)
+            }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
@@ -290,7 +299,7 @@ struct ShoppingView: View {
                     .tint(Theme.accent)
             }
             .contextMenu {
-                Button("כמות", systemImage: "number") { editingItem = item }
+                Button("כמות, הערה ותמונה", systemImage: "square.and.pencil") { expandedItemID = item.id }
                 Button("מחלקה וקטגוריה", systemImage: "square.grid.2x2") { editingCategory = product }
                 Button(item.isUrgent ? "הסר דגל דחוף" : "סמן כדחוף", systemImage: "flag") {
                     store.toggleUrgent(item)
@@ -344,5 +353,67 @@ struct ShoppingView: View {
     private func finishRename(_ item: ShoppingItem) {
         store.rename(item, to: editedName)
         editingNameID = nil
+    }
+}
+
+private struct ItemInlineDetails: View {
+    @ObservedObject var store: ShoppingStore
+    let item: ShoppingItem
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var note: String
+
+    init(store: ShoppingStore, item: ShoppingItem) {
+        self.store = store
+        self.item = item
+        _note = State(initialValue: item.note ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                Button {
+                    store.updateQuantity(of: item, to: max(1, item.quantity - 1))
+                } label: { Image(systemName: "minus.circle.fill").font(.title2) }
+                    .disabled(item.quantity <= 1)
+                    .accessibilityLabel("הפחתת כמות")
+                Text("\(item.quantity)").monospacedDigit().font(.headline)
+                    .accessibilityIdentifier("inlineQuantity")
+                Button {
+                    store.updateQuantity(of: item, to: min(9999, item.quantity + 1))
+                } label: { Image(systemName: "plus.circle.fill").font(.title2) }
+                    .disabled(item.quantity >= 9999)
+                    .accessibilityLabel("הגדלת כמות")
+            }
+            TextField("הערה למוצר…", text: $note, axis: .vertical)
+                .lineLimit(1...3)
+                .onChange(of: note) { _, value in store.updateNote(of: item, to: value) }
+                .accessibilityIdentifier("itemNoteField")
+            HStack {
+                if let url = store.photoURL(for: item), let image = UIImage(contentsOfFile: url.path) {
+                    Image(uiImage: image)
+                        .resizable().scaledToFill()
+                        .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                }
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label(item.photoFilename == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
+                }
+                .onChange(of: selectedPhoto) { _, selection in
+                    guard let selection else { return }
+                    Task {
+                        if let data = try? await selection.loadTransferable(type: Data.self) {
+                            store.setPhoto(data, for: item)
+                        }
+                    }
+                }
+                if item.photoFilename != nil {
+                    Button("הסרת תמונה", systemImage: "xmark.circle") {
+                        store.removePhoto(from: item)
+                    }
+                    .labelStyle(.iconOnly)
+                }
+            }
+            .font(.subheadline)
+        }
+        .padding(.vertical, 8)
     }
 }

@@ -34,8 +34,10 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var listID: UUID = ShoppingList.defaultID
     var isUrgent: Bool = false
     var manualOrder: Int? = nil
+    var note: String? = nil
+    var photoFilename: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -50,6 +52,8 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID) ?? ShoppingList.defaultID
         isUrgent = try c.decodeIfPresent(Bool.self, forKey: .isUrgent) ?? false
         manualOrder = try c.decodeIfPresent(Int.self, forKey: .manualOrder)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
     }
 }
 
@@ -61,8 +65,10 @@ struct Purchase: Codable, Identifiable, Hashable {
     var sourceItemID: UUID
     var listID: UUID = ShoppingList.defaultID
     var wasUrgent: Bool = false
+    var note: String? = nil
+    var photoFilename: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename }
     init(id: UUID, productID: UUID, quantity: Int, purchasedAt: Date,
          sourceItemID: UUID, listID: UUID = ShoppingList.defaultID, wasUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -78,6 +84,8 @@ struct Purchase: Codable, Identifiable, Hashable {
         sourceItemID = try c.decode(UUID.self, forKey: .sourceItemID)
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID) ?? ShoppingList.defaultID
         wasUrgent = try c.decodeIfPresent(Bool.self, forKey: .wasUrgent) ?? false
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
     }
 }
 
