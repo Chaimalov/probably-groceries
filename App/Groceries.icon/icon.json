@@ -5,10 +5,12 @@
   ],
   "groups": [
     {
-      "name": "Leaf and banana",
-      "layers": [{"name": "Produce behind", "image-name": "produce-back.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
+      "name": "Glass bag",
+      "layers": [{"name": "Shopping bag", "image-name": "market-bag.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
+      "blur-material": 0.10,
+      "translucency": {"enabled": true, "value": 0.72},
       "specular": true,
-      "shadow": {"kind": "neutral", "opacity": 0.18}
+      "shadow": {"kind": "neutral", "opacity": 0.25}
     },
     {
       "name": "Tomato",
@@ -17,12 +19,10 @@
       "shadow": {"kind": "neutral", "opacity": 0.16}
     },
     {
-      "name": "Glass bag",
-      "layers": [{"name": "Shopping bag", "image-name": "market-bag.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
-      "blur-material": 0.10,
-      "translucency": {"enabled": true, "value": 0.72},
+      "name": "Leaf and banana",
+      "layers": [{"name": "Produce behind", "image-name": "produce-back.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
       "specular": true,
-      "shadow": {"kind": "neutral", "opacity": 0.25}
+      "shadow": {"kind": "neutral", "opacity": 0.18}
     }
   ],
   "supported-platforms": {"squares": "shared", "circles": ["watchOS"]}
