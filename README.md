@@ -31,6 +31,7 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 - [Prediction contract](docs/PREDICTION.md)
 - [Jev spike](docs/JEV.md)
 - [v1 dependency graph](docs/ROADMAP.md)
+- [First TestFlight install](docs/TESTFLIGHT.md)
 
 The repository starts with decisions and issues. The Xcode project is the first implementation task. Keep dependencies small, ship to personal devices early, and change the model when actual use disproves it.
 
