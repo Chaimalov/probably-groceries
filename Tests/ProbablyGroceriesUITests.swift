@@ -97,6 +97,14 @@ final class ProbablyGroceriesUITests: XCTestCase {
         header.tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
 
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["סידור מוצרים"].tap()
+        let reorderScreenshot = XCTAttachment(screenshot: app.screenshot())
+        reorderScreenshot.name = "Native reorder handles"
+        reorderScreenshot.lifetime = .keepAlways
+        add(reorderScreenshot)
+        app.buttons["סיום"].tap()
+
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
         app.buttons["רשימה חדשה לחנות"].tap()
         let alert = app.alerts["רשימה חדשה לחנות"]
