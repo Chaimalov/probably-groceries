@@ -61,6 +61,15 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func setAppearance(tintName: String, symbolName: String) {
+        guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }),
+              Theme.listColors.contains(where: { $0.name == tintName }),
+              Theme.listSymbols.contains(symbolName) else { return }
+        data.lists[index].tintName = tintName
+        data.lists[index].symbolName = symbolName
+        persist()
+    }
+
     var items: [ShoppingItem] {
         let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
         return data.items.filter { $0.listID == selectedListID }.sorted { left, right in
@@ -109,14 +118,10 @@ final class ShoppingStore: ObservableObject {
                let index = data.products.firstIndex(where: { $0.id == productID }) {
                 data.products[index].category = category.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            if let department, !department.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               let index = data.products.firstIndex(where: { $0.id == productID }) {
-                data.products[index].department = department.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
         } else {
             let product = Product(id: UUID(), name: displayName, usualQuantity: max(1, quantity),
                                   category: category?.trimmingCharacters(in: .whitespacesAndNewlines),
-                                  department: department?.trimmingCharacters(in: .whitespacesAndNewlines))
+                                  department: nil)
             data.products.append(product)
             productID = product.id
         }
@@ -125,11 +130,15 @@ final class ShoppingStore: ObservableObject {
         }) {
             data.items[index].quantity += max(1, quantity)
             data.items[index].isUrgent = data.items[index].isUrgent || urgent
+            if let department { data.items[index].sectionName = department.trimmingCharacters(in: .whitespacesAndNewlines) }
         } else {
             data.items.append(ShoppingItem(id: UUID(), productID: productID,
                                            quantity: max(1, quantity), addedAt: .now,
                                            listID: selectedListID, isUrgent: urgent))
             data.items[data.items.count - 1].unit = product(for: productID)?.preferredUnit
+            data.items[data.items.count - 1].sectionName = department?.trimmingCharacters(in: .whitespacesAndNewlines)
+                ?? data.purchases.filter { $0.productID == productID && $0.listID == selectedListID }
+                    .max(by: { $0.purchasedAt < $1.purchasedAt })?.sectionName
         }
         data.deferrals.removeAll { $0.productID == productID && $0.listID == selectedListID }
         persist()
@@ -208,30 +217,15 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    func move(_ itemID: UUID, before targetID: UUID, grouping: Bool) {
-        guard itemID != targetID,
-              let target = data.items.first(where: { $0.id == targetID && $0.listID == selectedListID })
-        else { return }
-        if grouping, let moved = data.items.first(where: { $0.id == itemID && $0.listID == selectedListID }),
-           let productIndex = data.products.firstIndex(where: { $0.id == moved.productID }) {
-            let targetProduct = product(for: target.productID)
-            data.products[productIndex].department = targetProduct?.department
-            data.products[productIndex].category = targetProduct?.category
-        }
-        var ordered = items.map(\.id)
-        guard let source = ordered.firstIndex(of: itemID) else { return }
-        ordered.remove(at: source)
-        guard let destination = ordered.firstIndex(of: targetID) else { return }
-        ordered.insert(itemID, at: destination)
-        applyManualOrder(ordered)
+    func move(_ itemID: UUID, toSection section: String) {
+        guard let index = data.items.firstIndex(where: { $0.id == itemID && $0.listID == selectedListID }) else { return }
+        data.items[index].sectionName = section == "אחר" ? "" : section
+        persist()
     }
 
-    func move(_ itemID: UUID, toSection section: String) {
-        guard let item = data.items.first(where: { $0.id == itemID && $0.listID == selectedListID }),
-              let index = data.products.firstIndex(where: { $0.id == item.productID }) else { return }
-        data.products[index].department = section == "אחר" ? nil : section
-        data.products[index].category = nil
-        persist()
+    func section(for item: ShoppingItem) -> String {
+        let name = item.sectionName ?? product(for: item.productID)?.department ?? ""
+        return name.isEmpty ? "אחר" : name
     }
 
     private func applyManualOrder(_ orderedIDs: [UUID]) {
@@ -242,12 +236,29 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    func setGrouping(for productID: UUID, department: String?, category: String?) {
-        guard let index = data.products.firstIndex(where: { $0.id == productID }) else { return }
+    func move(from source: IndexSet, to destination: Int, inSection section: String?) {
+        let ordered = items
+        var sectionIDs = ordered.filter { item in
+            section == nil || self.section(for: item) == section
+        }.map(\.id)
+        sectionIDs.move(fromOffsets: source, toOffset: destination)
+        var iterator = sectionIDs.makeIterator()
+        let merged = ordered.map { item in
+            if section == nil || self.section(for: item) == section {
+                return iterator.next()!
+            }
+            return item.id
+        }
+        applyManualOrder(merged)
+    }
+
+    func setGrouping(for itemID: UUID, department: String?, category: String?) {
+        guard let itemIndex = data.items.firstIndex(where: { $0.id == itemID && $0.listID == selectedListID }),
+              let index = data.products.firstIndex(where: { $0.id == data.items[itemIndex].productID }) else { return }
         let trimmedCategory = category?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDepartment = department?.trimmingCharacters(in: .whitespacesAndNewlines)
         data.products[index].category = trimmedCategory?.isEmpty == false ? trimmedCategory : nil
-        data.products[index].department = trimmedDepartment?.isEmpty == false ? trimmedDepartment : nil
+        data.items[itemIndex].sectionName = trimmedDepartment?.isEmpty == false ? trimmedDepartment : ""
         persist()
     }
 
@@ -312,6 +323,7 @@ final class ShoppingStore: ObservableObject {
         data.purchases[data.purchases.count - 1].note = current.note
         data.purchases[data.purchases.count - 1].photoFilename = current.photoFilename
         data.purchases[data.purchases.count - 1].unit = current.unit
+        data.purchases[data.purchases.count - 1].sectionName = current.sectionName
         updateUsualQuantity(for: current.productID)
         persist()
     }
@@ -335,6 +347,7 @@ final class ShoppingStore: ObservableObject {
             data.items[index].note = data.items[index].note ?? current.note
             data.items[index].photoFilename = data.items[index].photoFilename ?? current.photoFilename
             data.items[index].unit = data.items[index].unit ?? current.unit
+            data.items[index].sectionName = data.items[index].sectionName ?? current.sectionName
         } else {
             data.items.append(ShoppingItem(id: current.sourceItemID,
                                            productID: current.productID,
@@ -343,6 +356,7 @@ final class ShoppingStore: ObservableObject {
             data.items[data.items.count - 1].note = current.note
             data.items[data.items.count - 1].photoFilename = current.photoFilename
             data.items[data.items.count - 1].unit = current.unit
+            data.items[data.items.count - 1].sectionName = current.sectionName
         }
         updateUsualQuantity(for: current.productID)
         persist()
