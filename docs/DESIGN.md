@@ -1,6 +1,6 @@
 # iOS design direction
 
-The preferred prototype is the calm left-hand concept: large native typography, generous breathing room, clear list rows, subtle warmth borrowed from the middle concept, and minimal explanation of the prediction machinery. Use “Maybe” for uncertainty. Do not repeat “Likely” on every row or show raw percentages by default.
+The preferred prototype uses large native typography and a compact, separator-free list like Apple Reminders. Keep breathing room around the headline and sections rather than between every product. Use “Maybe” for uncertainty. Do not repeat “Likely” on every row or show raw percentages by default.
 
 All user-facing app screens use Hebrew and right-to-left layout. The screenshot reference illustrates hierarchy and spacing; its English copy is not the app language.
 

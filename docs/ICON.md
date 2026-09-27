@@ -5,7 +5,7 @@ The source is `App/Groceries.icon`, a native layered Icon Composer document. The
 ## Construction
 
 - Keep the shared 1024 × 1024 coordinate system in every SVG. Leave the platform corner mask and border to the system.
-- The canvas owns the emerald gradient, with a darker appearance variant. The three depth groups contain the leaf and banana, tomato, and translucent bag front. This keeps the silhouette readable at Home Screen size.
+- The canvas owns the emerald gradient, with a darker appearance variant. The three depth groups contain the translucent bag front, tomato, and leaf and banana. Icon Composer renders the first group in front: keep the bag first so it visibly holds the produce on device. This keeps the silhouette readable at Home Screen size.
 - Source SVGs contain flat colors and simple shapes. Icon Composer provides the glass translucency, blur, specular lighting, and shadows. Don't paint static reflections into the source layers.
 - The bag is the largest shape and the clearest mono silhouette. Preview default, dark, tinted, and clear variants and the circular crop in Icon Composer before shipping. If mono contrast is weak, tune the group's mono appearance there.
 - The JSON document is wired to Xcode through `ASSETCATALOG_COMPILER_APPICON_NAME: Groceries` in `project.yml`.
