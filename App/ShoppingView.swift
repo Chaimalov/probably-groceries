@@ -55,6 +55,9 @@ struct ShoppingView: View {
                                     .focused($addFocused)
                                     .submitLabel(.next)
                                     .onSubmit(addInline)
+                                    .onChange(of: newName) { _, value in
+                                        if value.contains("\n") { addInline() }
+                                    }
                                     .accessibilityIdentifier("inlineAddField")
                             }
                             .id("new-item")
