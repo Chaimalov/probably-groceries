@@ -20,14 +20,14 @@ struct AddItemSheet: View {
                         .focused($nameFocused)
                         .onSubmit(save)
                     Stepper("כמות: \(quantity)", value: $quantity, in: 1...99)
-                    TextField("מחלקה (לא חובה)", text: $department)
+                    TextField("מקטע (לא חובה)", text: $department)
                     TextField("קטגוריה (לא חובה)", text: $category)
                     Toggle("דחוף", isOn: $urgent)
                 }
 
-                if !store.departments.isEmpty {
+                if !store.currentList.sections.isEmpty || !store.departments.isEmpty {
                     Section("מחלקות") {
-                        ForEach(store.departments, id: \.self) { existing in
+                        ForEach(Array(Set(store.currentList.sections + store.departments)).sorted(), id: \.self) { existing in
                             Button(existing) { department = existing }
                         }
                     }
