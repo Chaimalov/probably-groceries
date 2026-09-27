@@ -49,7 +49,11 @@ struct ShoppingView: View {
                             Section {
                                 if !collapsedSections.contains(section) {
                                     ForEach(items(in: section)) { item in
-                                        itemRow(item).moveDisabled(!reordering)
+                                        itemRow(item)
+                                            .moveDisabled(!reordering)
+                                            .listRowSeparator(.hidden, edges: .all)
+                                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                            .listRowBackground(Color.clear)
                                     }
                                     .onMove { source, destination in
                                         store.move(from: source, to: destination, inSection: section)
@@ -63,7 +67,11 @@ struct ShoppingView: View {
                     } else {
                         Section {
                             ForEach(store.items) { item in
-                                itemRow(item).moveDisabled(!reordering)
+                                itemRow(item)
+                                    .moveDisabled(!reordering)
+                                    .listRowSeparator(.hidden, edges: .all)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                    .listRowBackground(Color.clear)
                             }
                             .onMove { source, destination in
                                 store.move(from: source, to: destination, inSection: nil)
@@ -464,9 +472,6 @@ struct ShoppingView: View {
                 }
                 Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
             }
-            .listRowSeparator(.hidden, edges: .all)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
                 itemFrames[item.id] = frame
