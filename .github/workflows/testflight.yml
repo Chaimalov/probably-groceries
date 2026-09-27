@@ -28,18 +28,17 @@ jobs:
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
       - name: Archive for iPhone
         run: |
+          # CI runners have no persistent development certificate. Archive
+          # without signing, then let App Store Connect sign on export.
           xcodebuild archive \
             -project ProbablyGroceries.xcodeproj \
             -scheme ProbablyGroceries \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
-            -authenticationKeyID "$APPLE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO
       - name: Upload to App Store Connect
         run: |
           python3 - <<'PY'
