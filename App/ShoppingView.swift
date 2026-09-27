@@ -235,6 +235,7 @@ struct ShoppingView: View {
                         .font(.system(size: 24, weight: .light))
                         .frame(width: 30, height: 44)
                 }
+                .buttonStyle(.borderless)
                 .accessibilityLabel("נקנה \(product.name)")
                 VStack(alignment: .leading, spacing: 2) {
                     if editingNameID == item.id {
@@ -397,6 +398,7 @@ private struct ItemInlineDetails: View {
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
+                .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
                     guard let selection else { return }
                     Task {
@@ -414,6 +416,7 @@ private struct ItemInlineDetails: View {
             }
             .font(.subheadline)
         }
+        .buttonStyle(.borderless)
         .padding(.vertical, 8)
     }
 }
