@@ -13,14 +13,14 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(nameField.waitForExistence(timeout: 10))
         nameField.tap()
         nameField.typeText(item)
+        app.switches["דחוף"].tap()
+        XCTAssertEqual(app.switches["דחוף"].value as? String, "1")
         let departmentField = app.textFields["מחלקה (לא חובה)"]
         departmentField.tap()
         departmentField.typeText("Dairy")
         let categoryField = app.textFields["קטגוריה (לא חובה)"]
         categoryField.tap()
         categoryField.typeText("Pantry")
-        app.switches["דחוף"].tap()
-        XCTAssertEqual(app.switches["דחוף"].value as? String, "1")
         app.buttons["הוספה"].tap()
         XCTAssertTrue(app.staticTexts[item].waitForExistence(timeout: 10))
         labeledButton(app, prefix: "פעולות נוספות", containing: item).tap()
