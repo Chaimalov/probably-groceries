@@ -70,7 +70,7 @@ struct TwoFingerSelectionGesture: UIViewRepresentable {
         }
 
         private func findListScrollView(in root: UIView, near anchor: UIView) -> UIScrollView? {
-            let origin = anchor.convert(.zero, to: root)
+            let origin = anchor.convert(CGPoint.zero, to: root)
             func search(_ view: UIView) -> UIScrollView? {
                 if let scroll = view as? UICollectionView,
                    scroll.frame(in: root).contains(origin) { return scroll }
