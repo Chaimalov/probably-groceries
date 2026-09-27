@@ -18,10 +18,20 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.typeText(second + "\n")
         XCTAssertTrue(app.buttons["נקנה \(second)"].waitForExistence(timeout: 10))
 
+        app.buttons["עריכת כמות והערות עבור \(first)"].tap()
+        app.buttons["הגדלת כמות"].tap()
+        XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
+        let note = app.descendants(matching: .any)["itemNoteField"]
+        note.tap()
+        note.typeText("ללא סוכר")
+
         app.terminate()
         app.launch()
         let buy = app.buttons["נקנה \(first)"]
         XCTAssertTrue(buy.waitForExistence(timeout: 10), "Items should survive relaunch")
+        app.buttons["עריכת כמות והערות עבור \(first)"].tap()
+        XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
+        XCTAssertTrue(app.descendants(matching: .any)["itemNoteField"].exists)
         buy.tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 10))
         app.buttons["ביטול"].tap()
