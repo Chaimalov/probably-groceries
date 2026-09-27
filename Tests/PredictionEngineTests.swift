@@ -11,6 +11,24 @@ final class PredictionEngineTests: XCTestCase {
         XCTAssertEqual(restored.lists.first?.id, ShoppingList.defaultID)
         XCTAssertEqual(restored.items.first?.listID, ShoppingList.defaultID)
         XCTAssertEqual(restored.items.first?.isUrgent, false)
+        XCTAssertNil(restored.items.first?.unit)
+    }
+
+    func testOptionalUnitSurvivesPersistenceWithoutChangingPurchaseHistory() throws {
+        let productID = UUID()
+        var product = Product(id: productID, name: "Milk", usualQuantity: 2)
+        product.preferredUnit = "ליטרים"
+        var item = ShoppingItem(id: UUID(), productID: productID, quantity: 2, addedAt: .now)
+        item.unit = "ליטרים"
+        var purchase = Purchase(id: UUID(), productID: productID, quantity: 1,
+                                purchasedAt: .now, sourceItemID: UUID())
+        purchase.unit = "בקבוקים"
+        let restored = try JSONDecoder().decode(ShoppingData.self, from: JSONEncoder().encode(
+            ShoppingData(products: [product], items: [item], purchases: [purchase])
+        ))
+        XCTAssertEqual(restored.products[0].preferredUnit, "ליטרים")
+        XCTAssertEqual(restored.items[0].unit, "ליטרים")
+        XCTAssertEqual(restored.purchases[0].unit, "בקבוקים")
     }
 
     func testPredictionsStayWithinTheirStore() {

@@ -23,6 +23,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         details.tap()
         app.buttons["הגדלת כמות"].tap()
         XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
+        app.buttons["בחירת יחידת מידה"].tap()
+        app.buttons["חבילות"].tap()
         let note = app.descendants(matching: .any)["itemNoteField"]
         note.tap()
         note.typeText("ללא סוכר")
@@ -32,11 +34,33 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(buy.waitForExistence(timeout: 10), "Items should survive relaunch")
         details.tap()
         XCTAssertEqual(app.staticTexts["inlineQuantity"].label, "2")
+        XCTAssertEqual(app.buttons["בחירת יחידת מידה"].value as? String, "חבילות")
         XCTAssertTrue(app.descendants(matching: .any)["itemNoteField"].exists)
         buy.tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 10))
         app.buttons["ביטול"].tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
+    }
+
+    func testMultipleSelectionFlagsItemsTogether() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+
+        let first = "Milk \(UUID().uuidString.prefix(8))"
+        let second = "Bread \(UUID().uuidString.prefix(8))"
+        app.buttons["הוספת מוצר"].tap()
+        let field = app.textFields["inlineAddField"]
+        field.tap()
+        field.typeText(first + "\n")
+        field.typeText(second + "\n")
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["בחירת פריטים"].tap()
+        app.staticTexts[first].tap()
+        app.staticTexts[second].tap()
+        XCTAssertTrue(app.staticTexts["2 נבחרו"].waitForExistence(timeout: 5))
+        app.buttons["דגל"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", first)).firstMatch.waitForExistence(timeout: 5))
     }
 
     func testSectionCreationAndStoreSwitching() {
