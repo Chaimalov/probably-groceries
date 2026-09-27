@@ -14,6 +14,8 @@ targets:
       properties:
         CFBundleDisplayName: קניות
         CFBundleDevelopmentRegion: he
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
     settings:
       base:
@@ -21,6 +23,8 @@ targets:
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
   ProbablyGroceriesUITests:
     type: bundle.ui-testing
     platform: iOS
