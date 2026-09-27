@@ -14,16 +14,21 @@ struct ShoppingList: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
     var sections: [String] = []
+    var tintName: String = "green"
+    var symbolName: String = "cart"
 
-    enum CodingKeys: String, CodingKey { case id, name, sections }
-    init(id: UUID, name: String, sections: [String] = []) {
+    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName }
+    init(id: UUID, name: String, sections: [String] = [], tintName: String = "green", symbolName: String = "cart") {
         self.id = id; self.name = name; self.sections = sections
+        self.tintName = tintName; self.symbolName = symbolName
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         sections = try c.decodeIfPresent([String].self, forKey: .sections) ?? []
+        tintName = try c.decodeIfPresent(String.self, forKey: .tintName) ?? "green"
+        symbolName = try c.decodeIfPresent(String.self, forKey: .symbolName) ?? "cart"
     }
 }
 
@@ -38,8 +43,9 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var note: String? = nil
     var photoFilename: String? = nil
     var unit: String? = nil
+    var sectionName: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -57,6 +63,7 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         note = try c.decodeIfPresent(String.self, forKey: .note)
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
     }
 }
 
@@ -71,8 +78,9 @@ struct Purchase: Codable, Identifiable, Hashable {
     var note: String? = nil
     var photoFilename: String? = nil
     var unit: String? = nil
+    var sectionName: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename, unit }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename, unit, sectionName }
     init(id: UUID, productID: UUID, quantity: Int, purchasedAt: Date,
          sourceItemID: UUID, listID: UUID = ShoppingList.defaultID, wasUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -91,6 +99,7 @@ struct Purchase: Codable, Identifiable, Hashable {
         note = try c.decodeIfPresent(String.self, forKey: .note)
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
     }
 }
 
