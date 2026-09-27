@@ -1,0 +1,31 @@
+{
+  "fill-specializations": [
+    {"value": {"linear-gradient": ["display-p3:0.05500,0.61000,0.46500,1.00000", "display-p3:0.01500,0.28500,0.35500,1.00000"]}},
+    {"appearance": "dark", "value": {"linear-gradient": ["display-p3:0.02500,0.36500,0.35500,1.00000", "display-p3:0.00500,0.11500,0.19500,1.00000"]}}
+  ],
+  "groups": [
+    {
+      "name": "Glass list",
+      "layers": [{"name": "List card", "image-name": "card.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
+      "blur-material": 0.16,
+      "translucency": {"enabled": true, "value": 0.75},
+      "specular": true,
+      "shadow": {"kind": "neutral", "opacity": 0.28}
+    },
+    {
+      "name": "Groceries",
+      "layers": [{"name": "Colorful list", "image-name": "groceries.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
+      "specular": true,
+      "shadow": {"kind": "neutral", "opacity": 0.16}
+    },
+    {
+      "name": "Check",
+      "layers": [{"name": "Floating check", "image-name": "check.svg", "position": {"scale": 1, "translation-in-points": [0, 0]}}],
+      "blur-material": 0.12,
+      "translucency": {"enabled": true, "value": 0.72},
+      "specular": true,
+      "shadow": {"kind": "neutral", "opacity": 0.27}
+    }
+  ],
+  "supported-platforms": {"squares": "shared", "circles": ["watchOS"]}
+}
