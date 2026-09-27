@@ -4,22 +4,22 @@ The preferred prototype is the calm left-hand concept: large native typography, 
 
 All user-facing app screens use Hebrew and right-to-left layout. The screenshot reference illustrates hierarchy and spacing; its English copy is not the app language.
 
-The selected reference shows a small date and overflow control above a short headline, an airy white list with circular check-off controls, a secondary quantity line, and a restrained “Maybe” divider. A pill-shaped quick-add field and a four-destination bottom bar anchor the screen. Our functional prototype keeps active items ahead of predictions; the same row language applies to both. Do not depend on product photographs or category illustrations: household products can be highly specific. History, insights, and settings must open working screens rather than decorative destinations.
+The selected reference shows a small date and overflow control above a short headline, an airy white list with circular check-off controls, a secondary quantity line, and a restrained “Maybe” divider. An inline add row and one native bottom action anchor the screen. The current interaction model follows Apple Reminders: Enter adds another item, swipes expose row actions, and touch-and-hold drag changes the order. Our functional prototype keeps active items ahead of predictions; the same row language applies to both. Do not depend on product photographs or category illustrations: household products can be highly specific. History, insights, and settings must open working screens rather than decorative destinations.
 
 ## Screen anatomy
 
 - One primary list screen, with a short human headline and visible item count.
 - Active items first, suggested items next, compact purchased rows last. Keep the shopping state obvious.
-- A thumb-reachable quick-add action that opens a native entry field and suggestions from history.
+- A thumb-reachable New Item action focuses an inline row. Enter saves and keeps the row ready for the next item. Complex quantity and grouping editing can use a sheet.
 - Each row shows name and quantity. Completion is generous to tap and supported by VoiceOver.
-- A small store picker switches lists. A menu toggles department and category grouping; urgent items show a flag in place without moving in the list.
+- A small store picker switches lists. A menu toggles department grouping and creates sections; section headers collapse, and dragging moves items within or across sections. Urgent items show a flag in place without moving in the list.
 - Detailed why/when and history live behind a tap; the first screen stays quiet.
 
 ## Interaction language
 
 - A check-off gives a light haptic and a short, reversible move to Purchased.
 - Accepting a suggestion promotes it to the active list. “Not yet” records feedback with a temporary snooze.
-- Swipe actions may be shortcuts, but all important actions need discoverable buttons or menus.
+- Swipe actions expose flag, details and remove; a context menu keeps these actions discoverable. Touch-and-hold drag reorders items.
 - Use native transitions and respect Reduce Motion. No decorative animations that delay shopping.
 - Hebrew and English must both lay out correctly; test long names, dynamic type, dark mode, and RTL.
 
