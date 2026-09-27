@@ -103,14 +103,16 @@ final class ProbablyGroceriesUITests: XCTestCase {
 
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
         app.buttons["צבע וסמל הרשימה"].tap()
-        app.buttons["צבע blue"].tap()
-        app.buttons["סמל basket"].tap()
+        let blue = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blue")).firstMatch
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "basket")).firstMatch
+        blue.tap()
+        basket.tap()
         app.buttons["שמירה"].tap()
         app.terminate()
         app.launch()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
         app.buttons["צבע וסמל הרשימה"].tap()
-        XCTAssertTrue(app.buttons["צבע blue"].isSelected)
-        XCTAssertTrue(app.buttons["סמל basket"].isSelected)
+        XCTAssertTrue(blue.isSelected)
+        XCTAssertTrue(basket.isSelected)
     }
 }
