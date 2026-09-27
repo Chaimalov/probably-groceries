@@ -13,7 +13,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(nameField.waitForExistence(timeout: 10))
         nameField.tap()
         nameField.typeText(item)
-        app.switches["דחוף"].tap()
+        // Tap the switch itself; tapping the row center while a text field is
+        // focused can only dismiss the keyboard on iOS 27.
+        app.switches["דחוף"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
         XCTAssertEqual(app.switches["דחוף"].value as? String, "1")
         let departmentField = app.textFields["מחלקה (לא חובה)"]
         departmentField.tap()
