@@ -78,16 +78,20 @@ final class ProbablyGroceriesUITests: XCTestCase {
         sectionAlert.buttons["יצירה"].tap()
         XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 10))
 
-        app.buttons["הוספת מוצר למקטע \(section)"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@",
+                                         section, "הוספת מוצר למקטע")).firstMatch.tap()
         let item = "Eggs \(UUID().uuidString.prefix(6))"
         let field = app.textFields["inlineAddField"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
         field.typeText(item + "\n")
-        XCTAssertTrue(app.buttons["נקנה \(item)"].waitForExistence(timeout: 10))
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", section)).firstMatch.tap()
-        XCTAssertFalse(app.buttons["נקנה \(item)"].exists)
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", section)).firstMatch.tap()
-        XCTAssertTrue(app.buttons["נקנה \(item)"].waitForExistence(timeout: 10))
+        let buy = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", item, "נקנה")).firstMatch
+        XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        let header = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", section, "מוצרים")).firstMatch
+        header.tap()
+        XCTAssertFalse(buy.exists)
+        header.tap()
+        XCTAssertTrue(buy.waitForExistence(timeout: 10))
 
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
         app.buttons["רשימה חדשה לחנות"].tap()
