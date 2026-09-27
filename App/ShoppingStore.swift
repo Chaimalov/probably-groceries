@@ -63,6 +63,12 @@ final class ShoppingStore: ObservableObject {
     var items: [ShoppingItem] {
         let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
         return data.items.filter { $0.listID == selectedListID }.sorted { left, right in
+            switch (left.manualOrder, right.manualOrder) {
+            case let (a?, b?) where a != b: return a < b
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: break
+            }
             switch (positions[left.productID], positions[right.productID]) {
             case let (a?, b?) where a != b: return a < b
             case (_?, nil): return true
@@ -133,6 +139,61 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ item: ShoppingItem) {
         data.items.removeAll { $0.id == item.id }
+        persist()
+    }
+
+    func rename(_ item: ShoppingItem, to newName: String) {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              let index = data.products.firstIndex(where: { $0.id == item.productID }),
+              !data.products.contains(where: {
+                  $0.id != item.productID && Self.normalize($0.name) == Self.normalize(name)
+              }) else { return }
+        data.products[index].name = name
+        persist()
+    }
+
+    func addSection(_ rawName: String) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              let index = data.lists.firstIndex(where: { $0.id == selectedListID }),
+              !data.lists[index].sections.contains(where: { $0.localizedCaseInsensitiveCompare(name) == .orderedSame })
+        else { return }
+        data.lists[index].sections.append(name)
+        persist()
+    }
+
+    func move(_ itemID: UUID, before targetID: UUID, grouping: Bool) {
+        guard itemID != targetID,
+              let target = data.items.first(where: { $0.id == targetID && $0.listID == selectedListID })
+        else { return }
+        if grouping, let moved = data.items.first(where: { $0.id == itemID && $0.listID == selectedListID }),
+           let productIndex = data.products.firstIndex(where: { $0.id == moved.productID }) {
+            let targetProduct = product(for: target.productID)
+            data.products[productIndex].department = targetProduct?.department
+            data.products[productIndex].category = targetProduct?.category
+        }
+        var ordered = items.map(\.id)
+        guard let source = ordered.firstIndex(of: itemID) else { return }
+        ordered.remove(at: source)
+        guard let destination = ordered.firstIndex(of: targetID) else { return }
+        ordered.insert(itemID, at: destination)
+        applyManualOrder(ordered)
+    }
+
+    func move(_ itemID: UUID, toSection section: String) {
+        guard let item = data.items.first(where: { $0.id == itemID && $0.listID == selectedListID }),
+              let index = data.products.firstIndex(where: { $0.id == item.productID }) else { return }
+        data.products[index].department = section == "אחר" ? nil : section
+        data.products[index].category = nil
+        persist()
+    }
+
+    private func applyManualOrder(_ orderedIDs: [UUID]) {
+        for (order, id) in orderedIDs.enumerated() {
+            guard let index = data.items.firstIndex(where: { $0.id == id }) else { continue }
+            data.items[index].manualOrder = order
+        }
         persist()
     }
 

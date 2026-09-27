@@ -12,6 +12,18 @@ struct ShoppingList: Codable, Identifiable, Hashable {
     static let defaultID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     var id: UUID
     var name: String
+    var sections: [String] = []
+
+    enum CodingKeys: String, CodingKey { case id, name, sections }
+    init(id: UUID, name: String, sections: [String] = []) {
+        self.id = id; self.name = name; self.sections = sections
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        sections = try c.decodeIfPresent([String].self, forKey: .sections) ?? []
+    }
 }
 
 struct ShoppingItem: Codable, Identifiable, Hashable {
@@ -21,8 +33,9 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var addedAt: Date
     var listID: UUID = ShoppingList.defaultID
     var isUrgent: Bool = false
+    var manualOrder: Int? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -36,6 +49,7 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         addedAt = try c.decode(Date.self, forKey: .addedAt)
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID) ?? ShoppingList.defaultID
         isUrgent = try c.decodeIfPresent(Bool.self, forKey: .isUrgent) ?? false
+        manualOrder = try c.decodeIfPresent(Int.self, forKey: .manualOrder)
     }
 }
 
