@@ -7,7 +7,7 @@ Before a grocery trip, the user and his wife see one shared list that remembers 
 ## v1 flow
 
 1. **First launch:** empty list, one prominent add field, a short explanation that purchases teach the app. No lengthy onboarding.
-2. **Add:** type a product, reuse existing names via autocomplete, set an optional quantity (default 1). Manual items stay on the active list until purchased or removed.
+2. **Add:** type a product, reuse existing names via autocomplete, set an optional quantity (default 1) and unit (for example, packs or liters). Manual items stay on the active list until purchased or removed.
 3. **Shop:** tap to check off a row. Persist a purchase event and move it to a compact purchased section. Undo immediately if tapped by mistake.
 4. **Return:** candidate suggestions appear in “You'll probably need” and “Maybe”; one tap adds to the list. A “Not yet” action defers a candidate until a reasonable later date. Manual removal is not silently treated as a purchase.
 5. **Review:** a simple per-item history and a way to correct a mistaken purchase or quantity. Predictions derive from the corrected event log.
