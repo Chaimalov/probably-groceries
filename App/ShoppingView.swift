@@ -17,6 +17,8 @@ struct ShoppingView: View {
     @State private var listName = ""
     @State private var sectionName = ""
     @State private var collapsedSections: Set<String> = []
+    @State private var selectedItemIDs: Set<UUID> = []
+    @State private var editMode: EditMode = .inactive
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = false
@@ -24,11 +26,14 @@ struct ShoppingView: View {
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
+    private var selectionFullyUrgent: Bool {
+        !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { scroll in
-                List {
+                List(selection: $selectedItemIDs) {
                     if groupBySection {
                         ForEach(sectionNames, id: \.self) { section in
                             Section {
@@ -64,6 +69,7 @@ struct ShoppingView: View {
                                     .accessibilityIdentifier("inlineAddField")
                             }
                             .id("new-item")
+                            .selectionDisabled(true)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         }
@@ -91,38 +97,60 @@ struct ShoppingView: View {
                                         }
                                     }
                                     .listRowSeparator(.hidden)
+                                    .selectionDisabled(true)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                                 }
                             }
                             Button("לכל הקניות") { showingHistory = true }
                                 .font(.subheadline)
                                 .listRowSeparator(.hidden)
+                                .selectionDisabled(true)
                         }
                         .listSectionSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain)
+                .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(.compact)
                 .environment(\.defaultMinListRowHeight, 44)
                 .scrollDismissesKeyboard(.interactively)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     HStack {
-                        Button {
-                            isAdding = true
-                            Task { @MainActor in
-                                await Task.yield()
-                                scroll.scrollTo("new-item", anchor: .bottom)
-                                addFocused = true
+                        if editMode.isEditing {
+                            Text("\(selectedItemIDs.count) נבחרו")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button(selectionFullyUrgent ? "הסר דגל" : "דגל",
+                                   systemImage: selectionFullyUrgent ? "flag.slash" : "flag.fill") {
+                                store.setUrgent(!selectionFullyUrgent, for: selectedItemIDs)
+                                selectedItemIDs.removeAll()
+                                editMode = .inactive
                             }
-                        } label: {
-                            Label("מוצר חדש", systemImage: "plus.circle.fill")
-                                .font(.body.weight(.semibold))
-                        }
-                        .accessibilityLabel("הוספת מוצר")
-                        Spacer()
-                        if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Button("הוסף", action: addInline)
+                            .disabled(selectedItemIDs.isEmpty)
+                            Button("מחיקה", systemImage: "trash", role: .destructive) {
+                                withAnimation(.smooth) { store.remove(selectedItemIDs) }
+                                selectedItemIDs.removeAll()
+                                editMode = .inactive
+                            }
+                            .disabled(selectedItemIDs.isEmpty)
+                        } else {
+                            Button {
+                                isAdding = true
+                                Task { @MainActor in
+                                    await Task.yield()
+                                    scroll.scrollTo("new-item", anchor: .bottom)
+                                    addFocused = true
+                                }
+                            } label: {
+                                Label("מוצר חדש", systemImage: "plus.circle.fill")
+                                    .font(.body.weight(.semibold))
+                            }
+                            .accessibilityLabel("הוספת מוצר")
+                            Spacer()
+                            if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button("הוסף", action: addInline)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -135,8 +163,19 @@ struct ShoppingView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { listPicker }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
+                if editMode.isEditing {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("סיום") {
+                            selectedItemIDs.removeAll()
+                            editMode = .inactive
+                        }
+                    }
+                }
             }
             .sheet(item: $editingCategory) { CategoryEditor(store: store, product: $0) }
+            .onChange(of: editMode) { _, mode in
+                if !mode.isEditing { selectedItemIDs.removeAll() }
+            }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
@@ -167,6 +206,8 @@ struct ShoppingView: View {
                     store.selectList(list.id)
                     collapsedSections.removeAll()
                     isAdding = false
+                    selectedItemIDs.removeAll()
+                    editMode = .inactive
                 }
             }
             Divider()
@@ -191,6 +232,10 @@ struct ShoppingView: View {
                 sectionName = ""; showingNewSection = true
             }
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
+            Button("בחירת פריטים", systemImage: "checkmark.circle") {
+                addFocused = false
+                editMode = .active
+            }
         } label: {
             Image(systemName: "ellipsis.circle").font(.title3)
         }
@@ -238,6 +283,7 @@ struct ShoppingView: View {
         if let product = store.product(for: item.productID) {
             VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
+                if !editMode.isEditing {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     if reduceMotion { store.buy(item) }
@@ -249,12 +295,22 @@ struct ShoppingView: View {
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("נקנה \(product.name)")
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     if editingNameID == item.id {
                         TextField("שם המוצר", text: $editedName)
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.done)
                             .onSubmit { finishRename(item) }
+                    } else if editMode.isEditing {
+                        HStack(spacing: 6) {
+                            Text(product.name).foregroundStyle(.primary)
+                            if item.isUrgent {
+                                Image(systemName: "flag.fill")
+                                    .foregroundStyle(.orange)
+                                    .accessibilityLabel("דחוף")
+                            }
+                        }
                     } else {
                         Button {
                             editedName = product.name
@@ -286,27 +342,36 @@ struct ShoppingView: View {
                 if item.photoFilename != nil, expandedItemID != item.id {
                     Image(systemName: "photo").foregroundStyle(.secondary)
                 }
-                Button("×\(item.quantity)") {
-                    expandedItemID = expandedItemID == item.id ? nil : item.id
+                if editMode.isEditing {
+                    Text("×\(item.quantity) \(item.unit ?? "")")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else {
+                Button("×\(item.quantity) \(item.unit ?? "")") {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
+                        expandedItemID = expandedItemID == item.id ? nil : item.id
+                    }
                 }
                 .font(.subheadline.weight(.medium))
                 .buttonStyle(.bordered)
                 .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
-                .accessibilityValue("כמות \(item.quantity)")
+                .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
+                }
             }
-            if expandedItemID == item.id {
+            if expandedItemID == item.id && !editMode.isEditing {
                 ItemInlineDetails(store: store, item: item)
                     .padding(.leading, 42)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
             }
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
                        systemImage: item.isUrgent ? "flag.slash" : "flag") {
                     store.toggleUrgent(item)
                 }
                 .tint(.orange)
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
                 Button("פרטים", systemImage: "slider.horizontal.3") { editingCategory = product }
                     .tint(Theme.accent)
@@ -327,6 +392,7 @@ struct ShoppingView: View {
             }
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .tag(item.id)
         }
     }
 
@@ -339,8 +405,8 @@ struct ShoppingView: View {
                         .frame(width: 30)
                     VStack(alignment: .leading) {
                         Text(suggestion.product.name)
-                        if suggestion.quantity > 1 {
-                            Text("בדרך כלל ×\(suggestion.quantity)")
+                        if suggestion.quantity > 1 || suggestion.product.preferredUnit != nil {
+                            Text("בדרך כלל ×\(suggestion.quantity) \(suggestion.product.preferredUnit ?? "")")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -354,6 +420,7 @@ struct ShoppingView: View {
                     Button("לא עכשיו", systemImage: "clock") { store.deferSuggestion(suggestion) }
                 }
                 .listRowSeparator(.hidden)
+                .selectionDisabled(true)
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
         }
@@ -375,10 +442,14 @@ struct ShoppingView: View {
 }
 
 private struct ItemInlineDetails: View {
+    private static let commonUnits = ["יחידות", "חבילות", "ליטרים", "מ״ל", "ק״ג", "גרם", "בקבוקים", "קופסאות", "שקיות", "גלילים"]
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var note: String
+    @State private var customUnit = ""
+    @State private var editingCustomUnit = false
+    @FocusState private var customUnitFocused: Bool
 
     init(store: ShoppingStore, item: ShoppingItem) {
         self.store = store
@@ -395,12 +466,44 @@ private struct ItemInlineDetails: View {
                     .disabled(item.quantity <= 1)
                     .accessibilityLabel("הפחתת כמות")
                 Text("\(item.quantity)").monospacedDigit().font(.headline)
+                    .contentTransition(.numericText())
                     .accessibilityIdentifier("inlineQuantity")
                 Button {
                     store.updateQuantity(of: item, to: min(9999, item.quantity + 1))
                 } label: { Image(systemName: "plus.circle.fill").font(.title2) }
                     .disabled(item.quantity >= 9999)
                     .accessibilityLabel("הגדלת כמות")
+                Menu {
+                    Button("ללא יחידה") { store.updateUnit(of: item, to: nil) }
+                    ForEach(Self.commonUnits, id: \.self) { unit in
+                        Button(unit) { store.updateUnit(of: item, to: unit) }
+                    }
+                    Button("יחידה אחרת…", systemImage: "pencil") {
+                        customUnit = item.unit ?? ""
+                        editingCustomUnit = true
+                        customUnitFocused = true
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(item.unit ?? "יחידת מידה")
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(item.unit == nil ? .secondary : .primary)
+                }
+                .accessibilityLabel("בחירת יחידת מידה")
+                .accessibilityValue(item.unit ?? "ללא יחידה")
+            }
+            if editingCustomUnit {
+                HStack {
+                    TextField("שם היחידה", text: $customUnit)
+                        .focused($customUnitFocused)
+                        .submitLabel(.done)
+                        .onSubmit(saveCustomUnit)
+                        .accessibilityIdentifier("customUnitField")
+                    Button("שמירה", action: saveCustomUnit)
+                }
+                .transition(.opacity)
             }
             TextField("הערה למוצר…", text: $note, axis: .vertical)
                 .lineLimit(1...3)
@@ -435,5 +538,10 @@ private struct ItemInlineDetails: View {
         }
         .buttonStyle(.borderless)
         .padding(.vertical, 8)
+    }
+
+    private func saveCustomUnit() {
+        store.updateUnit(of: item, to: customUnit)
+        editingCustomUnit = false
     }
 }

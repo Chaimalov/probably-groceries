@@ -6,6 +6,7 @@ struct Product: Codable, Identifiable, Hashable {
     var usualQuantity: Int
     var category: String? = nil
     var department: String? = nil
+    var preferredUnit: String? = nil
 }
 
 struct ShoppingList: Codable, Identifiable, Hashable {
@@ -36,8 +37,9 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var manualOrder: Int? = nil
     var note: String? = nil
     var photoFilename: String? = nil
+    var unit: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -54,6 +56,7 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         manualOrder = try c.decodeIfPresent(Int.self, forKey: .manualOrder)
         note = try c.decodeIfPresent(String.self, forKey: .note)
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
+        unit = try c.decodeIfPresent(String.self, forKey: .unit)
     }
 }
 
@@ -67,8 +70,9 @@ struct Purchase: Codable, Identifiable, Hashable {
     var wasUrgent: Bool = false
     var note: String? = nil
     var photoFilename: String? = nil
+    var unit: String? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename, unit }
     init(id: UUID, productID: UUID, quantity: Int, purchasedAt: Date,
          sourceItemID: UUID, listID: UUID = ShoppingList.defaultID, wasUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -86,6 +90,7 @@ struct Purchase: Codable, Identifiable, Hashable {
         wasUrgent = try c.decodeIfPresent(Bool.self, forKey: .wasUrgent) ?? false
         note = try c.decodeIfPresent(String.self, forKey: .note)
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
+        unit = try c.decodeIfPresent(String.self, forKey: .unit)
     }
 }
 

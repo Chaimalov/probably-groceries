@@ -17,9 +17,9 @@ struct PurchaseHistoryView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("×\(purchase.quantity)") { editingPurchase = purchase }
+                        Button("×\(purchase.quantity) \(purchase.unit ?? "")") { editingPurchase = purchase }
                             .accessibilityLabel("עריכת כמות שנקנתה עבור \(product.name)")
-                            .accessibilityValue("כמות \(purchase.quantity)")
+                            .accessibilityValue("כמות \(purchase.quantity) \(purchase.unit ?? "")")
                         Button("ביטול קנייה") { store.undo(purchase) }
                             .font(.subheadline)
                     }

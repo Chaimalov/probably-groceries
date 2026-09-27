@@ -129,6 +129,7 @@ final class ShoppingStore: ObservableObject {
             data.items.append(ShoppingItem(id: UUID(), productID: productID,
                                            quantity: max(1, quantity), addedAt: .now,
                                            listID: selectedListID, isUrgent: urgent))
+            data.items[data.items.count - 1].unit = product(for: productID)?.preferredUnit
         }
         data.deferrals.removeAll { $0.productID == productID && $0.listID == selectedListID }
         persist()
@@ -256,6 +257,23 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func setUrgent(_ urgent: Bool, for ids: Set<UUID>) {
+        for index in data.items.indices where ids.contains(data.items[index].id) {
+            data.items[index].isUrgent = urgent
+        }
+        persist()
+    }
+
+    func remove(_ ids: Set<UUID>) {
+        for item in data.items where ids.contains(item.id) {
+            if let name = item.photoFilename {
+                try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
+            }
+        }
+        data.items.removeAll { ids.contains($0.id) }
+        persist()
+    }
+
     var categories: [String] {
         Array(Set(data.products.compactMap(\.category)))
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
@@ -273,6 +291,17 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func updateUnit(of item: ShoppingItem, to rawValue: String?) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unit = trimmed?.isEmpty == false ? String(trimmed!.prefix(24)) : nil
+        data.items[index].unit = unit
+        if let productIndex = data.products.firstIndex(where: { $0.id == item.productID }) {
+            data.products[productIndex].preferredUnit = unit
+        }
+        persist()
+    }
+
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         data.items.removeAll { $0.id == current.id }
@@ -282,6 +311,7 @@ final class ShoppingStore: ObservableObject {
                                        wasUrgent: current.isUrgent))
         data.purchases[data.purchases.count - 1].note = current.note
         data.purchases[data.purchases.count - 1].photoFilename = current.photoFilename
+        data.purchases[data.purchases.count - 1].unit = current.unit
         updateUsualQuantity(for: current.productID)
         persist()
     }
@@ -304,6 +334,7 @@ final class ShoppingStore: ObservableObject {
             data.items[index].isUrgent = data.items[index].isUrgent || current.wasUrgent
             data.items[index].note = data.items[index].note ?? current.note
             data.items[index].photoFilename = data.items[index].photoFilename ?? current.photoFilename
+            data.items[index].unit = data.items[index].unit ?? current.unit
         } else {
             data.items.append(ShoppingItem(id: current.sourceItemID,
                                            productID: current.productID,
@@ -311,6 +342,7 @@ final class ShoppingStore: ObservableObject {
                                            listID: current.listID, isUrgent: current.wasUrgent))
             data.items[data.items.count - 1].note = current.note
             data.items[data.items.count - 1].photoFilename = current.photoFilename
+            data.items[data.items.count - 1].unit = current.unit
         }
         updateUsualQuantity(for: current.productID)
         persist()
