@@ -297,6 +297,9 @@ struct ShoppingView: View {
             }
             Button("סידור מוצרים", systemImage: "line.3.horizontal") {
                 addFocused = false
+                isAdding = false
+                addingToSection = nil
+                newName = ""
                 selectedItemIDs.removeAll()
                 reordering = true
                 editMode = .active
