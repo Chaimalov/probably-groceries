@@ -2,26 +2,27 @@ import SwiftUI
 
 struct CategoryEditor: View {
     @ObservedObject var store: ShoppingStore
-    let product: Product
+    let item: ShoppingItem
     @Environment(\.dismiss) private var dismiss
     @State private var categoryName: String
     @State private var departmentName: String
 
-    init(store: ShoppingStore, product: Product) {
+    init(store: ShoppingStore, item: ShoppingItem) {
         self.store = store
-        self.product = product
-        _categoryName = State(initialValue: product.category ?? "")
-        _departmentName = State(initialValue: product.department ?? "")
+        self.item = item
+        _categoryName = State(initialValue: store.product(for: item.productID)?.category ?? "")
+        let section = store.section(for: item)
+        _departmentName = State(initialValue: section == "אחר" ? "" : section)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("מחלקה", text: $departmentName)
+                TextField("מקטע", text: $departmentName)
                 TextField("קטגוריה", text: $categoryName)
-                if !store.departments.isEmpty {
-                    Section("מחלקות קיימות") {
-                        ForEach(store.departments, id: \.self) { name in
+                if !store.currentList.sections.isEmpty || !store.departments.isEmpty {
+                    Section("מקטעים קיימים") {
+                        ForEach(Array(Set(store.currentList.sections + store.departments)).sorted(), id: \.self) { name in
                             Button(name) { departmentName = name }
                         }
                     }
@@ -34,9 +35,9 @@ struct CategoryEditor: View {
                     }
                 }
                 Button("ללא קטגוריה") { categoryName = "" }
-                Button("ללא מחלקה") { departmentName = "" }
+                Button("ללא מקטע") { departmentName = "" }
             }
-            .navigationTitle(product.name)
+            .navigationTitle(store.product(for: item.productID)?.name ?? "מוצר")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -44,7 +45,7 @@ struct CategoryEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("שמירה") {
-                        store.setGrouping(for: product.id, department: departmentName,
+                        store.setGrouping(for: item.id, department: departmentName,
                                           category: categoryName)
                         dismiss()
                     }
