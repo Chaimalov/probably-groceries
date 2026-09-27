@@ -76,6 +76,6 @@ struct ListAppearanceEditor: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
     }
 }
