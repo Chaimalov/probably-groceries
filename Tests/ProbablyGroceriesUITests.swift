@@ -13,10 +13,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         field.typeText(first + "\n")
-        XCTAssertTrue(app.staticTexts[first].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["נקנה \(first)"].waitForExistence(timeout: 10))
         XCTAssertTrue(field.exists, "Enter should keep inline add available")
         field.typeText(second + "\n")
-        XCTAssertTrue(app.staticTexts[second].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["נקנה \(second)"].waitForExistence(timeout: 10))
 
         app.terminate()
         app.launch()
