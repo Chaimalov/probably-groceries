@@ -87,6 +87,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.typeText(item + "\n")
         let buy = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", item, "נקנה")).firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "List with section and compact rows"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
         let header = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", section, "מוצרים")).firstMatch
         header.tap()
         XCTAssertFalse(buy.exists)
