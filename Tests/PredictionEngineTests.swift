@@ -31,6 +31,26 @@ final class PredictionEngineTests: XCTestCase {
         XCTAssertEqual(restored.purchases[0].unit, "בקבוקים")
     }
 
+    func testLegacyListAppearanceAndStoreSpecificSectionsDecode() throws {
+        let id = UUID()
+        let legacy = Data("{\"id\":\"\(id.uuidString)\",\"name\":\"קניות\",\"sections\":[\"קפואים\"]}".utf8)
+        let list = try JSONDecoder().decode(ShoppingList.self, from: legacy)
+        XCTAssertEqual(list.tintName, "green")
+        XCTAssertEqual(list.symbolName, "cart")
+        XCTAssertEqual(list.sections, ["קפואים"])
+
+        var item = ShoppingItem(id: UUID(), productID: UUID(), quantity: 1, addedAt: .now)
+        item.sectionName = "ירקות"
+        var purchase = Purchase(id: UUID(), productID: item.productID, quantity: 1,
+                                purchasedAt: .now, sourceItemID: item.id)
+        purchase.sectionName = item.sectionName
+        let restored = try JSONDecoder().decode(ShoppingData.self, from: JSONEncoder().encode(
+            ShoppingData(lists: [list], items: [item], purchases: [purchase])
+        ))
+        XCTAssertEqual(restored.items[0].sectionName, "ירקות")
+        XCTAssertEqual(restored.purchases[0].sectionName, "ירקות")
+    }
+
     func testPredictionsStayWithinTheirStore() {
         let anotherList = UUID()
         let product = Product(id: UUID(), name: "Milk", usualQuantity: 1)
