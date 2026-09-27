@@ -71,12 +71,23 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let section = "Dairy \(UUID().uuidString.prefix(6))"
         let shop = "Corner \(UUID().uuidString.prefix(6))"
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["מחלקה חדשה"].tap()
-        let sectionAlert = app.alerts["מחלקה חדשה"]
+        app.buttons["מקטע חדש"].tap()
+        let sectionAlert = app.alerts["מקטע חדש"]
         XCTAssertTrue(sectionAlert.waitForExistence(timeout: 10))
-        sectionAlert.textFields["שם המחלקה"].typeText(section)
+        sectionAlert.textFields["שם המקטע"].typeText(section)
         sectionAlert.buttons["יצירה"].tap()
         XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 10))
+
+        app.buttons["הוספת מוצר למקטע \(section)"].tap()
+        let item = "Eggs \(UUID().uuidString.prefix(6))"
+        let field = app.textFields["inlineAddField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.typeText(item + "\n")
+        XCTAssertTrue(app.buttons["נקנה \(item)"].waitForExistence(timeout: 10))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", section)).firstMatch.tap()
+        XCTAssertFalse(app.buttons["נקנה \(item)"].exists)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", section)).firstMatch.tap()
+        XCTAssertTrue(app.buttons["נקנה \(item)"].waitForExistence(timeout: 10))
 
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
         app.buttons["רשימה חדשה לחנות"].tap()
@@ -85,5 +96,17 @@ final class ProbablyGroceriesUITests: XCTestCase {
         alert.textFields["שם החנות"].typeText(shop)
         alert.buttons["יצירה"].tap()
         XCTAssertTrue(app.navigationBars[shop].waitForExistence(timeout: 10))
+
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["צבע וסמל הרשימה"].tap()
+        app.buttons["צבע blue"].tap()
+        app.buttons["סמל basket"].tap()
+        app.buttons["שמירה"].tap()
+        app.terminate()
+        app.launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["צבע וסמל הרשימה"].tap()
+        XCTAssertTrue(app.buttons["צבע blue"].isSelected)
+        XCTAssertTrue(app.buttons["סמל basket"].isSelected)
     }
 }
