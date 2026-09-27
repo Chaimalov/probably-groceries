@@ -38,11 +38,13 @@ struct ShoppingView: View {
                             } header: {
                                 sectionHeader(section)
                             }
+                            .listSectionSeparator(.hidden)
                         }
                     } else {
                         Section {
                             ForEach(store.items) { item in itemRow(item) }
                         }
+                        .listSectionSeparator(.hidden)
                     }
 
                     if isAdding {
@@ -62,7 +64,10 @@ struct ShoppingView: View {
                                     .accessibilityIdentifier("inlineAddField")
                             }
                             .id("new-item")
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         }
+                        .listSectionSeparator(.hidden)
                     }
 
                     if !likely.isEmpty { suggestionSection("כנראה צריך", items: likely) }
@@ -85,14 +90,21 @@ struct ShoppingView: View {
                                             store.undo(purchase)
                                         }
                                     }
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                                 }
                             }
                             Button("לכל הקניות") { showingHistory = true }
                                 .font(.subheadline)
+                                .listRowSeparator(.hidden)
                         }
+                        .listSectionSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain)
+                .listRowSpacing(0)
+                .listSectionSpacing(.compact)
+                .environment(\.defaultMinListRowHeight, 44)
                 .scrollDismissesKeyboard(.interactively)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     HStack {
@@ -313,6 +325,8 @@ struct ShoppingView: View {
                 store.move(id, before: item.id, grouping: groupBySection)
                 return true
             }
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         }
     }
 
@@ -339,8 +353,11 @@ struct ShoppingView: View {
                 .swipeActions(edge: .trailing) {
                     Button("לא עכשיו", systemImage: "clock") { store.deferSuggestion(suggestion) }
                 }
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
         }
+        .listSectionSeparator(.hidden)
     }
 
     private func addInline() {
