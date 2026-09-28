@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import Security
 
 // The app's JSON store remains the source used by the UI. A foreground pass
 // reconciles stable entity records with the private iCloud database. No network
@@ -21,6 +22,20 @@ final class PersonalCloudSync: ObservableObject {
     private var needsAnotherPass = false
     private var scheduled: Task<Void, Never>?
 
+    // CKContainer(identifier:) can terminate the process if the exported app
+    // lacks the container entitlement. Keep the local list usable in that case.
+    private var hasCloudKitEntitlement: Bool {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let identifiers = SecTaskCopyValueForEntitlement(
+                task, "com.apple.developer.icloud-container-identifiers" as CFString, nil
+              ) as? [String],
+              identifiers.contains("iCloud.com.chaimalov.probablygroceries"),
+              let services = SecTaskCopyValueForEntitlement(
+                task, "com.apple.developer.icloud-services" as CFString, nil
+              ) as? [String], services.contains("CloudKit") else { return false }
+        return true
+    }
+
     init(store: ShoppingStore) { self.store = store }
 
     func start() {
@@ -41,6 +56,10 @@ final class PersonalCloudSync: ObservableObject {
     func synchronize() async {
         if syncing { needsAnotherPass = true; return }
         guard let store else { return }
+        guard hasCloudKitEntitlement else {
+            status = .unavailable
+            return
+        }
         syncing = true
         status = .syncing
         defer {
