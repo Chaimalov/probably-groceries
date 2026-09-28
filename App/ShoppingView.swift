@@ -27,6 +27,7 @@ struct ShoppingView: View {
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
@@ -257,6 +258,10 @@ struct ShoppingView: View {
             }
         }
         .tint(listTint)
+        .task { store.cloudSync.start() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { store.cloudSync.start() }
+        }
     }
 
     private var listPicker: some View {
@@ -310,10 +315,25 @@ struct ShoppingView: View {
                 reordering = false
                 editMode = .active
             }
+            Divider()
+            Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
+                Task { await store.cloudSync.synchronize() }
+            }
         } label: {
             Image(systemName: "ellipsis.circle").font(.title3)
         }
         .accessibilityLabel("אפשרויות נוספות")
+    }
+
+    private var syncLabel: String {
+        switch store.syncStatus {
+        case .local: return "סנכרון iCloud"
+        case .syncing: return "מסנכרן עם iCloud…"
+        case .current: return "iCloud מעודכן"
+        case .unavailable: return "iCloud אינו זמין — נסה שוב"
+        case .accountChanged: return "חשבון iCloud השתנה — הנתונים נשמרו במכשיר"
+        case .failed: return "הסנכרון ממתין לחיבור — נסה שוב"
+        }
     }
 
     private var sectionNames: [String] {
