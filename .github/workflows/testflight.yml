@@ -63,6 +63,32 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$APPLE_KEY_ID" \
             -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
+      - name: Verify exported CloudKit entitlements
+        run: |
+          ipa="$RUNNER_TEMP/TestFlight/ProbablyGroceries.ipa"
+          if [[ ! -f "$ipa" ]]; then
+            echo 'Export did not leave an IPA to inspect.' >&2
+            find "$RUNNER_TEMP/TestFlight" -maxdepth 1 -type f -print
+            exit 1
+          fi
+          unzip -q "$ipa" -d "$RUNNER_TEMP/SignedApp"
+          app="$RUNNER_TEMP/SignedApp/Payload/ProbablyGroceries.app"
+          codesign --verify --strict "$app"
+          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/signed-entitlements.plist"
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'signed-entitlements.plist'
+          entitlements = plistlib.loads(path.read_bytes())
+          containers = entitlements.get('com.apple.developer.icloud-container-identifiers', [])
+          services = entitlements.get('com.apple.developer.icloud-services', [])
+          print('Signed iCloud containers:', containers)
+          print('Signed iCloud services:', services)
+          assert 'iCloud.com.chaimalov.probablygroceries' in containers, 'Missing signed iCloud container'
+          assert 'CloudKit' in services, 'Missing signed CloudKit service'
+          PY
       - name: Remove temporary credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
