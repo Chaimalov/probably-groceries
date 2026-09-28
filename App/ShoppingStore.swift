@@ -6,13 +6,19 @@ import UIKit
 final class ShoppingStore: ObservableObject {
     @Published private(set) var data: ShoppingData
     @Published private(set) var selectedListID: UUID
+    @Published private(set) var syncStatus: PersonalCloudSync.Status = .local
 
     private let fileURL: URL
+    private let journalURL: URL
+    private var lastJournaledData: ShoppingData
+    var syncJournal: SyncJournal
+    lazy var cloudSync = PersonalCloudSync(store: self)
 
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let path = directory.appendingPathComponent("shopping.json")
         fileURL = path
+        journalURL = directory.appendingPathComponent("sync-journal.json")
         let loadedData: ShoppingData
         if let bytes = try? Data(contentsOf: path),
            let saved = try? JSONDecoder().decode(ShoppingData.self, from: bytes) {
@@ -25,6 +31,10 @@ final class ShoppingStore: ObservableObject {
         let listID = loadedData.lists.contains(where: { $0.id == savedID })
             ? savedID! : loadedData.lists.first?.id ?? ShoppingList.defaultID
         data = loadedData
+        lastJournaledData = loadedData
+        syncJournal = (try? Data(contentsOf: journalURL))
+            .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
+        syncJournal.seed(loadedData)
         selectedListID = listID
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
@@ -402,12 +412,36 @@ final class ShoppingStore: ObservableObject {
     }
 
     private func persist() {
+        syncJournal.recordChanges(from: lastJournaledData, to: data)
+        lastJournaledData = data
+        saveLocal()
+        cloudSync.schedule()
+    }
+
+    private func saveLocal() {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try JSONEncoder().encode(data).write(to: fileURL, options: .atomic)
+            try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
         } catch {
             assertionFailure("Could not save the shopping list: \(error)")
         }
+    }
+
+    func saveSyncMetadata() { saveLocal() }
+    func updateSyncStatus(_ status: PersonalCloudSync.Status) { syncStatus = status }
+
+    func mergeRemote(_ revisions: [SyncRevision]) {
+        var changed = false
+        for revision in revisions {
+            changed = syncJournal.merge(revision, into: &data) || changed
+        }
+        guard changed else { return }
+        lastJournaledData = data
+        if !data.lists.contains(where: { $0.id == selectedListID }) {
+            selectedListID = data.lists.first?.id ?? ShoppingList.defaultID
+        }
+        saveLocal()
     }
 }
