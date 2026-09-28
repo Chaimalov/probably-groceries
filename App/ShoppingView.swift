@@ -258,9 +258,15 @@ struct ShoppingView: View {
             }
         }
         .tint(listTint)
-        .task { store.cloudSync.start() }
+        .task {
+            #if !targetEnvironment(simulator)
+            store.cloudSync.start()
+            #endif
+        }
         .onChange(of: scenePhase) { _, phase in
+            #if !targetEnvironment(simulator)
             if phase == .active { store.cloudSync.start() }
+            #endif
         }
     }
 
@@ -317,8 +323,13 @@ struct ShoppingView: View {
             }
             Divider()
             Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
+                #if !targetEnvironment(simulator)
                 Task { await store.cloudSync.synchronize() }
+                #endif
             }
+            #if targetEnvironment(simulator)
+            .disabled(true)
+            #endif
         } label: {
             Image(systemName: "ellipsis.circle").font(.title3)
         }
