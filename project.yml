@@ -9,6 +9,13 @@ targets:
     platform: iOS
     sources:
       - App
+    entitlements:
+      path: App/ProbablyGroceries.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.chaimalov.probablygroceries
+        com.apple.developer.icloud-services:
+          - CloudKit
     info:
       path: App/Info.plist
       properties:
@@ -51,9 +58,11 @@ targets:
     platform: iOS
     sources:
       - Tests/PredictionEngineTests.swift
+      - Tests/SyncJournalTests.swift
       - App/Models.swift
       - App/PredictionEngine.swift
       - App/ShoppingRouteOrder.swift
+      - App/SyncJournal.swift
     dependencies:
       - target: ProbablyGroceries
     settings:
