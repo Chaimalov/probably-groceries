@@ -14,7 +14,7 @@ final class PersonalCloudSync: ObservableObject {
         didSet { store?.updateSyncStatus(status) }
     }
     private weak var store: ShoppingStore?
-    private let container = CKContainer(identifier: "iCloud.com.chaimalov.probablygroceries")
+    private var container: CKContainer { CKContainer(identifier: "iCloud.com.chaimalov.probablygroceries") }
     private let zone = CKRecordZone(zoneName: "Groceries")
     private var started = false
     private var syncing = false
