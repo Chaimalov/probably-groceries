@@ -37,7 +37,7 @@ The repository starts with decisions and issues. The Xcode project is the first 
 
 ## First device build
 
-The first SwiftUI slice is in `App/`: inline add with Enter, swipe actions, manual drag order, collapsible departments, local lists, purchase check-off, undo, and conservative recurring suggestions. Data currently stays on this device; personal CloudKit sync is tracked in issue #11 and household sharing with the wife's Apple Account in issue #8.
+The first SwiftUI slice is in `App/`: inline add with Enter, swipe actions, manual drag order, collapsible departments, local lists, purchase check-off, undo, and conservative recurring suggestions. Private CloudKit sync is being built in issue #11; it needs container/schema setup and a two-device check before it can be relied on. Household sharing with the wife's Apple Account remains issue #8.
 
 The app targets iOS/iPadOS 27 and CI uses the Xcode 27 GitHub-hosted runner. On a compatible Mac with Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen generate`, open `ProbablyGroceries.xcodeproj`, set your signing team in the app target, and run on your iPhone or iPad. The generated project and Info.plist are ignored by git. GitHub Actions runs an unsigned iPhone simulator build after each push; it cannot produce an installable device build without signing.
 
