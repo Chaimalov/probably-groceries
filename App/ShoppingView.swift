@@ -258,16 +258,6 @@ struct ShoppingView: View {
             }
         }
         .tint(listTint)
-        .task {
-            #if !targetEnvironment(simulator)
-            store.cloudSync.start()
-            #endif
-        }
-        .onChange(of: scenePhase) { _, phase in
-            #if !targetEnvironment(simulator)
-            if phase == .active { store.cloudSync.start() }
-            #endif
-        }
     }
 
     private var listPicker: some View {
@@ -322,14 +312,8 @@ struct ShoppingView: View {
                 editMode = .active
             }
             Divider()
-            Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
-                #if !targetEnvironment(simulator)
-                Task { await store.cloudSync.synchronize() }
-                #endif
-            }
-            #if targetEnvironment(simulator)
+            Button("סנכרון iCloud בהשהיה", systemImage: "arrow.triangle.2.circlepath.icloud") {}
             .disabled(true)
-            #endif
         } label: {
             Image(systemName: "ellipsis.circle").font(.title3)
         }
