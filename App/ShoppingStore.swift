@@ -415,6 +415,7 @@ final class ShoppingStore: ObservableObject {
         syncJournal.recordChanges(from: lastJournaledData, to: data)
         lastJournaledData = data
         saveLocal()
+        cloudSync.schedule()
     }
 
     private func saveLocal() {
