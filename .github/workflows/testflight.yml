@@ -37,7 +37,10 @@ jobs:
             -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$APPLE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
       - name: Upload to App Store Connect
         run: |
           python3 - <<'PY'
