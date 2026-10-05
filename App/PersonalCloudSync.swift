@@ -17,7 +17,9 @@ final class PersonalCloudSync: ObservableObject {
         }
     }
     static let containerIdentifier = "iCloud.com.chaimalov.probablygroceries"
-    let container = CKContainer(identifier: containerIdentifier)
+    // Local persistence constructs this coordinator even in unsigned simulator
+    // builds. Defer CloudKit entitlement checks until a real sync/share request.
+    lazy var container = CKContainer(identifier: containerIdentifier)
     private(set) var status: Status = .local {
         didSet { store?.updateSyncStatus(status) }
     }

@@ -351,6 +351,9 @@ struct ShoppingView: View {
                 sharingListID = store.selectedListID
                 showingSharing = true
             }
+            #if targetEnvironment(simulator)
+            .disabled(true)
+            #endif
             Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
                 #if !targetEnvironment(simulator)
                 Task { await store.cloudSync.synchronize() }
