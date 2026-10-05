@@ -112,6 +112,9 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$APPLE_KEY_ID" \
             -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
+      - name: Wait for TestFlight availability
+        timeout-minutes: 17
+        run: python3 scripts/wait_for_testflight.py
       - name: Remove temporary credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
