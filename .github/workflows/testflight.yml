@@ -1,10 +1,23 @@
 name: Upload to TestFlight
 "on":
   workflow_dispatch:
+  workflow_run:
+    workflows: ["iOS build"]
+    types: [completed]
+    branches: [main]
 
+
+concurrency:
+  group: testflight-upload
+  cancel-in-progress: false
 
 jobs:
   upload:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: xcode-27
     env:
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
@@ -13,6 +26,8 @@ jobs:
       APPLE_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Check signing configuration
         run: |
           if [[ -z "$APPLE_TEAM_ID" || -z "$APPLE_KEY_ID" || -z "$APPLE_ISSUER_ID" || -z "$APPLE_KEY_P8" ]]; then
