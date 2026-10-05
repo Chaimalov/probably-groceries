@@ -24,6 +24,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
+        CKSharingSupported: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
@@ -63,6 +64,8 @@ targets:
       - App/PredictionEngine.swift
       - App/ShoppingRouteOrder.swift
       - App/SyncJournal.swift
+      - App/SharedListBinding.swift
+      - Tests/SharedListBindingTests.swift
     dependencies:
       - target: ProbablyGroceries
     settings:

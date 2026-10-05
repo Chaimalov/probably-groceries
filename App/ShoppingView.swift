@@ -3,7 +3,9 @@ import UIKit
 import PhotosUI
 
 struct ShoppingView: View {
-    @StateObject private var store = ShoppingStore()
+    @ObservedObject var store: ShoppingStore
+    @State private var showingSharing = false
+    @State private var sharingListID: UUID?
     @State private var isAdding = false
     @State private var addingToSection: String?
     @State private var newName = ""
@@ -45,6 +47,16 @@ struct ShoppingView: View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
+                    if let binding = store.currentShare {
+                        Section {
+                            Label(binding.accessible ? "שיתוף דרך iCloud" : "השיתוף אינו זמין — השינויים נשמרים במכשיר",
+                                  systemImage: binding.accessible ? "person.2" : "icloud.slash")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .listRowSeparator(.hidden)
+                                .selectionDisabled(true)
+                        }
+                        .listSectionSeparator(.hidden)
+                    }
                     if showsSections {
                         ForEach(sectionNames, id: \.self) { section in
                             Section {
@@ -258,6 +270,9 @@ struct ShoppingView: View {
             }
         }
         .tint(listTint)
+        .sheet(isPresented: $showingSharing) {
+            if let listID = sharingListID { ListSharingSheet(store: store, listID: listID) }
+        }
         .task {
             #if !targetEnvironment(simulator)
             store.cloudSync.start()
@@ -266,6 +281,15 @@ struct ShoppingView: View {
         .onChange(of: scenePhase) { _, phase in
             #if !targetEnvironment(simulator)
             if phase == .active { store.cloudSync.start() }
+            #endif
+        }
+        .task(id: scenePhase) {
+            #if !targetEnvironment(simulator)
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                if !store.sharedLists.isEmpty { await store.cloudSync.synchronize() }
+            }
             #endif
         }
     }
@@ -322,6 +346,11 @@ struct ShoppingView: View {
                 editMode = .active
             }
             Divider()
+            Button(store.currentShare == nil ? "שיתוף הרשימה…" : "ניהול השיתוף…",
+                   systemImage: "person.2") {
+                sharingListID = store.selectedListID
+                showingSharing = true
+            }
             Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
                 #if !targetEnvironment(simulator)
                 Task { await store.cloudSync.synchronize() }

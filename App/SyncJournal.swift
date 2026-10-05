@@ -12,8 +12,14 @@ struct SyncJournal: Codable {
     var revisions: [String: SyncRevision] = [:]
     var accountRecordName: String?
     var zoneReady = false
+    // Optional for decoding journals written before sharing was supported.
+    var sharedLists: [SharedListBinding]? = nil
 
-    private static let encoder = JSONEncoder()
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
     private static let decoder = JSONDecoder()
 
     static func records(in data: ShoppingData) -> [String: Data] {
