@@ -1,8 +1,9 @@
 # Household CloudKit sharing
 
 Implementation prepared against main `af862af48425a7f1fb0f1bf6c40eb292e1297318`.
-This is not yet a verified device build. The GitHub integration returned 403
-when creating a branch, so the patch has not been pushed or built in CI.
+Published for review in PR #13 after GitHub write access was restored.
+This is not yet a verified two-account device build; Xcode CI validates the
+simulator build and local unit/UI flows, not signed CloudKit sharing.
 
 ## User flow
 

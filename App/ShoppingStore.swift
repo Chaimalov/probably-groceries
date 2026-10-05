@@ -160,12 +160,18 @@ final class ShoppingStore: ObservableObject {
 
     func product(for id: UUID) -> Product? { data.products.first { $0.id == id } }
 
+    private func productBelongsToCurrentScope(_ product: Product) -> Bool {
+        let key = "product_\(product.id.uuidString)"
+        if let binding = currentShare { return binding.keys.contains(key) }
+        return !sharedLists.contains { $0.keys.contains(key) }
+    }
+
     func matchingProducts(_ query: String) -> [Product] {
         let value = Self.normalize(query)
         guard !value.isEmpty else { return [] }
         return data.products.filter {
             Self.normalize($0.name).localizedStandardContains(value) &&
-            (currentShare == nil || currentShare!.keys.contains("product_\($0.id.uuidString)"))
+            productBelongsToCurrentScope($0)
         }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -178,7 +184,7 @@ final class ShoppingStore: ObservableObject {
         let productID: UUID
         if let existing = data.products.first(where: {
             Self.normalize($0.name) == normalized &&
-            (currentShare == nil || currentShare!.keys.contains("product_\($0.id.uuidString)"))
+            productBelongsToCurrentScope($0)
         }) {
             productID = existing.id
             if let category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -268,7 +274,8 @@ final class ShoppingStore: ObservableObject {
         guard !name.isEmpty,
               let index = data.products.firstIndex(where: { $0.id == item.productID }),
               !data.products.contains(where: {
-                  $0.id != item.productID && Self.normalize($0.name) == Self.normalize(name)
+                  $0.id != item.productID && productBelongsToCurrentScope($0) &&
+                    Self.normalize($0.name) == Self.normalize(name)
               }) else { return }
         data.products[index].name = name
         persist()
