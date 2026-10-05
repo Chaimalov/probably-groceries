@@ -14,6 +14,57 @@ final class ShoppingStore: ObservableObject {
     var syncJournal: SyncJournal
     lazy var cloudSync = PersonalCloudSync(store: self)
 
+    var sharedLists: [SharedListBinding] { syncJournal.sharedLists ?? [] }
+    var currentShare: SharedListBinding? { sharedLists.first { $0.listID == selectedListID } }
+
+    func registerSharedList(_ binding: SharedListBinding) {
+        var bindings = sharedLists
+        if let index = bindings.firstIndex(where: { $0.listID == binding.listID }) {
+            var updated = binding
+            updated.keys.formUnion(bindings[index].keys)
+            bindings[index] = updated
+        } else { bindings.append(binding) }
+        syncJournal.sharedLists = bindings
+        saveSyncMetadata()
+    }
+
+    // Each shared list has its own product identities and a globally unique
+    // list ID. Two accounts' built-in default lists must never overwrite each other.
+    func prepareCurrentListForSharing(ownerName: String) -> SharedListBinding {
+        if let existing = currentShare { return existing }
+        let oldID = selectedListID
+        let newID = UUID()
+        let keys = SharedListBinding.keys(in: data, listID: oldID)
+        var productIDs: [UUID: UUID] = [:]
+        for product in data.products where keys.contains("product_\(product.id.uuidString)") {
+            var copy = product
+            copy.id = UUID()
+            productIDs[product.id] = copy.id
+            data.products.append(copy)
+        }
+        if let index = data.lists.firstIndex(where: { $0.id == oldID }) { data.lists[index].id = newID }
+        for index in data.items.indices where data.items[index].listID == oldID {
+            data.items[index].listID = newID
+            data.items[index].productID = productIDs[data.items[index].productID] ?? data.items[index].productID
+        }
+        for index in data.purchases.indices where data.purchases[index].listID == oldID {
+            data.purchases[index].listID = newID
+            data.purchases[index].productID = productIDs[data.purchases[index].productID] ?? data.purchases[index].productID
+        }
+        for index in data.deferrals.indices where data.deferrals[index].listID == oldID {
+            data.deferrals[index].listID = newID
+            data.deferrals[index].productID = productIDs[data.deferrals[index].productID] ?? data.deferrals[index].productID
+        }
+        var binding = SharedListBinding(listID: newID, zoneName: SharedListBinding.zoneName(for: newID),
+                                        ownerName: ownerName, isOwner: true)
+        binding.includeRecords(in: data)
+        syncJournal.sharedLists = sharedLists + [binding]
+        selectedListID = newID
+        UserDefaults.standard.set(newID.uuidString, forKey: "selectedShoppingListID")
+        persist()
+        return binding
+    }
+
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let path = directory.appendingPathComponent("shopping.json")
@@ -109,10 +160,19 @@ final class ShoppingStore: ObservableObject {
 
     func product(for id: UUID) -> Product? { data.products.first { $0.id == id } }
 
+    private func productBelongsToCurrentScope(_ product: Product) -> Bool {
+        let key = "product_\(product.id.uuidString)"
+        if let binding = currentShare { return binding.keys.contains(key) }
+        return !sharedLists.contains { $0.keys.contains(key) }
+    }
+
     func matchingProducts(_ query: String) -> [Product] {
         let value = Self.normalize(query)
         guard !value.isEmpty else { return [] }
-        return data.products.filter { Self.normalize($0.name).localizedStandardContains(value) }
+        return data.products.filter {
+            Self.normalize($0.name).localizedStandardContains(value) &&
+            productBelongsToCurrentScope($0)
+        }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
@@ -122,7 +182,10 @@ final class ShoppingStore: ObservableObject {
         guard !displayName.isEmpty else { return }
         let normalized = Self.normalize(displayName)
         let productID: UUID
-        if let existing = data.products.first(where: { Self.normalize($0.name) == normalized }) {
+        if let existing = data.products.first(where: {
+            Self.normalize($0.name) == normalized &&
+            productBelongsToCurrentScope($0)
+        }) {
             productID = existing.id
             if let category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                let index = data.products.firstIndex(where: { $0.id == productID }) {
@@ -211,7 +274,8 @@ final class ShoppingStore: ObservableObject {
         guard !name.isEmpty,
               let index = data.products.firstIndex(where: { $0.id == item.productID }),
               !data.products.contains(where: {
-                  $0.id != item.productID && Self.normalize($0.name) == Self.normalize(name)
+                  $0.id != item.productID && productBelongsToCurrentScope($0) &&
+                    Self.normalize($0.name) == Self.normalize(name)
               }) else { return }
         data.products[index].name = name
         persist()
@@ -326,7 +390,8 @@ final class ShoppingStore: ObservableObject {
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         data.items.removeAll { $0.id == current.id }
-        data.purchases.append(Purchase(id: UUID(), productID: current.productID,
+        // Concurrent check-offs of the same active row converge to one event.
+        data.purchases.append(Purchase(id: current.id, productID: current.productID,
                                        quantity: current.quantity, purchasedAt: .now,
                                        sourceItemID: current.id, listID: current.listID,
                                        wasUrgent: current.isUrgent))
@@ -413,6 +478,10 @@ final class ShoppingStore: ObservableObject {
 
     private func persist() {
         syncJournal.recordChanges(from: lastJournaledData, to: data)
+        if var bindings = syncJournal.sharedLists {
+            for index in bindings.indices { bindings[index].includeRecords(in: data) }
+            syncJournal.sharedLists = bindings
+        }
         lastJournaledData = data
         saveLocal()
         cloudSync.schedule()
