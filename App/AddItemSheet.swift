@@ -9,6 +9,10 @@ struct AddItemSheet: View {
     @State private var department = ""
     @State private var urgent = false
 
+    private var availableSections: [String] {
+        Array(Set(store.currentList.sections + store.departments + store.categories)).sorted()
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -25,7 +29,7 @@ struct AddItemSheet: View {
 
                 if !store.currentList.sections.isEmpty || !store.departments.isEmpty || !store.categories.isEmpty {
                     Section("מקטעים") {
-                        ForEach(Array(Set(store.currentList.sections + store.departments + store.categories)).sorted(), id: \.self) { existing in
+                        ForEach(availableSections, id: \.self) { existing in
                             Button(existing) { department = existing }
                         }
                     }
