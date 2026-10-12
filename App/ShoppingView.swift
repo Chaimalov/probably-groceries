@@ -9,6 +9,9 @@ struct ShoppingView: View {
     @State private var isAdding = false
     @State private var addingToSection: String?
     @State private var newName = ""
+    @State private var newQuantity = 1
+    @State private var draggedSection: String?
+    @State private var draggedItemID: UUID?
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
@@ -74,6 +77,27 @@ struct ShoppingView: View {
                                 }
                             } header: {
                                 sectionHeader(section)
+                                    .onDrag {
+                                        draggedItemID = nil
+                                        draggedSection = section
+                                        return NSItemProvider(object: section as NSString)
+                                    }
+                                    .onDrop(of: [.text], isTargeted: nil) { _ in
+                                        if let draggedItemID {
+                                            store.place(draggedItemID, inSection: section)
+                                            self.draggedItemID = nil
+                                            return true
+                                        }
+                                        guard let draggedSection,
+                                              draggedSection != section,
+                                              let source = sectionNames.firstIndex(of: draggedSection),
+                                              let destination = sectionNames.firstIndex(of: section),
+                                              draggedSection != "אחר", section != "אחר" else { return false }
+                                        store.moveSection(from: IndexSet(integer: source),
+                                                          to: destination > source ? destination + 1 : destination)
+                                        self.draggedSection = nil
+                                        return true
+                                    }
                             }
                             .listSectionSeparator(.hidden, edges: .all)
                         }
@@ -108,7 +132,25 @@ struct ShoppingView: View {
                                         if value.contains("\n") { addInline() }
                                     }
                                     .accessibilityIdentifier("inlineAddField")
+                                Button {
+                                    newQuantity = max(1, newQuantity - 1)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .disabled(newQuantity == 1)
+                                .accessibilityLabel("הפחתת כמות למוצר חדש")
+                                Text("\(newQuantity)")
+                                    .monospacedDigit()
+                                    .frame(minWidth: 20)
+                                Button {
+                                    newQuantity = min(9999, newQuantity + 1)
+                                } label: {
+                                    Image(systemName: "plus.circle")
+                                }
+                                .disabled(newQuantity == 9999)
+                                .accessibilityLabel("הגדלת כמות למוצר חדש")
                             }
+                            .buttonStyle(.borderless)
                             .id("new-item")
                             .selectionDisabled(true)
                             .listRowSeparator(.hidden)
@@ -396,7 +438,7 @@ struct ShoppingView: View {
     private func sectionHeader(_ section: String) -> some View {
         HStack {
             Button {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
                     if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
                 }
             } label: {
@@ -433,7 +475,7 @@ struct ShoppingView: View {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     if reduceMotion { store.buy(item) }
-                    else { withAnimation(.smooth) { store.buy(item) } }
+                    else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
                 } label: {
                     Image(systemName: "circle")
                         .font(.system(size: 24, weight: .light))
@@ -477,9 +519,6 @@ struct ShoppingView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    if let category = product.category {
-                        Text(category).font(.caption).foregroundStyle(.secondary)
-                    }
                     if let note = item.note, !note.isEmpty, expandedItemID != item.id {
                         Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -494,7 +533,7 @@ struct ShoppingView: View {
                 } else {
                 Button("×\(item.quantity) \(item.unit ?? "")") {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                         expandedItemID = expandedItemID == item.id ? nil : item.id
                     }
                 }
@@ -507,7 +546,7 @@ struct ShoppingView: View {
             if expandedItemID == item.id && !editMode.isEditing {
                 ItemInlineDetails(store: store, item: item)
                     .padding(.leading, 42)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity)
             }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -524,7 +563,7 @@ struct ShoppingView: View {
             }
             .contextMenu {
                 Button("כמות, הערה ותמונה", systemImage: "square.and.pencil") { expandedItemID = item.id }
-                Button("מקטע וקטגוריה", systemImage: "square.grid.2x2") { editingCategory = item }
+                Button("מקטע", systemImage: "square.grid.2x2") { editingCategory = item }
                 if !store.currentList.sections.isEmpty {
                     Menu("העבר למקטע", systemImage: "square.stack") {
                         ForEach(store.currentList.sections, id: \.self) { section in
@@ -537,6 +576,19 @@ struct ShoppingView: View {
                     store.toggleUrgent(item)
                 }
                 Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
+            }
+            .onDrag {
+                draggedSection = nil
+                draggedItemID = item.id
+                return NSItemProvider(object: item.id.uuidString as NSString)
+            }
+            .onDrop(of: [.text], isTargeted: nil) { _ in
+                guard let draggedItemID, draggedItemID != item.id else { return false }
+                store.place(draggedItemID,
+                            inSection: showsSections ? store.section(for: item) : nil,
+                            before: item.id)
+                self.draggedItemID = nil
+                return true
             }
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
@@ -579,7 +631,8 @@ struct ShoppingView: View {
     private func addInline() {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store.add(name: trimmed, quantity: 1, department: addingToSection)
+        store.add(name: trimmed, quantity: newQuantity, department: addingToSection)
+        newQuantity = 1
         newName = ""
         addFocused = true
     }
