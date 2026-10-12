@@ -9,6 +9,7 @@ struct ShoppingView: View {
     @State private var isAdding = false
     @State private var addingToSection: String?
     @State private var newName = ""
+    @State private var newQuantity = 1
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
@@ -108,6 +109,23 @@ struct ShoppingView: View {
                                         if value.contains("\n") { addInline() }
                                     }
                                     .accessibilityIdentifier("inlineAddField")
+                                Button {
+                                    newQuantity = max(1, newQuantity - 1)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .disabled(newQuantity == 1)
+                                .accessibilityLabel("הפחתת כמות")
+                                Text("\(newQuantity)")
+                                    .monospacedDigit()
+                                    .frame(minWidth: 20)
+                                Button {
+                                    newQuantity = min(9999, newQuantity + 1)
+                                } label: {
+                                    Image(systemName: "plus.circle")
+                                }
+                                .disabled(newQuantity == 9999)
+                                .accessibilityLabel("הגדלת כמות")
                             }
                             .id("new-item")
                             .selectionDisabled(true)
@@ -579,7 +597,8 @@ struct ShoppingView: View {
     private func addInline() {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store.add(name: trimmed, quantity: 1, department: addingToSection)
+        store.add(name: trimmed, quantity: newQuantity, department: addingToSection)
+        newQuantity = 1
         newName = ""
         addFocused = true
     }
