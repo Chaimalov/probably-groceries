@@ -10,6 +10,7 @@ struct ShoppingView: View {
     @State private var addingToSection: String?
     @State private var newName = ""
     @State private var newQuantity = 1
+    @State private var draggedSection: String?
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
@@ -75,6 +76,21 @@ struct ShoppingView: View {
                                 }
                             } header: {
                                 sectionHeader(section)
+                                    .onDrag {
+                                        draggedSection = section
+                                        return NSItemProvider(object: section as NSString)
+                                    }
+                                    .onDrop(of: [.text], isTargeted: nil) { _ in
+                                        guard let draggedSection,
+                                              draggedSection != section,
+                                              let source = sectionNames.firstIndex(of: draggedSection),
+                                              let destination = sectionNames.firstIndex(of: section),
+                                              draggedSection != "אחר", section != "אחר" else { return false }
+                                        store.moveSection(from: IndexSet(integer: source),
+                                                          to: destination > source ? destination + 1 : destination)
+                                        self.draggedSection = nil
+                                        return true
+                                    }
                             }
                             .listSectionSeparator(.hidden, edges: .all)
                         }
@@ -414,7 +430,7 @@ struct ShoppingView: View {
     private func sectionHeader(_ section: String) -> some View {
         HStack {
             Button {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
                     if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
                 }
             } label: {
