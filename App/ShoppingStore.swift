@@ -298,7 +298,9 @@ final class ShoppingStore: ObservableObject {
     }
 
     func section(for item: ShoppingItem) -> String {
-        let name = item.sectionName ?? product(for: item.productID)?.department ?? ""
+        let name = [item.sectionName, product(for: item.productID)?.department, product(for: item.productID)?.category]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty }) ?? ""
         return name.isEmpty ? "אחר" : name
     }
 
