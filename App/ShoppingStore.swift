@@ -291,6 +291,18 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func moveSection(from source: IndexSet, to destination: Int) {
+        guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }) else { return }
+        var sections = data.lists[index].sections
+        for item in items {
+            let name = section(for: item)
+            if name != "אחר" && !sections.contains(name) { sections.append(name) }
+        }
+        sections.move(fromOffsets: source, toOffset: destination)
+        data.lists[index].sections = sections
+        persist()
+    }
+
     func move(_ itemID: UUID, toSection section: String) {
         guard let index = data.items.firstIndex(where: { $0.id == itemID && $0.listID == selectedListID }) else { return }
         data.items[index].sectionName = section == "אחר" ? "" : section
