@@ -310,10 +310,35 @@ final class ShoppingStore: ObservableObject {
     }
 
     func section(for item: ShoppingItem) -> String {
-        let name = [item.sectionName, product(for: item.productID)?.department, product(for: item.productID)?.category]
+        if let explicit = item.sectionName {
+            let name = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "אחר" : name
+        }
+        let name = [product(for: item.productID)?.department, product(for: item.productID)?.category]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first(where: { !$0.isEmpty }) ?? ""
         return name.isEmpty ? "אחר" : name
+    }
+
+    func place(_ itemID: UUID, inSection destination: String?, before targetID: UUID? = nil) {
+        guard let index = data.items.firstIndex(where: { $0.id == itemID && $0.listID == selectedListID }),
+              targetID != itemID else { return }
+        var ordered = items.map(\.id).filter { $0 != itemID }
+        if let destination {
+            data.items[index].sectionName = destination == "אחר" ? "" : destination
+        }
+        if let targetID, let position = ordered.firstIndex(of: targetID) {
+            ordered.insert(itemID, at: position)
+        } else if let destination,
+                  let last = ordered.lastIndex(where: { id in
+                      guard let item = data.items.first(where: { $0.id == id }) else { return false }
+                      return section(for: item) == destination
+                  }) {
+            ordered.insert(itemID, at: last + 1)
+        } else {
+            ordered.append(itemID)
+        }
+        applyManualOrder(ordered)
     }
 
     private func applyManualOrder(_ orderedIDs: [UUID]) {
