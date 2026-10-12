@@ -6,7 +6,6 @@ struct AddItemSheet: View {
     @FocusState private var nameFocused: Bool
     @State private var name = ""
     @State private var quantity = 1
-    @State private var category = ""
     @State private var department = ""
     @State private var urgent = false
 
@@ -21,22 +20,13 @@ struct AddItemSheet: View {
                         .onSubmit(save)
                     Stepper("כמות: \(quantity)", value: $quantity, in: 1...99)
                     TextField("מקטע (לא חובה)", text: $department)
-                    TextField("קטגוריה (לא חובה)", text: $category)
                     Toggle("דחוף", isOn: $urgent)
                 }
 
-                if !store.currentList.sections.isEmpty || !store.departments.isEmpty {
-                    Section("מחלקות") {
-                        ForEach(Array(Set(store.currentList.sections + store.departments)).sorted(), id: \.self) { existing in
+                if !store.currentList.sections.isEmpty || !store.departments.isEmpty || !store.categories.isEmpty {
+                    Section("מקטעים") {
+                        ForEach(Array(Set(store.currentList.sections + store.departments + store.categories)).sorted(), id: \.self) { existing in
                             Button(existing) { department = existing }
-                        }
-                    }
-                }
-
-                if !store.categories.isEmpty {
-                    Section("קטגוריות") {
-                        ForEach(store.categories, id: \.self) { existing in
-                            Button(existing) { category = existing }
                         }
                     }
                 }
@@ -49,8 +39,7 @@ struct AddItemSheet: View {
                                 Button(product.name) {
                                     name = product.name
                                     quantity = product.usualQuantity
-                                    category = product.category ?? ""
-                                    department = product.department ?? ""
+                                    department = product.department ?? product.category ?? ""
                                 }
                             }
                         }
@@ -76,7 +65,7 @@ struct AddItemSheet: View {
 
     private func save() {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        store.add(name: name, quantity: quantity, category: category,
+        store.add(name: name, quantity: quantity,
                   department: department, urgent: urgent)
         dismiss()
     }
