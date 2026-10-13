@@ -19,7 +19,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.tap()
         for name in ["Drag Alpha", "Drag Beta", "Drag Gamma"] {
             field.typeText(name + "\n")
-            XCTAssertTrue(app.buttons["נקנה " + name].waitForExistence(timeout: 5))
+            let buy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name)).firstMatch
+            XCTAssertTrue(buy.waitForExistence(timeout: 5))
         }
         // Relaunch closes the keyboard so drag uses the ordinary shopping state.
         app.terminate()
