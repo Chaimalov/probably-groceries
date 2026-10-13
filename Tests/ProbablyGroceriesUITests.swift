@@ -1,6 +1,47 @@
 import XCTest
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+        let shop = "Drag \(UUID().uuidString.prefix(6))"
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["רשימה חדשה לחנות"].tap()
+        let alert = app.alerts["רשימה חדשה לחנות"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        alert.textFields["שם החנות"].typeText(shop)
+        alert.buttons["יצירה"].tap()
+        app.buttons["הוספת מוצר"].tap()
+        let field = app.textFields["inlineAddField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("Drag Alpha\nDrag Beta\nDrag Gamma\n")
+        // Relaunch closes the keyboard so drag uses the ordinary shopping state.
+        app.terminate()
+        app.launch()
+        let alpha = app.staticTexts["Drag Alpha"]
+        let gamma = app.staticTexts["Drag Gamma"]
+        XCTAssertTrue(alpha.waitForExistence(timeout: 10))
+        alpha.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo:
+                gamma.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+                    .withOffset(CGVector(dx: 0, dy: 8)))
+        let reordered = NSPredicate { _, _ in alpha.frame.minY > gamma.frame.minY }
+        expectation(for: reordered, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "נקנה")).count, 3)
+        XCTAssertFalse(app.buttons["ביטול"].exists, "Reorder must not create purchase history")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Touch and hold reorder"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(alpha.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(alpha.frame.minY, gamma.frame.minY)
+    }
+
     func testInlineAddEnterPurchaseUndoAndPersistence() {
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
@@ -128,3 +169,4 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(basket.isSelected)
     }
 }
+

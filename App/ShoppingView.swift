@@ -10,8 +10,6 @@ struct ShoppingView: View {
     @State private var addingToSection: String?
     @State private var newName = ""
     @State private var newQuantity = 1
-    @State private var draggedSection: String?
-    @State private var draggedItemID: UUID?
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
@@ -77,26 +75,8 @@ struct ShoppingView: View {
                                 }
                             } header: {
                                 sectionHeader(section)
-                                    .onDrag {
-                                        draggedItemID = nil
-                                        draggedSection = section
-                                        return NSItemProvider(object: section as NSString)
-                                    }
-                                    .onDrop(of: [.text], isTargeted: nil) { _ in
-                                        if let draggedItemID {
-                                            store.place(draggedItemID, inSection: section)
-                                            self.draggedItemID = nil
-                                            return true
-                                        }
-                                        guard let draggedSection,
-                                              draggedSection != section,
-                                              let source = sectionNames.firstIndex(of: draggedSection),
-                                              let destination = sectionNames.firstIndex(of: section),
-                                              draggedSection != "אחר", section != "אחר" else { return false }
-                                        store.moveSection(from: IndexSet(integer: source),
-                                                          to: destination > source ? destination + 1 : destination)
-                                        self.draggedSection = nil
-                                        return true
+                                    .background {
+                                        nativeDrag(.section(section), section: section)
                                     }
                             }
                             .listSectionSeparator(.hidden, edges: .all)
@@ -178,6 +158,8 @@ struct ShoppingView: View {
                                         Button("ביטול קנייה", systemImage: "arrow.uturn.backward") {
                                             store.undo(purchase)
                                         }
+                                        .labelStyle(.iconOnly)
+                                        .tint(Color(uiColor: .systemBlue))
                                     }
                                     .listRowSeparator(.hidden)
                                     .selectionDisabled(true)
@@ -427,7 +409,7 @@ struct ShoppingView: View {
         let names = existing + used.filter { !existing.contains($0) }
         var seen = Set<String>()
         let unique = names.filter { seen.insert($0).inserted }
-        return store.items.contains(where: { store.section(for: $0) == "אחר" })
+        return store.items.contains(where: { store.section(for: $0) == "אחר" }) && !unique.contains("אחר")
             ? unique + ["אחר"] : unique
     }
 
@@ -554,12 +536,16 @@ struct ShoppingView: View {
                        systemImage: item.isUrgent ? "flag.slash" : "flag") {
                     store.toggleUrgent(item)
                 }
-                .tint(.orange)
+                .labelStyle(.iconOnly)
+                .tint(Color(red: 0.62, green: 0.34, blue: 0.02))
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
-                Button("פרטים", systemImage: "slider.horizontal.3") { editingCategory = item }
-                    .tint(listTint)
+                    .labelStyle(.iconOnly)
+                    .tint(.red)
+                Button("מקטע", systemImage: "square.grid.2x2") { editingCategory = item }
+                    .labelStyle(.iconOnly)
+                    .tint(Color(uiColor: .systemBlue))
             }
             .contextMenu {
                 Button("כמות, הערה ותמונה", systemImage: "square.and.pencil") { expandedItemID = item.id }
@@ -577,22 +563,33 @@ struct ShoppingView: View {
                 }
                 Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
             }
-            .onDrag {
-                draggedSection = nil
-                draggedItemID = item.id
-                return NSItemProvider(object: item.id.uuidString as NSString)
-            }
-            .onDrop(of: [.text], isTargeted: nil) { _ in
-                guard let draggedItemID, draggedItemID != item.id else { return false }
-                store.place(draggedItemID,
-                            inSection: showsSections ? store.section(for: item) : nil,
-                            before: item.id)
-                self.draggedItemID = nil
-                return true
+            .background {
+                nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil)
             }
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
                 itemFrames[item.id] = frame
+            }
+        }
+    }
+
+    private func nativeDrag(_ entry: ShoppingDragEntry, section: String?) -> some View {
+        NativeShoppingDrag(entry: entry, listID: store.selectedListID,
+                           enabled: !editMode.isEditing && editingNameID == nil,
+                           tint: UIColor(listTint)) { entries, after in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                if case .section(let source)? = entries.first,
+                   case .section(let target) = entry {
+                    store.placeSection(source, relativeTo: target, after: after)
+                } else {
+                    let ids = entries.compactMap { value -> UUID? in
+                        if case .item(let id) = value { return id }
+                        return nil
+                    }
+                    let target: UUID?
+                    if case .item(let id) = entry { target = id } else { target = nil }
+                    store.place(ids, inSection: section, relativeTo: target, after: after)
+                }
             }
         }
     }
@@ -619,6 +616,8 @@ struct ShoppingView: View {
                 }
                 .swipeActions(edge: .trailing) {
                     Button("לא עכשיו", systemImage: "clock") { store.deferSuggestion(suggestion) }
+                        .labelStyle(.iconOnly)
+                        .tint(Color(uiColor: .systemIndigo))
                 }
                 .listRowSeparator(.hidden)
                 .selectionDisabled(true)
@@ -747,3 +746,4 @@ private struct ItemInlineDetails: View {
         editingCustomUnit = false
     }
 }
+

@@ -321,24 +321,52 @@ final class ShoppingStore: ObservableObject {
     }
 
     func place(_ itemID: UUID, inSection destination: String?, before targetID: UUID? = nil) {
-        guard let index = data.items.firstIndex(where: { $0.id == itemID && $0.listID == selectedListID }),
-              targetID != itemID else { return }
-        var ordered = items.map(\.id).filter { $0 != itemID }
-        if let destination {
-            data.items[index].sectionName = destination == "אחר" ? "" : destination
+        place([itemID], inSection: destination, relativeTo: targetID)
+    }
+
+    // Commit the entire drag in one persistence/sync operation. Keep the group's
+    // original visual order, regardless of the order in which fingers picked it up.
+    func place(_ itemIDs: [UUID], inSection destination: String?,
+               relativeTo targetID: UUID? = nil, after: Bool = false) {
+        let requested = Set(itemIDs)
+        let moving = items.filter { requested.contains($0.id) }.map(\.id)
+        guard !moving.isEmpty, targetID.map({ !requested.contains($0) }) ?? true,
+              targetID == nil || items.contains(where: { $0.id == targetID }) else { return }
+        var ordered = items.map(\.id).filter { !requested.contains($0) }
+        for index in data.items.indices
+            where data.items[index].listID == selectedListID && requested.contains(data.items[index].id) {
+            if let destination {
+                data.items[index].sectionName = destination == "אחר" ? "" : destination
+            }
         }
         if let targetID, let position = ordered.firstIndex(of: targetID) {
-            ordered.insert(itemID, at: position)
+            ordered.insert(contentsOf: moving, at: position + (after ? 1 : 0))
         } else if let destination,
                   let last = ordered.lastIndex(where: { id in
                       guard let item = data.items.first(where: { $0.id == id }) else { return false }
                       return section(for: item) == destination
                   }) {
-            ordered.insert(itemID, at: last + 1)
+            ordered.insert(contentsOf: moving, at: last + 1)
         } else {
-            ordered.append(itemID)
+            ordered.append(contentsOf: moving)
         }
         applyManualOrder(ordered)
+    }
+
+    func placeSection(_ name: String, relativeTo target: String, after: Bool) {
+        guard name != target,
+              let index = data.lists.firstIndex(where: { $0.id == selectedListID }) else { return }
+        var sections = data.lists[index].sections
+        for item in items {
+            let used = section(for: item)
+            if !sections.contains(used) { sections.append(used) }
+        }
+        guard sections.contains(name), sections.contains(target) else { return }
+        sections.removeAll { $0 == name }
+        let position = sections.firstIndex(of: target).map { $0 + (after ? 1 : 0) } ?? sections.count
+        sections.insert(name, at: position)
+        data.lists[index].sections = sections
+        persist()
     }
 
     private func applyManualOrder(_ orderedIDs: [UUID]) {
@@ -553,3 +581,4 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
     }
 }
+
