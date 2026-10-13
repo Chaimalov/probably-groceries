@@ -2,6 +2,7 @@ import XCTest
 
 final class ProbablyGroceriesUITests: XCTestCase {
     func testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch() {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
         app.launch()
@@ -16,12 +17,15 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let field = app.textFields["inlineAddField"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
-        field.typeText("Drag Alpha\nDrag Beta\nDrag Gamma\n")
+        for name in ["Drag Alpha", "Drag Beta", "Drag Gamma"] {
+            field.typeText(name + "\n")
+            XCTAssertTrue(app.buttons["נקנה " + name].waitForExistence(timeout: 5))
+        }
         // Relaunch closes the keyboard so drag uses the ordinary shopping state.
         app.terminate()
         app.launch()
-        let alpha = app.staticTexts["Drag Alpha"]
-        let gamma = app.staticTexts["Drag Gamma"]
+        let alpha = app.buttons["Drag Alpha"]
+        let gamma = app.buttons["Drag Gamma"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 10))
         alpha.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.7, thenDragTo:
