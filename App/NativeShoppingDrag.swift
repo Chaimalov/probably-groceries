@@ -74,8 +74,8 @@ struct NativeShoppingDrag: UIViewRepresentable {
         init(_ parent: NativeShoppingDrag) { self.parent = parent }
 
         func attach(to anchor: Anchor) {
-            guard let host = anchor.window?.rootViewController?.view else { detach(); return }
-            let current = ShoppingDragManager.shared(on: host)
+            guard let window = anchor.window else { detach(); return }
+            let current = ShoppingDragManager.shared(on: window)
             if manager !== current {
                 detach()
                 manager = current
@@ -91,7 +91,8 @@ struct NativeShoppingDrag: UIViewRepresentable {
         }
 
         fileprivate func rect(in host: UIView) -> CGRect? {
-            guard parent.enabled, let anchor, anchor.window != nil, anchor.window === host.window,
+            let window = (host as? UIWindow) ?? host.window
+            guard parent.enabled, let anchor, anchor.window != nil, anchor.window === window,
                   anchor.bounds.width > 0, anchor.bounds.height > 0 else { return nil }
             return anchor.convert(anchor.bounds, to: host)
         }
@@ -142,6 +143,9 @@ fileprivate final class ShoppingDragManager: NSObject, UIDragInteractionDelegate
 
     private func row(at point: CGPoint, listID: UUID? = nil) -> NativeShoppingDrag.Coordinator? {
         guard let host else { return nil }
+        // A presented editor/share sheet must not drag the rows underneath it.
+        if let window = host as? UIWindow,
+           window.rootViewController?.presentedViewController != nil { return nil }
         return rows.compactMap { ref -> (NativeShoppingDrag.Coordinator, CGRect)? in
             guard let row = ref.value, listID == nil || row.parent.listID == listID,
                   let rect = row.rect(in: host), rect.insetBy(dx: 0, dy: -4).contains(point) else { return nil }
