@@ -29,7 +29,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let gamma = app.buttons["Drag Gamma"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 10))
         alpha.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.7, thenDragTo:
+            .press(forDuration: 1.0, thenDragTo:
                 gamma.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
                     .withOffset(CGVector(dx: 0, dy: 8)))
         let reordered = NSPredicate { _, _ in alpha.frame.minY > gamma.frame.minY }
@@ -58,7 +58,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(one.waitForExistence(timeout: 5))
         XCTAssertTrue(two.waitForExistence(timeout: 5))
         one.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.7, thenDragTo:
+            .press(forDuration: 1.0, thenDragTo:
                 two.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
                     .withOffset(CGVector(dx: 0, dy: 4)))
         expectation(for: NSPredicate { _, _ in one.frame.minY > two.frame.minY }, evaluatedWith: nil)

@@ -547,22 +547,6 @@ struct ShoppingView: View {
                     .labelStyle(.iconOnly)
                     .tint(Color(uiColor: .systemBlue))
             }
-            .contextMenu {
-                Button("כמות, הערה ותמונה", systemImage: "square.and.pencil") { expandedItemID = item.id }
-                Button("מקטע", systemImage: "square.grid.2x2") { editingCategory = item }
-                if !store.currentList.sections.isEmpty {
-                    Menu("העבר למקטע", systemImage: "square.stack") {
-                        ForEach(store.currentList.sections, id: \.self) { section in
-                            Button(section) { store.move(item.id, toSection: section) }
-                        }
-                        Button("ללא מקטע") { store.move(item.id, toSection: "אחר") }
-                    }
-                }
-                Button(item.isUrgent ? "הסר דגל דחוף" : "סמן כדחוף", systemImage: "flag") {
-                    store.toggleUrgent(item)
-                }
-                Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
-            }
             .background {
                 nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil)
             }
