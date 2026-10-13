@@ -12,7 +12,7 @@ The selected reference shows a small date and overflow control above a short hea
 - Active items first, suggested items next, compact purchased rows last. Keep the shopping state obvious.
 - A thumb-reachable New Item action focuses an inline row. Enter saves and keeps the row ready for the next item.
 - Each row shows a tappable quantity even when it is one. Tapping animates open quantity controls, an optional unit (including a custom unit), an inline note and an optional photo attachment. Grouping can use a sheet. Completion is generous to tap and supported by VoiceOver.
-- A small store picker switches lists and opens a native color and SF Symbol picker for each list. Named sections such as frozen vegetables, canned food and baking are collapsible; the plus in a header adds directly to that section. Reorder mode shows native drag handles within each section or the route view. An item can move to another section from its context menu. Urgent items show a flag in place without moving in the list.
+- A small store picker switches lists and opens a native color and SF Symbol picker for each list. Named sections such as frozen vegetables, canned food and baking are collapsible; the plus in a header adds directly to that section. Touch and hold lifts a product or section; drop above or below another row/header to reorder. While holding products, tap other product rows with a second finger to add them to the drag. Dropping products on a section header moves them into that section, including empty or collapsed sections. Native handles remain available in reorder mode. The section swipe action opens the section editor. Urgent items show a flag in place without moving in the list.
 - Detailed why/when and history live behind a tap; the first screen stays quiet.
 
 ## Interaction language
@@ -20,9 +20,10 @@ The selected reference shows a small date and overflow control above a short hea
 - A check-off gives a light haptic and a short, reversible move to Purchased.
 - Notes and attached photos belong to the shopping item and survive undo. Photos are resized and stored in the app's local support directory; they do not sync between devices until the CloudKit data work includes attachments.
 - Accepting a suggestion promotes it to the active list. “Not yet” records feedback with a temporary snooze.
-- Swipe actions expose flag, details and remove; a context menu keeps these actions discoverable. The reorder command shows native drag handles.
+- Swipe actions use icons with accessible Hebrew labels: a darker amber flag, blue section editor, and red destructive delete independent of the list color. Quantity, units, notes and photos stay available through the quantity button; tap the product name to rename. Touch and hold is reserved for lifting, so a context menu must not intercept this gesture.
 - A full swipe flags or deletes from opposite edges. List selection supports the system's two-finger multi-select gesture; selected products can be flagged or deleted together. The selection control in the menu provides a visible alternative.
-- Use native transitions and respect Reduce Motion. No decorative animations that delay shopping.
+- A multi-product drop preserves the displayed order across sections, regardless of pickup order, and persists once. Cancellation and foreign-list/text drops must not reorder products or create purchase events.
+- Use native lift, stacking and cancellation previews with a visible insertion line. Attach public UIKit drag interactions to the enclosing list row/header, keeping controls and swipes available. Lift previews use the stable window as their animation target. Respect Reduce Motion and avoid animations that delay shopping.
 - Hebrew and English must both lay out correctly; test long names, dynamic type, dark mode, and RTL.
 
 ## Materials and color
