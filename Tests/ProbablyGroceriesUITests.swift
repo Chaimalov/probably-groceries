@@ -40,6 +40,43 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(alpha.waitForExistence(timeout: 10))
         XCTAssertGreaterThan(alpha.frame.minY, gamma.frame.minY)
+        for name in ["Drag One", "Drag Two"] {
+            app.buttons["אפשרויות נוספות"].tap()
+            app.buttons["מקטע חדש"].tap()
+            let sectionAlert = app.alerts["מקטע חדש"]
+            XCTAssertTrue(sectionAlert.waitForExistence(timeout: 5))
+            sectionAlert.textFields["שם המקטע"].typeText(name)
+            sectionAlert.buttons["יצירה"].tap()
+        }
+        let one = app.staticTexts["Drag One"]
+        let two = app.staticTexts["Drag Two"]
+        XCTAssertTrue(one.waitForExistence(timeout: 5))
+        XCTAssertTrue(two.waitForExistence(timeout: 5))
+        one.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo:
+                two.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+                    .withOffset(CGVector(dx: 0, dy: 4)))
+        expectation(for: NSPredicate { _, _ in one.frame.minY > two.frame.minY }, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(one.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(one.frame.minY, two.frame.minY, "Section order must also persist")
+        for appearance in ["Light", "Dark"] {
+            app.terminate()
+            app.launchArguments = ["-ui-testing", "-AppleInterfaceStyle", appearance]
+            app.launch()
+            XCTAssertTrue(alpha.waitForExistence(timeout: 10))
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.3, dy: alpha.frame.midY))
+            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.65, dy: alpha.frame.midY))
+            start.press(forDuration: 0.05, thenDragTo: end)
+            XCTAssertTrue(app.buttons["הסר"].waitForExistence(timeout: 5))
+            let swipe = XCTAttachment(screenshot: app.screenshot())
+            swipe.name = "Icon swipe actions - \(appearance)"
+            swipe.lifetime = .keepAlways
+            add(swipe)
+        }
     }
 
     func testInlineAddEnterPurchaseUndoAndPersistence() {

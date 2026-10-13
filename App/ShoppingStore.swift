@@ -325,11 +325,13 @@ final class ShoppingStore: ObservableObject {
     }
 
     // Commit the entire drag in one persistence/sync operation. Keep the group's
-    // original visual order, regardless of the order in which fingers picked it up.
+    // visual order supplied by the caller, rather than finger pickup order.
     func place(_ itemIDs: [UUID], inSection destination: String?,
                relativeTo targetID: UUID? = nil, after: Bool = false) {
         let requested = Set(itemIDs)
-        let moving = items.filter { requested.contains($0.id) }.map(\.id)
+        let validIDs = Set(items.map(\.id))
+        var seen = Set<UUID>()
+        let moving = itemIDs.filter { validIDs.contains($0) && seen.insert($0).inserted }
         guard !moving.isEmpty, targetID.map({ !requested.contains($0) }) ?? true,
               targetID == nil || items.contains(where: { $0.id == targetID }) else { return }
         var ordered = items.map(\.id).filter { !requested.contains($0) }

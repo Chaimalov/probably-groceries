@@ -582,10 +582,12 @@ struct ShoppingView: View {
                    case .section(let target) = entry {
                     store.placeSection(source, relativeTo: target, after: after)
                 } else {
-                    let ids = entries.compactMap { value -> UUID? in
+                    let draggedIDs = Set(entries.compactMap { value -> UUID? in
                         if case .item(let id) = value { return id }
                         return nil
-                    }
+                    })
+                    let visibleOrder = showsSections ? sectionNames.flatMap { items(in: $0) } : store.items
+                    let ids = visibleOrder.filter { draggedIDs.contains($0.id) }.map(\.id)
                     let target: UUID?
                     if case .item(let id) = entry { target = id } else { target = nil }
                     store.place(ids, inSection: section, relativeTo: target, after: after)
