@@ -1,90 +1,82 @@
 name: iOS build
-"on":
+'on':
   push:
+    paths-ignore:
+    - '**/*.md'
+    - docs/**
+    - LICENSE
+    branches:
+    - main
   pull_request:
-  workflow_dispatch:
-
+    paths-ignore:
+    - '**/*.md'
+    - docs/**
+    - LICENSE
+  workflow_dispatch: null
 concurrency:
-  group: ios-build-${{ github.ref }}
+  group: ios-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   simulator-build:
-    # Xcode 27 is needed to compile against the iOS 27 SDK.
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate project
-        run: xcodegen generate
-      - name: Upload project for on-device install
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcode-project
-          path: |
-            App
-            Tests
-            ProbablyGroceries.xcodeproj
-            project.yml
-          if-no-files-found: error
-      - name: Verify Xcode version
-        run: xcodebuild -version
-      - name: Build for iPhone simulator
-        run: |
-          xcodebuild -project ProbablyGroceries.xcodeproj \
-            -scheme ProbablyGroceries \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/ProbablyDerived" \
-            CODE_SIGNING_ALLOWED=NO build
-      - name: Install and launch on iPhone simulator
-        timeout-minutes: 10
-        run: |
-          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in devices.items() if "iOS-27" in runtime for d in group if d["name"].startswith("iPhone")))')
-          xcrun simctl boot "$DEVICE_ID"
-          xcrun simctl bootstatus "$DEVICE_ID" -b
-          xcrun simctl install "$DEVICE_ID" "$RUNNER_TEMP/ProbablyDerived/Build/Products/Debug-iphonesimulator/ProbablyGroceries.app"
-          xcrun simctl launch "$DEVICE_ID" com.chaimalov.probablygroceries
-          xcrun simctl io "$DEVICE_ID" screenshot "$RUNNER_TEMP/probably-smoke.png"
-      - name: Run shopping flow on booted simulator
-        timeout-minutes: 15
-        run: |
-          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in devices.items() if "iOS-27" in runtime for d in group if d["name"].startswith("iPhone")))')
-          xcodebuild -project ProbablyGroceries.xcodeproj \
-            -scheme ProbablyGroceries \
-            -configuration Debug \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -parallel-testing-enabled NO \
-            -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
-            CODE_SIGNING_ALLOWED=NO test
-      - name: Upload simulator screenshot
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: simulator-screenshot
-          path: ${{ runner.temp }}/probably-smoke.png
-          if-no-files-found: ignore
-      - name: Export test screenshots
-        if: always()
-        run: |
-          if [ -d "$RUNNER_TEMP/TestResults.xcresult" ]; then
-            xcrun xcresulttool export attachments \
-              --path "$RUNNER_TEMP/TestResults.xcresult" \
-              --output-path "$RUNNER_TEMP/ui-screenshots"
-          fi
-      - name: Upload test screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: shopping-flow-screenshots
-          path: ${{ runner.temp }}/ui-screenshots
-          if-no-files-found: ignore
-      - name: Upload UI test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-test-results
-          path: ${{ runner.temp }}/TestResults.xcresult
-          if-no-files-found: ignore
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install XcodeGen
+      run: command -v xcodegen >/dev/null || brew install xcodegen
+    - name: Generate project
+      run: xcodegen generate
+    - name: Upload project for on-device install
+      uses: actions/upload-artifact@v4
+      with:
+        name: xcode-project
+        path: |
+          App
+          Tests
+          ProbablyGroceries.xcodeproj
+          project.yml
+        if-no-files-found: error
+        retention-days: 7
+      if: github.event_name == 'workflow_dispatch'
+    - name: Verify Xcode version
+      run: xcodebuild -version
+    - name: Build and test shopping flow on iPhone simulator
+      timeout-minutes: 15
+      run: |
+        DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in devices.items() if "iOS-27" in runtime for d in group if d["name"].startswith("iPhone")))')
+        xcodebuild -project ProbablyGroceries.xcodeproj \
+          -scheme ProbablyGroceries \
+          -configuration Debug \
+          -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+          -derivedDataPath "$RUNNER_TEMP/ProbablyDerived" \
+          -parallel-testing-enabled NO \
+          -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
+          CODE_SIGNING_ALLOWED=NO test
+    - name: Export test screenshots
+      if: always()
+      run: |
+        if [ -d "$RUNNER_TEMP/TestResults.xcresult" ]; then
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/TestResults.xcresult" \
+            --output-path "$RUNNER_TEMP/ui-screenshots"
+        fi
+    - name: Upload test screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: shopping-flow-screenshots
+        path: ${{ runner.temp }}/ui-screenshots
+        if-no-files-found: ignore
+        retention-days: 7
+    - name: Upload UI test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ui-test-results
+        path: ${{ runner.temp }}/TestResults.xcresult
+        if-no-files-found: ignore
+        retention-days: 7
+    timeout-minutes: 25
+permissions:
+  contents: read

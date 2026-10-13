@@ -1,21 +1,20 @@
 name: Upload to TestFlight
-"on":
-  workflow_dispatch:
+'on':
+  workflow_dispatch: null
   workflow_run:
-    workflows: ["iOS build"]
-    types: [completed]
-    branches: [main]
-
-
+    workflows:
+    - iOS build
+    types:
+    - completed
+    branches:
+    - main
 concurrency:
   group: testflight-upload
   cancel-in-progress: false
-
 jobs:
   upload:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
+    if: |-
+      github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main')
     runs-on: xcode-27
@@ -25,96 +24,120 @@ jobs:
       APPLE_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
       APPLE_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Check signing configuration
-        run: |
-          if [[ -z "$APPLE_TEAM_ID" || -z "$APPLE_KEY_ID" || -z "$APPLE_ISSUER_ID" || -z "$APPLE_KEY_P8" ]]; then
-            echo 'Set APPLE_TEAM_ID (variable) and APPLE_API_KEY_ID, APPLE_API_ISSUER_ID, APPLE_API_KEY_P8 (secrets) first.' >&2
-            exit 1
-          fi
-      - name: Generate Xcode project
-        run: |
-          brew install xcodegen
-          xcodegen generate
-      - name: Prepare App Store Connect credentials
-        run: |
-          printf '%s' "$APPLE_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
-      - name: Archive for iPhone
-        run: |
-          xcodebuild archive \
-            -project ProbablyGroceries.xcodeproj \
-            -scheme ProbablyGroceries \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO
-          codesign --force --sign - \
-            --entitlements App/ProbablyGroceries.entitlements \
-            "$RUNNER_TEMP/ProbablyGroceries.xcarchive/Products/Applications/ProbablyGroceries.app"
-      - name: Upload to App Store Connect
-        run: |
-          python3 - <<'PY'
-          import os
-          import plistlib
-          from pathlib import Path
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+        persist-credentials: false
+    - name: Check signing configuration
+      run: |
+        if [[ -z "$APPLE_TEAM_ID" || -z "$APPLE_KEY_ID" || -z "$APPLE_ISSUER_ID" || -z "$APPLE_KEY_P8" ]]; then
+          echo 'Set APPLE_TEAM_ID (variable) and APPLE_API_KEY_ID, APPLE_API_ISSUER_ID, APPLE_API_KEY_P8 (secrets) first.' >&2
+          exit 1
+        fi
+    - name: Generate Xcode project
+      run: |
+        command -v xcodegen >/dev/null || brew install xcodegen
+        xcodegen generate
+    - name: Prepare App Store Connect credentials
+      run: |
+        printf '%s' "$APPLE_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+        chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+    - name: Archive for iPhone
+      run: |
+        xcodebuild archive \
+          -project ProbablyGroceries.xcodeproj \
+          -scheme ProbablyGroceries \
+          -configuration Release \
+          -destination 'generic/platform=iOS' \
+          -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
+          DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+          CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+          CODE_SIGNING_ALLOWED=NO
+        codesign --force --sign - \
+          --entitlements App/ProbablyGroceries.entitlements \
+          "$RUNNER_TEMP/ProbablyGroceries.xcarchive/Products/Applications/ProbablyGroceries.app"
+    - name: Upload to App Store Connect
+      run: |
+        python3 - <<'PY'
+        import os
+        import plistlib
+        from pathlib import Path
 
 
-          options = {
-              'method': 'app-store-connect',
-              'destination': 'upload',
-              'signingStyle': 'automatic',
-              'teamID': os.environ['APPLE_TEAM_ID'],
-          }
-          with (Path(os.environ['RUNNER_TEMP']) / 'ExportOptions.plist').open('wb') as f:
-              plistlib.dump(options, f)
-          options['destination'] = 'export'
-          with (Path(os.environ['RUNNER_TEMP']) / 'InspectOptions.plist').open('wb') as f:
-              plistlib.dump(options, f)
-          PY
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
-            -exportPath "$RUNNER_TEMP/SignedExport" \
-            -exportOptionsPlist "$RUNNER_TEMP/InspectOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
-            -authenticationKeyID "$APPLE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
-          ipa="$RUNNER_TEMP/SignedExport/ProbablyGroceries.ipa"
-          unzip -q "$ipa" -d "$RUNNER_TEMP/SignedApp"
-          app="$RUNNER_TEMP/SignedApp/Payload/ProbablyGroceries.app"
-          codesign --verify --strict "$app"
-          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/signed-entitlements.plist"
-          python3 - <<'PY'
-          import os
-          import plistlib
-          from pathlib import Path
+        options = {
+            'method': 'app-store-connect',
+            'destination': 'upload',
+            'signingStyle': 'automatic',
+            'teamID': os.environ['APPLE_TEAM_ID'],
+        }
+        with (Path(os.environ['RUNNER_TEMP']) / 'ExportOptions.plist').open('wb') as f:
+            plistlib.dump(options, f)
+        options['destination'] = 'export'
+        with (Path(os.environ['RUNNER_TEMP']) / 'InspectOptions.plist').open('wb') as f:
+            plistlib.dump(options, f)
+        PY
+        xcodebuild -exportArchive \
+          -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
+          -exportPath "$RUNNER_TEMP/SignedExport" \
+          -exportOptionsPlist "$RUNNER_TEMP/InspectOptions.plist" \
+          -allowProvisioningUpdates \
+          -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+          -authenticationKeyID "$APPLE_KEY_ID" \
+          -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
+        ipa="$RUNNER_TEMP/SignedExport/ProbablyGroceries.ipa"
+        unzip -q "$ipa" -d "$RUNNER_TEMP/SignedApp"
+        app="$RUNNER_TEMP/SignedApp/Payload/ProbablyGroceries.app"
+        codesign --verify --strict "$app"
+        codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/signed-entitlements.plist"
+        python3 - <<'PY'
+        import os
+        import plistlib
+        from pathlib import Path
 
 
-          path = Path(os.environ['RUNNER_TEMP']) / 'signed-entitlements.plist'
-          entitlements = plistlib.loads(path.read_bytes())
-          containers = entitlements.get('com.apple.developer.icloud-container-identifiers', [])
-          services = entitlements.get('com.apple.developer.icloud-services', [])
-          print('Signed iCloud containers:', containers)
-          print('Signed iCloud services:', services)
-          assert 'iCloud.com.chaimalov.probablygroceries' in containers, 'Missing signed iCloud container'
-          assert 'CloudKit' in services, 'Missing signed CloudKit service'
-          PY
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
-            -exportPath "$RUNNER_TEMP/TestFlight" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
-            -authenticationKeyID "$APPLE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
-      - name: Wait for TestFlight availability
-        timeout-minutes: 17
-        run: python3 scripts/wait_for_testflight.py
-      - name: Remove temporary credentials
-        if: always()
-        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+        path = Path(os.environ['RUNNER_TEMP']) / 'signed-entitlements.plist'
+        entitlements = plistlib.loads(path.read_bytes())
+        containers = entitlements.get('com.apple.developer.icloud-container-identifiers', [])
+        services = entitlements.get('com.apple.developer.icloud-services', [])
+        print('Signed iCloud containers:', containers)
+        print('Signed iCloud services:', services)
+        assert 'iCloud.com.chaimalov.probablygroceries' in containers, 'Missing signed iCloud container'
+        assert 'CloudKit' in services, 'Missing signed CloudKit service'
+        PY
+        xcodebuild -exportArchive \
+          -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
+          -exportPath "$RUNNER_TEMP/TestFlight" \
+          -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+          -allowProvisioningUpdates \
+          -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+          -authenticationKeyID "$APPLE_KEY_ID" \
+          -authenticationKeyIssuerID "$APPLE_ISSUER_ID"
+    - name: Remove temporary credentials
+      if: always()
+      run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+    timeout-minutes: 25
+  processing:
+    needs: upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APPLE_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      APPLE_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+        persist-credentials: false
+    - name: Check Apple processing
+      shell: bash
+      run: |
+        set +x
+        set -euo pipefail
+        umask 077
+        trap 'rm -f "$RUNNER_TEMP/AuthKey.p8"' EXIT
+        printf '%s' "$APPLE_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+        unset APPLE_KEY_P8
+        python3 scripts/wait_for_testflight.py
+permissions:
+  contents: read
