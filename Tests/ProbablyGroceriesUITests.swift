@@ -69,7 +69,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertGreaterThan(one.frame.minY, two.frame.minY, "Section order must also persist")
         for appearance in ["Light", "Dark"] {
             app.terminate()
-            app.launchArguments = ["-ui-testing", "-AppleInterfaceStyle", appearance]
+            app.launchArguments = ["-ui-testing"]
+            app.launchEnvironment["UITEST_APPEARANCE"] = appearance.lowercased()
             app.launch()
             XCTAssertTrue(alpha.waitForExistence(timeout: 10))
             let origin = app.coordinate(withNormalizedOffset: .zero)
