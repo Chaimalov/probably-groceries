@@ -31,7 +31,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         alpha.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 1.0, thenDragTo:
                 gamma.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
-                    .withOffset(CGVector(dx: 0, dy: 8)))
+                    .withOffset(CGVector(dx: 0, dy: 8)),
+                withVelocity: .slow, thenHoldForDuration: 1.0)
         let reordered = NSPredicate { _, _ in alpha.frame.minY > gamma.frame.minY }
         expectation(for: reordered, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
@@ -60,7 +61,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         one.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 1.0, thenDragTo:
                 two.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
-                    .withOffset(CGVector(dx: 0, dy: 4)))
+                    .withOffset(CGVector(dx: 0, dy: 4)),
+                withVelocity: .slow, thenHoldForDuration: 1.0)
         expectation(for: NSPredicate { _, _ in one.frame.minY > two.frame.minY }, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
         app.terminate()

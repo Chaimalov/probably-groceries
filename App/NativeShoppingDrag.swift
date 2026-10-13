@@ -118,14 +118,7 @@ struct NativeShoppingDrag: UIViewRepresentable {
         }
 
         private func makeItem() -> UIDragItem {
-            let provider = NSItemProvider()
-            let bytes = Data(parent.entry.representation.utf8)
-            provider.registerDataRepresentation(forTypeIdentifier: "com.chaimalov.probablygroceries.reorder",
-                                                visibility: .ownProcess) { completion in
-                completion(bytes, nil)
-                return nil
-            }
-            let item = UIDragItem(itemProvider: provider)
+            let item = UIDragItem(itemProvider: NSItemProvider(object: parent.entry.representation as NSString))
             item.localObject = parent.entry
             return item
         }
@@ -187,7 +180,11 @@ struct NativeShoppingDrag: UIViewRepresentable {
         }
 
         func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
-            entries(in: session) != nil
+            let accepted = entries(in: session) != nil
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
+                print("ShoppingDrag: target \(parent.entry), accepted \(accepted)")
+            }
+            return accepted
         }
 
         func dropInteraction(_ interaction: UIDropInteraction,
