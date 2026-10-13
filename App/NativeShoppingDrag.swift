@@ -111,6 +111,11 @@ fileprivate final class ShoppingDragManager: NSObject, UIDragInteractionDelegate
     private var hoverEntry: ShoppingDragEntry?
     private var hoverAfter: Bool?
     private var dropPoint: CGPoint?
+    private var loggedHover = false
+
+    private func debug(_ message: String) {
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing") { print("ShoppingDrag: " + message) }
+    }
 
     static func shared(on host: UIView) -> ShoppingDragManager {
         if let existing = objc_getAssociatedObject(host, &key) as? ShoppingDragManager { return existing }
@@ -154,13 +159,25 @@ fileprivate final class ShoppingDragManager: NSObject, UIDragInteractionDelegate
     }
 
     private func makeItem(for row: NativeShoppingDrag.Coordinator) -> UIDragItem {
-        let item = UIDragItem(itemProvider: NSItemProvider(object: row.parent.entry.representation as NSString))
+        let provider = NSItemProvider()
+        let bytes = Data(row.parent.entry.representation.utf8)
+        provider.registerDataRepresentation(forTypeIdentifier: "com.chaimalov.probablygroceries.reorder",
+                                            visibility: .ownProcess) { completion in
+            completion(bytes, nil)
+            return nil
+        }
+        let item = UIDragItem(itemProvider: provider)
         item.localObject = row.parent.entry
         return item
     }
 
     func dragInteraction(_ interaction: UIDragInteraction, itemsForBeginning session: UIDragSession) -> [UIDragItem] {
-        guard let host, let row = row(at: session.location(in: host)) else { return [] }
+        guard let host else { return [] }
+        let point = session.location(in: host)
+        debug("begin at \(point); regions: \(rows.compactMap { $0.value?.rect(in: host) })")
+        guard let row = row(at: point) else { debug("no source region"); return [] }
+        debug("source found")
+        loggedHover = false
         session.localContext = ShoppingDragContext(listID: row.parent.listID)
         return [makeItem(for: row)]
     }
@@ -219,10 +236,13 @@ fileprivate final class ShoppingDragManager: NSObject, UIDragInteractionDelegate
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
         // Accept the session across the entire screen, even while over its source
         // row; eligibility at each pointer location is checked in sessionDidUpdate.
-        entries(in: session) != nil
+        let accepted = entries(in: session) != nil
+        debug("canHandle: \(accepted)")
+        return accepted
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: UIDropSession) -> UIDropProposal {
+        if !loggedHover { debug("drop update received"); loggedHover = true }
         guard let host, let (row, _, after) = destination(in: session), let rect = row.rect(in: host) else {
             clearIndicator()
             return UIDropProposal(operation: .cancel)
@@ -240,7 +260,8 @@ fileprivate final class ShoppingDragManager: NSObject, UIDragInteractionDelegate
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
-        guard let host, let (row, entries, after) = destination(in: session) else { return }
+        guard let host, let (row, entries, after) = destination(in: session) else { debug("invalid destination"); return }
+        debug("perform drop; after: \(after)")
         dropPoint = session.location(in: host)
         clearIndicator()
         row.parent.drop(entries, after)
