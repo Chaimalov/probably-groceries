@@ -8,9 +8,21 @@ struct ProbablyGroceriesApp: App {
     @State private var accepting = false
     @State private var invitationError: String?
 
+    // Explicit test-only appearance avoids macOS defaults that iOS ignores.
+    // Normal launches continue to follow the user's system appearance.
+    private var testAppearance: ColorScheme? {
+        guard ProcessInfo.processInfo.arguments.contains("-ui-testing") else { return nil }
+        switch ProcessInfo.processInfo.environment["UITEST_APPEARANCE"] {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ShoppingView(store: store)
+                .preferredColorScheme(testAppearance)
                 .environment(\.locale, Locale(identifier: "he_IL"))
                 .environment(\.layoutDirection, .rightToLeft)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
@@ -37,3 +49,4 @@ struct ProbablyGroceriesApp: App {
         }
     }
 }
+
