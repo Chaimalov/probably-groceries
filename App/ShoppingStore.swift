@@ -501,10 +501,10 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
-        let originalOrder = current.manualOrder ?? items.firstIndex(where: { $0.id == current.id })
+        let originalOrder = items.firstIndex(where: { $0.id == current.id })
         // Freeze the remaining route before new learning changes positions.
         for (order, visible) in items.enumerated() {
-            if let index = data.items.firstIndex(where: { $0.id == visible.id }), data.items[index].manualOrder == nil {
+            if let index = data.items.firstIndex(where: { $0.id == visible.id }) {
                 data.items[index].manualOrder = order
             }
         }
