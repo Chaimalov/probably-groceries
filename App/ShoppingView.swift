@@ -61,7 +61,7 @@ struct ShoppingView: View {
                 List(selection: reordering ? nil : $selectedItemIDs) {
                     if let error = store.storageError {
                         Section {
-                            Text(error).foregroundStyle(.red)
+                            Text(LocalizedStringKey(error)).foregroundStyle(.red)
                             Button("ניסיון שמירה נוסף") { store.retryLocalSave() }
                         }
                     }
@@ -272,6 +272,9 @@ struct ShoppingView: View {
                     }
                 }
             }
+            .onChange(of: store.items) { _, items in
+                if placeFilter != "הכול" && placeFilter != "ללא מקום" && !items.contains(where: { $0.shoppingPlace == placeFilter }) { placeFilter = "הכול" }
+            }
             .onChange(of: nameFocused) { oldID, newID in
                 if oldID != newID, let oldID, editingNameID == oldID,
                    let item = store.items.first(where: { $0.id == oldID }) {
@@ -443,7 +446,7 @@ struct ShoppingView: View {
             #if targetEnvironment(simulator)
             .disabled(true)
             #endif
-            Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
+            Button(LocalizedStringKey(syncLabel), systemImage: "arrow.triangle.2.circlepath.icloud") {
                 #if !targetEnvironment(simulator)
                 Task { await store.cloudSync.synchronize() }
                 #endif
@@ -849,7 +852,7 @@ struct ItemInlineDetails: View {
                         }
                     }
                 }
-                if item.photoFilename != nil {
+                if item.photoFilename != nil || item.photoData != nil {
                     Button("הסרת תמונה", systemImage: "xmark.circle") {
                         store.removePhoto(from: item)
                     }
