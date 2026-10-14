@@ -138,8 +138,10 @@ struct ShoppingData: Codable {
     var items: [ShoppingItem] = []
     var purchases: [Purchase] = []
     var deferrals: [Deferral] = []
+    // Device-local receipts, persisted atomically with confirmed additions.
+    var confirmedDrafts: [UUID] = []
 
-    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals }
+    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts }
     init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")],
          products: [Product] = [], items: [ShoppingItem] = [],
          purchases: [Purchase] = [], deferrals: [Deferral] = []) {
@@ -154,6 +156,7 @@ struct ShoppingData: Codable {
         items = try c.decodeIfPresent([ShoppingItem].self, forKey: .items) ?? []
         purchases = try c.decodeIfPresent([Purchase].self, forKey: .purchases) ?? []
         deferrals = try c.decodeIfPresent([Deferral].self, forKey: .deferrals) ?? []
+        confirmedDrafts = try c.decodeIfPresent([UUID].self, forKey: .confirmedDrafts) ?? []
     }
 }
 
