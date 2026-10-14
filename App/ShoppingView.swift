@@ -211,60 +211,7 @@ struct ShoppingView: View {
                         addFocused = true
                     }
                 }
-                .toolbar {
-                    if reordering {
-                        ToolbarItem(placement: .bottomBar) {
-                            Text("גרור את ידיות הסידור של המוצרים")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else if editMode.isEditing {
-                        ToolbarItem(placement: .bottomBar) {
-                            Text("\(selectedItemIDs.count) נבחרו")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItemGroup(placement: .bottomBar) {
-                            Button(selectionFullyUrgent ? "הסר דגל" : "דגל",
-                                   systemImage: selectionFullyUrgent ? "flag.slash" : "flag.fill") {
-                                store.setUrgent(!selectionFullyUrgent, for: selectedItemIDs)
-                                selectedItemIDs.removeAll()
-                                editMode = .inactive
-                            }
-                            .disabled(selectedItemIDs.isEmpty)
-                            Button("מחיקה", systemImage: "trash", role: .destructive) {
-                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs) }
-                                selectedItemIDs.removeAll()
-                                editMode = .inactive
-                            }
-                            .disabled(selectedItemIDs.isEmpty)
-                        }
-                    } else {
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-                                .labelStyle(.iconOnly)
-                        }
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItem(placement: .bottomBar) {
-                            Button {
-                                addingToSection = nil
-                                isAdding = true
-                                Task { @MainActor in
-                                    await Task.yield()
-                                    scroll.scrollTo("new-item", anchor: .bottom)
-                                    addFocused = true
-                                }
-                            } label: {
-                                Label("מוצר חדש", systemImage: "plus").labelStyle(.iconOnly)
-                            }
-                            .accessibilityLabel("הוספת מוצר")
-                        }
-                        if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ToolbarItem(placement: .keyboard) {
-                                Button("הוסף", action: addInline)
-                            }
-                        }
-                    }
-                }
+                .toolbar { bottomActions(scroll) }
 
             }
             .navigationTitle(store.currentList.name)
@@ -344,6 +291,62 @@ struct ShoppingView: View {
             }
             #endif
         }
+    }
+
+    @ToolbarContentBuilder
+    private func bottomActions(_ scroll: ScrollViewProxy) -> some ToolbarContent {
+if reordering {
+                        ToolbarItem(placement: .bottomBar) {
+                            Text("גרור את ידיות הסידור של המוצרים")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if editMode.isEditing {
+                        ToolbarItem(placement: .bottomBar) {
+                            Text("\(selectedItemIDs.count) נבחרו")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        ToolbarSpacer(.flexible, placement: .bottomBar)
+                        ToolbarItemGroup(placement: .bottomBar) {
+                            Button(selectionFullyUrgent ? "הסר דגל" : "דגל",
+                                   systemImage: selectionFullyUrgent ? "flag.slash" : "flag.fill") {
+                                store.setUrgent(!selectionFullyUrgent, for: selectedItemIDs)
+                                selectedItemIDs.removeAll()
+                                editMode = .inactive
+                            }
+                            .disabled(selectedItemIDs.isEmpty)
+                            Button("מחיקה", systemImage: "trash", role: .destructive) {
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs) }
+                                selectedItemIDs.removeAll()
+                                editMode = .inactive
+                            }
+                            .disabled(selectedItemIDs.isEmpty)
+                        }
+                    } else {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
+                                .labelStyle(.iconOnly)
+                        }
+                        ToolbarSpacer(.flexible, placement: .bottomBar)
+                        ToolbarItem(placement: .bottomBar) {
+                            Button {
+                                addingToSection = nil
+                                isAdding = true
+                                Task { @MainActor in
+                                    await Task.yield()
+                                    scroll.scrollTo("new-item", anchor: .bottom)
+                                    addFocused = true
+                                }
+                            } label: {
+                                Label("מוצר חדש", systemImage: "plus").labelStyle(.iconOnly)
+                            }
+                            .accessibilityLabel("הוספת מוצר")
+                        }
+                        if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ToolbarItem(placement: .keyboard) {
+                                Button("הוסף", action: addInline)
+                            }
+                        }
+                    }
     }
 
     private var inlineAddRow: some View {
