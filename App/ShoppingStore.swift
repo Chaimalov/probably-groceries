@@ -251,6 +251,10 @@ final class ShoppingStore: ObservableObject {
         fileURL.deletingLastPathComponent().appendingPathComponent("ItemPhotos", isDirectory: true)
     }
 
+    func legacyPhotoURL(for item: ShoppingItem) -> URL? {
+        item.photoFilename.map { photoDirectory.appendingPathComponent($0) }
+    }
+
     func photoURL(for item: ShoppingItem) -> URL? {
         if let bytes = item.photoData {
             let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")

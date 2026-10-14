@@ -605,10 +605,8 @@ struct ShoppingView: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if let url = store.photoURL(for: item), let photo = UIImage(contentsOfFile: url.path) {
-                    Image(uiImage: photo).resizable().scaledToFill()
-                        .frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
-                        .accessibilityLabel("תמונה של \(product.name)")
+                if item.photoData != nil || item.photoFilename != nil {
+                    ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
                 }
                 Button("פרטי מוצר", systemImage: "info.circle") { detailItem = item }
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -850,10 +848,10 @@ struct ItemInlineDetails: View {
                 .onChange(of: note) { _, value in store.updateNote(of: item, to: value) }
                 .accessibilityIdentifier("itemNoteField")
             HStack {
-                if let url = store.photoURL(for: item), let image = UIImage(contentsOfFile: url.path) {
+                if item.photoData != nil || item.photoFilename != nil {
                     Button { showingPhoto = true } label: {
-                        Image(uiImage: image).resizable().scaledToFill()
-                            .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                        ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
+                                           name: store.product(for: item.productID)?.name ?? "", side: 52)
                     }.accessibilityLabel("הגדלת תמונת המוצר")
                 }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {

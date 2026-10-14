@@ -24,6 +24,8 @@ Fresh manual additions carry their own request time. A resumed draft’s age mus
 
 Retained requests are edited through live details, so those explicit changes apply immediately and remain if preparation is closed. Draft name edits for existing products apply only if the current product name still matches the original name; newer remote names win. Existing active quantity always wins over a suggestion. Ordinary simultaneous shared quantity edits retain the repository's entity-level last-revision policy (timestamp, deterministic payload tie break). Undo into an independently created active request adds the undone quantity and preserves its newer context, correcting purchase evidence without duplicating the product.
 
+List and inline-editor thumbnails load and prepare off the main thread, keyed by photo content rather than quantity/note changes. Text and purchase controls do not wait for image I/O or full-resolution decoding; missing images collapse to plain content.
+
 New photos carry a compressed JPEG in the existing Codable payload, bounded below 600KB to stay below a CloudKit record's payload limit. Available legacy local attachments migrate to bounded payloads on launch. Missing local files cannot be recovered automatically. The actor identifier identifies the originating installation, not a claimed participant display name.
 
 ## Validation
