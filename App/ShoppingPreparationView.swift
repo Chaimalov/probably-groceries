@@ -230,17 +230,18 @@ private struct DraftEntryDetails: View {
             .onChange(of: photo) { _, selected in
                 guard let selected else { return }
                 Task {
-                    if let bytes = try? await selected.loadTransferable(type: Data.self) { attach(bytes) }
+                    if let bytes = try? await selected.loadTransferable(type: Data.self) {
+                        if photo == selected { attach(bytes) }
+                    }
                     else { error = "לא ניתן לטעון את התמונה. נסה שוב." }
                 }
             }
             .sheet(isPresented: $camera) { ItemCamera(onPhoto: attach) }
             .sheet(isPresented: $photoExpanded) {
-                if let bytes = entry.photoData, let image = UIImage(data: bytes) {
-                    NavigationStack {
-                        Image(uiImage: image).resizable().scaledToFit()
-                            .toolbar { Button("סגירה", systemImage: "xmark") { photoExpanded = false }.labelStyle(.iconOnly) }
-                    }
+                NavigationStack {
+                    ItemPhotoThumbnail(bytes: entry.photoData, fileURL: nil, name: entry.name, fullImage: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .toolbar { Button("סגירה", systemImage: "xmark") { photoExpanded = false }.labelStyle(.iconOnly) }
                 }
             }
             .alert("לא ניתן לצרף תמונה", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {

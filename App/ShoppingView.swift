@@ -869,7 +869,7 @@ struct ItemInlineDetails: View {
                 .onChange(of: selectedPhoto) { _, selection in
                     guard let selection else { return }
                     Task {
-                        if let data = try? await selection.loadTransferable(type: Data.self) {
+                        if let data = try? await selection.loadTransferable(type: Data.self), selectedPhoto == selection {
                             store.setPhoto(data, for: item)
                         }
                     }
@@ -887,11 +887,11 @@ struct ItemInlineDetails: View {
         .padding(.vertical, 8)
         .sheet(isPresented: $showingCamera) { ItemCamera { store.setPhoto($0, for: item) } }
         .sheet(isPresented: $showingPhoto) {
-            if let url = store.photoURL(for: item), let photo = UIImage(contentsOfFile: url.path) {
-                NavigationStack {
-                    Image(uiImage: photo).resizable().scaledToFit()
-                        .toolbar { Button("סגירה", systemImage: "xmark") { showingPhoto = false }.labelStyle(.iconOnly) }
-                }
+            NavigationStack {
+                ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
+                                   name: store.product(for: item.productID)?.name ?? "", fullImage: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .toolbar { Button("סגירה", systemImage: "xmark") { showingPhoto = false }.labelStyle(.iconOnly) }
             }
         }
         .alert("אין גישה למצלמה", isPresented: $cameraDenied) {
