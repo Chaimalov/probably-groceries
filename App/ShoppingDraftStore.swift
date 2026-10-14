@@ -4,7 +4,8 @@ extension ShoppingStore {
     private func draftKey(_ listID: UUID) -> String { "shoppingDraft.\(listID.uuidString)" }
     func shoppingDraft() -> ShoppingDraft {
         if let bytes = UserDefaults.standard.data(forKey: draftKey(selectedListID)),
-           let draft = try? JSONDecoder().decode(ShoppingDraft.self, from: bytes), draft.listID == selectedListID {
+           let draft = try? JSONDecoder().decode(ShoppingDraft.self, from: bytes), draft.listID == selectedListID,
+           storageError != nil || !data.confirmedDrafts.contains(draft.token) {
             return draft
         }
         let draft = ShoppingDraft(listID: selectedListID, entries: suggestions.map { suggestion in
@@ -19,6 +20,13 @@ extension ShoppingStore {
         return draft
     }
     func saveDraft(_ draft: ShoppingDraft) {
+        // SwiftUI may deliver its final onChange after confirmation closes the
+        // sheet. Do not recreate a completed draft from that callback. Keep it
+        // only when the local save failed and confirmation still needs retry.
+        if storageError == nil && data.confirmedDrafts.contains(draft.token) {
+            UserDefaults.standard.removeObject(forKey: draftKey(draft.listID))
+            return
+        }
         if let bytes = try? JSONEncoder().encode(draft) {
             UserDefaults.standard.set(bytes, forKey: draftKey(draft.listID))
         }

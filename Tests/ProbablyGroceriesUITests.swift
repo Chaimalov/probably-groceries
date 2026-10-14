@@ -29,6 +29,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let buy = bought.firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         XCTAssertEqual(bought.count, 1)
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
+        XCTAssertTrue(app.textFields["מוצר נוסף"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["שם המוצר"].exists, "Confirmed draft must not reopen as unfinished")
+        app.buttons.matching(identifier: "סגירה").firstMatch.tap()
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Confirmed preparation"
         capture.lifetime = .keepAlways
