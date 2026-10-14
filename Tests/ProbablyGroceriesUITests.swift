@@ -1,6 +1,39 @@
 import XCTest
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testPreparationCloseResumeExcludeAndConfirmOnce() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["רשימה חדשה לחנות"].tap()
+        let alert = app.alerts["רשימה חדשה לחנות"]
+        alert.textFields["שם החנות"].typeText("Draft \(UUID().uuidString.prefix(6))")
+        alert.buttons["יצירה"].tap()
+        app.buttons["קנייה חדשה"].firstMatch.tap()
+        let field = app.textFields["מוצר נוסף"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("Draft Milk 2 חב\n")
+        let name = "Draft Milk"
+        XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
+        app.buttons["החרגת \(name)"].tap()
+        app.buttons["סגירה"].firstMatch.tap()
+        XCTAssertFalse(app.buttons["נקנה \(name)"].exists)
+        app.buttons["קנייה חדשה"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["החזרת \(name)"].waitForExistence(timeout: 5))
+        app.buttons["החזרת \(name)"].tap()
+        app.buttons["אישור"].tap()
+        let buy = app.buttons["נקנה \(name)"]
+        XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "נקנה \(name)").count, 1)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Confirmed preparation"
+        capture.lifetime = .keepAlways
+        add(capture)
+    }
+
     func testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch() {
         continueAfterFailure = false
         let app = XCUIApplication()
