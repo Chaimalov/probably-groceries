@@ -132,10 +132,19 @@ struct ItemDetailsSheet: View {
     let item: ShoppingItem
     @Environment(\.dismiss) private var dismiss
     @State private var place = ""
+    @State private var name = ""
+    @FocusState private var nameFocused: Bool
+    private func saveName() {
+        guard store.items.contains(where: { $0.id == item.id }) else { return }
+        store.rename(item, to: name)
+    }
     var body: some View {
         NavigationStack {
             Form {
                 if let current = store.items.first(where: { $0.id == item.id }) {
+                    TextField("שם המוצר", text: $name)
+                        .focused($nameFocused).submitLabel(.done).onSubmit(saveName)
+                        .onChange(of: nameFocused) { _, focused in if !focused { saveName() } }
                     ItemInlineDetails(store: store, item: current)
                     Section("מקום קנייה") {
                         TextField("אופציונלי", text: $place)
@@ -152,7 +161,11 @@ struct ItemDetailsSheet: View {
                     Button("סגירה", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
                 }
             }
-            .onAppear { place = item.shoppingPlace ?? "" }
+            .onAppear {
+                place = item.shoppingPlace ?? ""
+                name = store.product(for: item.productID)?.name ?? ""
+            }
+            .onDisappear(perform: saveName)
         }
     }
 }
