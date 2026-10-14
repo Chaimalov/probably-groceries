@@ -102,7 +102,7 @@ struct NativeShoppingDrag: UIViewRepresentable {
         view.isUserInteractionEnabled = false
         view.isAccessibilityElement = false
         view.attach = { [weak coordinator = context.coordinator] anchor in
-            coordinator?.attach(to: anchor)
+            coordinator?.attach(to: anchor) ?? false
         }
         return view
     }
@@ -119,18 +119,41 @@ struct NativeShoppingDrag: UIViewRepresentable {
     }
 
     final class Anchor: UIView {
-        var attach: ((Anchor) -> Void)?
+        var attach: ((Anchor) -> Bool)?
+        private var retryScheduled = false
+        private var attempts = 0
+
+        override func didMoveToSuperview() {
+            super.didMoveToSuperview()
+            attempts = 0
+            attachWhenReady()
+        }
+
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            attach?(self)
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.attach?(self)
-            }
+            attempts = 0
+            attachWhenReady()
         }
+
         override func layoutSubviews() {
             super.layoutSubviews()
-            attach?(self)
+            attachWhenReady()
+        }
+
+        private func attachWhenReady() {
+            guard window != nil else { _ = attach?(self); return }
+            if attach?(self) == true { attempts = 0; return }
+            // SwiftUI can put the anchor in a window before installing the
+            // enclosing reusable cell. Retry that installation independently of
+            // view-state updates; geometry must not rerender the list to fix it.
+            guard !retryScheduled, attempts < 20, attach != nil else { return }
+            retryScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self else { return }
+                self.retryScheduled = false
+                self.attempts += 1
+                self.attachWhenReady()
+            }
         }
     }
 
@@ -147,8 +170,9 @@ struct NativeShoppingDrag: UIViewRepresentable {
 
         init(_ parent: NativeShoppingDrag) { self.parent = parent }
 
-        func attach(to anchor: UIView) {
-            guard anchor.window != nil else { detach(); return }
+        @discardableResult
+        func attach(to anchor: UIView) -> Bool {
+            guard anchor.window != nil else { detach(); return false }
             var ancestor = anchor.superview
             var target: UIView?
             while let view = ancestor {
@@ -159,7 +183,8 @@ struct NativeShoppingDrag: UIViewRepresentable {
                 }
                 ancestor = view.superview
             }
-            guard let target, host !== target else { return }
+            guard let target else { return false }
+            guard host !== target else { return true }
             detach()
             host = target
             let drag = UIDragInteraction(delegate: self)
@@ -173,6 +198,7 @@ struct NativeShoppingDrag: UIViewRepresentable {
             indicator.isAccessibilityElement = false
             indicator.isHidden = true
             target.addSubview(indicator)
+            return true
         }
 
         func detach() {
