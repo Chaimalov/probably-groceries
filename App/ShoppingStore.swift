@@ -237,12 +237,6 @@ final class ShoppingStore: ObservableObject {
     func remove(_ item: ShoppingItem) {
         recordRemoval(item)
         data.items.removeAll { $0.id == item.id }
-        if let bytes = item.photoData {
-            let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
-            try? FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
-            if (try? Data(contentsOf: url)) != bytes { try? bytes.write(to: url, options: .atomic) }
-            return url
-        }
         if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
     }
@@ -258,6 +252,12 @@ final class ShoppingStore: ObservableObject {
     }
 
     func photoURL(for item: ShoppingItem) -> URL? {
+        if let bytes = item.photoData {
+            let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
+            try? FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
+            if (try? Data(contentsOf: url)) != bytes { try? bytes.write(to: url, options: .atomic) }
+            return url
+        }
         if let name = item.photoFilename {
             let url = photoDirectory.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) { return url }
