@@ -10,7 +10,7 @@ enum ShoppingRouteOrder {
         var trips: [[Purchase]] = []
         for event in events {
             if let last = trips.last?.last,
-               event.purchasedAt.timeIntervalSince(last.purchasedAt) < 12 * 3600 {
+               event.purchasedAt.timeIntervalSince(last.purchasedAt) < ShoppingSession.inactivityThreshold {
                 trips[trips.count - 1].append(event)
             } else {
                 trips.append([event])

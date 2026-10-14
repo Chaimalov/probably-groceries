@@ -9,3 +9,5 @@ Read README.md and docs/PRODUCT.md before implementing. This is a personal iPhon
 - Prefer small working vertical slices and device checks over broad abstractions. Add tests only for meaningful prediction/event edge cases.
 - Follow docs/DESIGN.md for the preferred calm iOS direction, including RTL, accessibility and subtle motion.
 - Before implementing a task, check its `Depends on` issue references in docs/ROADMAP.md.
+
+Current implementation brief: [Groceries PRD v1](docs/product/Groceries-PRD-v1.md). Its first-delivery requirements supersede older product/design descriptions.

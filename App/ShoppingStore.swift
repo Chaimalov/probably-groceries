@@ -6,6 +6,8 @@ import UIKit
 final class ShoppingStore: ObservableObject {
     @Published private(set) var data: ShoppingData
     @Published private(set) var selectedListID: UUID
+    @Published private(set) var storageError: String?
+    private var loadFailed = false
     @Published private(set) var syncStatus: PersonalCloudSync.Status = .local
 
     private let fileURL: URL
@@ -71,11 +73,14 @@ final class ShoppingStore: ObservableObject {
         fileURL = path
         journalURL = directory.appendingPathComponent("sync-journal.json")
         let loadedData: ShoppingData
-        if let bytes = try? Data(contentsOf: path),
-           let saved = try? JSONDecoder().decode(ShoppingData.self, from: bytes) {
-            loadedData = saved
-        } else {
+        do {
+            if FileManager.default.fileExists(atPath: path.path) {
+                loadedData = try JSONDecoder().decode(ShoppingData.self, from: Data(contentsOf: path))
+            } else { loadedData = ShoppingData() }
+        } catch {
             loadedData = ShoppingData()
+            loadFailed = true
+            storageError = "לא ניתן לפתוח את הרשימה שנשמרה. הנתונים המקוריים לא הוחלפו."
         }
         let savedID = UserDefaults.standard.string(forKey: "selectedShoppingListID")
             .flatMap(UUID.init(uuidString:))
@@ -87,6 +92,7 @@ final class ShoppingStore: ObservableObject {
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
         syncJournal.seed(loadedData)
         selectedListID = listID
+        migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
         }) {
@@ -160,7 +166,7 @@ final class ShoppingStore: ObservableObject {
 
     func product(for id: UUID) -> Product? { data.products.first { $0.id == id } }
 
-    private func productBelongsToCurrentScope(_ product: Product) -> Bool {
+    func productBelongsToCurrentScope(_ product: Product) -> Bool {
         let key = "product_\(product.id.uuidString)"
         if let binding = currentShare { return binding.keys.contains(key) }
         return !sharedLists.contains { $0.keys.contains(key) }
@@ -221,7 +227,15 @@ final class ShoppingStore: ObservableObject {
         add(name: suggestion.product.name, quantity: suggestion.quantity)
     }
 
+    private func recordRemoval(_ item: ShoppingItem) {
+        data.deferrals.removeAll { $0.productID == item.productID && $0.listID == item.listID }
+        var removal = Deferral(productID: item.productID, until: .now.addingTimeInterval(3 * 86400), listID: item.listID)
+        removal.recordedAt = .now
+        data.deferrals.append(removal)
+    }
+
     func remove(_ item: ShoppingItem) {
+        recordRemoval(item)
         data.items.removeAll { $0.id == item.id }
         if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
@@ -238,34 +252,62 @@ final class ShoppingStore: ObservableObject {
     }
 
     func photoURL(for item: ShoppingItem) -> URL? {
-        guard let name = item.photoFilename else { return nil }
-        return photoDirectory.appendingPathComponent(name)
+        if let bytes = item.photoData {
+            let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
+            try? FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
+            if (try? Data(contentsOf: url)) != bytes { try? bytes.write(to: url, options: .atomic) }
+            return url
+        }
+        if let name = item.photoFilename {
+            let url = photoDirectory.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        return nil
+    }
+
+    private func migrateLegacyPhotos() {
+        guard !loadFailed else { return }
+        var changed = false
+        for index in data.items.indices where data.items[index].photoData == nil {
+            if let name = data.items[index].photoFilename,
+               let bytes = try? Data(contentsOf: photoDirectory.appendingPathComponent(name)),
+               let image = UIImage(data: bytes), let encoded = ItemPhotoEncoder.encode(image) {
+                data.items[index].photoData = encoded; changed = true
+            }
+        }
+        for index in data.purchases.indices where data.purchases[index].photoData == nil {
+            if let name = data.purchases[index].photoFilename,
+               let bytes = try? Data(contentsOf: photoDirectory.appendingPathComponent(name)),
+               let image = UIImage(data: bytes), let encoded = ItemPhotoEncoder.encode(image) {
+                data.purchases[index].photoData = encoded; changed = true
+            }
+        }
+        if changed { persist() }
     }
 
     func setPhoto(_ bytes: Data, for item: ShoppingItem) {
         guard let image = UIImage(data: bytes),
               let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
-        let longest = max(image.size.width, image.size.height)
-        let scale = min(1, 1200 / max(longest, 1))
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let resized = UIGraphicsImageRenderer(size: size).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+        guard let jpeg = ItemPhotoEncoder.encode(image) else {
+            storageError = "לא ניתן לצרף את התמונה. נסה תמונה אחרת."
+            return
         }
-        guard let jpeg = resized.jpegData(compressionQuality: 0.78) else { return }
         do {
             try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
             let name = "\(item.id.uuidString).jpg"
             try jpeg.write(to: photoDirectory.appendingPathComponent(name), options: .atomic)
             data.items[index].photoFilename = name
+            data.items[index].photoData = jpeg
             persist()
-        } catch { return }
+        } catch { storageError = "לא ניתן לשמור את התמונה. נסה שוב." }
     }
 
     func removePhoto(from item: ShoppingItem) {
-        guard let index = data.items.firstIndex(where: { $0.id == item.id }),
-              let name = data.items[index].photoFilename else { return }
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let name = data.items[index].photoFilename
         data.items[index].photoFilename = nil
-        try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
+        data.items[index].photoData = nil
+        if let name { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
     }
 
@@ -420,6 +462,7 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ ids: Set<UUID>) {
         for item in data.items where ids.contains(item.id) {
+            recordRemoval(item)
             if let name = item.photoFilename {
                 try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
             }
@@ -458,16 +501,29 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
+        let originalOrder = current.manualOrder ?? items.firstIndex(where: { $0.id == current.id })
+        // Freeze the remaining route before new learning changes positions.
+        for (order, visible) in items.enumerated() {
+            if let index = data.items.firstIndex(where: { $0.id == visible.id }), data.items[index].manualOrder == nil {
+                data.items[index].manualOrder = order
+            }
+        }
         data.items.removeAll { $0.id == current.id }
         // Concurrent check-offs of the same active row converge to one event.
         data.purchases.append(Purchase(id: current.id, productID: current.productID,
                                        quantity: current.quantity, purchasedAt: .now,
                                        sourceItemID: current.id, listID: current.listID,
                                        wasUrgent: current.isUrgent))
+        let actor = UserDefaults.standard.string(forKey: "shoppingActorID") ?? UUID().uuidString
+        UserDefaults.standard.set(actor, forKey: "shoppingActorID")
+        data.purchases[data.purchases.count - 1].actorID = actor
+        data.purchases[data.purchases.count - 1].originalOrder = originalOrder
+        data.purchases[data.purchases.count - 1].photoData = current.photoData
         data.purchases[data.purchases.count - 1].note = current.note
         data.purchases[data.purchases.count - 1].photoFilename = current.photoFilename
         data.purchases[data.purchases.count - 1].unit = current.unit
         data.purchases[data.purchases.count - 1].sectionName = current.sectionName
+        data.purchases[data.purchases.count - 1].shoppingPlace = current.shoppingPlace
         updateUsualQuantity(for: current.productID)
         persist()
     }
@@ -488,19 +544,24 @@ final class ShoppingStore: ObservableObject {
         }) {
             data.items[index].quantity += current.quantity
             data.items[index].isUrgent = data.items[index].isUrgent || current.wasUrgent
+            data.items[index].photoData = data.items[index].photoData ?? current.photoData
             data.items[index].note = data.items[index].note ?? current.note
             data.items[index].photoFilename = data.items[index].photoFilename ?? current.photoFilename
             data.items[index].unit = data.items[index].unit ?? current.unit
             data.items[index].sectionName = data.items[index].sectionName ?? current.sectionName
+            data.items[index].shoppingPlace = data.items[index].shoppingPlace ?? current.shoppingPlace
         } else {
             data.items.append(ShoppingItem(id: current.sourceItemID,
                                            productID: current.productID,
                                            quantity: current.quantity, addedAt: .now,
                                            listID: current.listID, isUrgent: current.wasUrgent))
+            data.items[data.items.count - 1].manualOrder = current.originalOrder
+            data.items[data.items.count - 1].photoData = current.photoData
             data.items[data.items.count - 1].note = current.note
             data.items[data.items.count - 1].photoFilename = current.photoFilename
             data.items[data.items.count - 1].unit = current.unit
             data.items[data.items.count - 1].sectionName = current.sectionName
+            data.items[data.items.count - 1].shoppingPlace = current.shoppingPlace
         }
         updateUsualQuantity(for: current.productID)
         persist()
@@ -545,7 +606,22 @@ final class ShoppingStore: ObservableObject {
             .max(by: { $0.purchasedAt < $1.purchasedAt })?.quantity ?? 1
     }
 
-    private func persist() {
+    func applyDraftData(_ updated: ShoppingData) -> Bool {
+        guard !loadFailed else { return false }
+        data = updated
+        persist()
+        return storageError == nil
+    }
+
+    func updatePlace(of item: ShoppingItem, to value: String) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let place = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        data.items[index].shoppingPlace = place.isEmpty ? nil : place
+        persist()
+    }
+
+    func persist() {
+        guard !loadFailed else { return }
         syncJournal.recordChanges(from: lastJournaledData, to: data)
         if var bindings = syncJournal.sharedLists {
             for index in bindings.indices { bindings[index].includeRecords(in: data) }
@@ -557,20 +633,25 @@ final class ShoppingStore: ObservableObject {
     }
 
     private func saveLocal() {
+        guard !loadFailed else { return }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try JSONEncoder().encode(data).write(to: fileURL, options: .atomic)
             try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
+            storageError = nil
         } catch {
-            assertionFailure("Could not save the shopping list: \(error)")
+            storageError = "השינויים עדיין לא נשמרו במכשיר. נסה שוב."
         }
     }
+
+    func retryLocalSave() { saveLocal() }
 
     func saveSyncMetadata() { saveLocal() }
     func updateSyncStatus(_ status: PersonalCloudSync.Status) { syncStatus = status }
 
     func mergeRemote(_ revisions: [SyncRevision]) {
+        guard !loadFailed else { return }
         var changed = false
         for revision in revisions {
             changed = syncJournal.merge(revision, into: &data) || changed

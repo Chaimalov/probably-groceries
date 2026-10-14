@@ -46,3 +46,5 @@ To check membership, sign in at [Apple Developer Account](https://developer.appl
 ## Working rules
 
 No purchase history is inferred from merely tapping “add.” Check-off means purchased. Record an explicit outcome for rejected/deferred suggestions so the same candidate does not instantly return. Avoid claiming numeric confidence to the user before it is calibrated. Never commit API keys or personal purchase data.
+
+Current implementation brief: [Groceries PRD v1](docs/product/Groceries-PRD-v1.md). Its first-delivery requirements supersede older product/design descriptions.

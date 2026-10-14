@@ -1,6 +1,44 @@
 import XCTest
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testPreparationCloseResumeExcludeAndConfirmOnce() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["רשימה חדשה לחנות"].tap()
+        let alert = app.alerts["רשימה חדשה לחנות"]
+        alert.textFields["שם החנות"].typeText("Draft \(UUID().uuidString.prefix(6))")
+        alert.buttons["יצירה"].tap()
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
+        let field = app.textFields["מוצר נוסף"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("Draft Milk 2 חב\n")
+        let name = "Draft Milk"
+        XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החרגת", name)).firstMatch.tap()
+        app.buttons.matching(identifier: "סגירה").firstMatch.tap()
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name)).firstMatch.exists)
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.tap()
+        app.buttons["אישור"].tap()
+        let bought = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name))
+        let buy = bought.firstMatch
+        XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        XCTAssertEqual(bought.count, 1)
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
+        XCTAssertTrue(app.textFields["מוצר נוסף"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["שם המוצר"].exists, "Confirmed draft must not reopen as unfinished")
+        app.buttons.matching(identifier: "סגירה").firstMatch.tap()
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Confirmed preparation"
+        capture.lifetime = .keepAlways
+        add(capture)
+    }
+
     func testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch() {
         continueAfterFailure = false
         let app = XCUIApplication()

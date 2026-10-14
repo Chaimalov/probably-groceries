@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import PhotosUI
+import AVFoundation
 
 struct ShoppingView: View {
     @ObservedObject var store: ShoppingStore
@@ -10,11 +11,16 @@ struct ShoppingView: View {
     @State private var addingToSection: String?
     @State private var newName = ""
     @State private var newQuantity = 1
+    @State private var preserveRawInput = false
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
+    @State private var showingPreparation = false
+    @State private var detailItem: ShoppingItem?
+    @State private var placeFilter = "הכול"
+    @State private var lastMarkAt = Date.distantPast
     @State private var showingNewList = false
     @State private var showingRenameList = false
     @State private var showingNewSection = false
@@ -45,10 +51,20 @@ struct ShoppingView: View {
         !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
     }
 
+    private var visibleItems: [ShoppingItem] {
+        store.items.filter { placeFilter == "הכול" || (placeFilter == "ללא מקום" ? $0.shoppingPlace == nil : $0.shoppingPlace == placeFilter) }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
+                    if let error = store.storageError {
+                        Section {
+                            Text(LocalizedStringKey(error)).foregroundStyle(.red)
+                            Button("ניסיון שמירה נוסף") { store.retryLocalSave() }
+                        }
+                    }
                     if let binding = store.currentShare {
                         Section {
                             Label(binding.accessible ? "שיתוף דרך iCloud" : "השיתוף אינו זמין — השינויים נשמרים במכשיר",
@@ -58,6 +74,13 @@ struct ShoppingView: View {
                                 .selectionDisabled(true)
                         }
                         .listSectionSeparator(.hidden)
+                    }
+                    if !Set(store.items.compactMap(\.shoppingPlace)).isEmpty {
+                        Picker("מקום קנייה", selection: $placeFilter) {
+                            Text("הכול").tag("הכול")
+                            Text("ללא מקום").tag("ללא מקום")
+                            ForEach(Array(Set(store.items.compactMap(\.shoppingPlace))).sorted(), id: \.self) { Text($0).tag($0) }
+                        }
                     }
                     if showsSections {
                         ForEach(sectionNames, id: \.self) { section in
@@ -85,7 +108,7 @@ struct ShoppingView: View {
                         }
                     } else {
                         Section {
-                            ForEach(store.items) { item in
+                            ForEach(visibleItems) { item in
                                 itemRow(item)
                                     .moveDisabled(!reordering)
                                     .listRowSeparator(.hidden, edges: .all)
@@ -104,8 +127,7 @@ struct ShoppingView: View {
                             .listSectionSeparator(.hidden)
                     }
 
-                    if !likely.isEmpty { suggestionSection("כנראה צריך", items: likely) }
-                    if !maybe.isEmpty { suggestionSection("אולי", items: maybe) }
+
 
                     if showRecentPurchases && !store.recentPurchases.isEmpty {
                         Section("נקנו לאחרונה") {
@@ -224,6 +246,7 @@ struct ShoppingView: View {
                             }
                             .accessibilityLabel("הוספת מוצר")
                             Spacer()
+                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
                             if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Button("הוסף", action: addInline)
                             }
@@ -249,6 +272,9 @@ struct ShoppingView: View {
                     }
                 }
             }
+            .onChange(of: store.items) { _, items in
+                if placeFilter != "הכול" && placeFilter != "ללא מקום" && !items.contains(where: { $0.shoppingPlace == placeFilter }) { placeFilter = "הכול" }
+            }
             .onChange(of: nameFocused) { oldID, newID in
                 if oldID != newID, let oldID, editingNameID == oldID,
                    let item = store.items.first(where: { $0.id == oldID }) {
@@ -263,6 +289,8 @@ struct ShoppingView: View {
                     reordering = false
                 }
             }
+            .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
+            .sheet(item: $detailItem) { ItemDetailsSheet(store: store, item: $0) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
@@ -309,6 +337,7 @@ struct ShoppingView: View {
     }
 
     private var inlineAddRow: some View {
+        VStack(alignment: .leading) {
         HStack(spacing: 12) {
             Image(systemName: "circle")
                 .font(.title2.weight(.ultraLight))
@@ -341,6 +370,15 @@ struct ShoppingView: View {
             .accessibilityLabel("הגדלת כמות למוצר חדש")
         }
         .buttonStyle(.borderless)
+        let parsed = ShoppingInputParser.parse(newName)
+        if parsed.unit != nil && !preserveRawInput {
+            HStack {
+                Text("\(parsed.name) · ×\(parsed.quantity) \(parsed.unit ?? "")").font(.caption).foregroundStyle(.secondary)
+                Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") { preserveRawInput = true }
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+            }
+        }
+        }
         .id("new-item")
         .selectionDisabled(true)
         .listRowSeparator(.hidden)
@@ -353,7 +391,7 @@ struct ShoppingView: View {
                 Button(list.name, systemImage: list.symbolName) {
                     store.selectList(list.id)
                     collapsedSections.removeAll()
-                    isAdding = false
+                    placeFilter = "הכול"
                     addingToSection = nil
                     selectedItemIDs.removeAll()
                     itemFrames.frames.removeAll()
@@ -378,6 +416,7 @@ struct ShoppingView: View {
 
     private var optionsMenu: some View {
         Menu {
+            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
             Button(groupBySection ? "הצגה לפי מסלול הקנייה" : "הצגת מקטעים",
                    systemImage: "square.stack") { groupBySection.toggle() }
             Button("מקטע חדש", systemImage: "plus.rectangle.on.rectangle") {
@@ -387,7 +426,6 @@ struct ShoppingView: View {
                 addFocused = false
                 isAdding = false
                 addingToSection = nil
-                newName = ""
                 selectedItemIDs.removeAll()
                 reordering = true
                 editMode = .active
@@ -408,7 +446,7 @@ struct ShoppingView: View {
             #if targetEnvironment(simulator)
             .disabled(true)
             #endif
-            Button(syncLabel, systemImage: "arrow.triangle.2.circlepath.icloud") {
+            Button(LocalizedStringKey(syncLabel), systemImage: "arrow.triangle.2.circlepath.icloud") {
                 #if !targetEnvironment(simulator)
                 Task { await store.cloudSync.synchronize() }
                 #endif
@@ -445,7 +483,7 @@ struct ShoppingView: View {
     }
 
     private func items(in section: String) -> [ShoppingItem] {
-        store.items.filter { store.section(for: $0) == section }
+        visibleItems.filter { store.section(for: $0) == section }
     }
 
     private func sectionHeader(_ section: String) -> some View {
@@ -487,13 +525,15 @@ struct ShoppingView: View {
             HStack(spacing: 12) {
                 if !editMode.isEditing {
                 Button {
+                    guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
+                    lastMarkAt = .now
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     if reduceMotion { store.buy(item) }
                     else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
                 } label: {
                     Image(systemName: "circle")
                         .font(.system(size: 24, weight: .light))
-                        .frame(width: 30, height: 44)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("נקנה \(product.name)")
@@ -544,9 +584,14 @@ struct ShoppingView: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if item.photoFilename != nil {
-                    Image(systemName: "photo").foregroundStyle(.secondary)
+                if let url = store.photoURL(for: item), let photo = UIImage(contentsOfFile: url.path) {
+                    Image(uiImage: photo).resizable().scaledToFill()
+                        .frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
+                        .accessibilityLabel("תמונה של \(product.name)")
                 }
+                Button("פרטי מוצר", systemImage: "info.circle") { detailItem = item }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+                    .frame(minWidth: 44, minHeight: 44)
                 if editMode.isEditing {
                     Text("×\(item.quantity) \(item.unit ?? "")")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -691,8 +736,13 @@ struct ShoppingView: View {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         updateEditor {
-            store.add(name: trimmed, quantity: newQuantity, department: addingToSection)
+            let parsed = preserveRawInput ? ShoppingInputParser.Result(name: trimmed, quantity: newQuantity, unit: nil) : ShoppingInputParser.parse(trimmed)
+            store.add(name: parsed.name, quantity: parsed.unit == nil ? newQuantity : parsed.quantity, department: addingToSection)
+            if let unit = parsed.unit, let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
+                store.updateUnit(of: item, to: unit)
+            }
             newQuantity = 1
+            preserveRawInput = false
             newName = ""
             addFocused = true
         }
@@ -704,11 +754,14 @@ struct ShoppingView: View {
     }
 }
 
-private struct ItemInlineDetails: View {
+struct ItemInlineDetails: View {
     private static let commonUnits = ["יחידות", "חבילות", "ליטרים", "מ״ל", "ק״ג", "גרם", "בקבוקים", "קופסאות", "שקיות", "גלילים"]
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var showingCamera = false
+    @State private var cameraDenied = false
+    @State private var showingPhoto = false
     @State private var note: String
     @State private var customUnit = ""
     @State private var editingCustomUnit = false
@@ -774,12 +827,21 @@ private struct ItemInlineDetails: View {
                 .accessibilityIdentifier("itemNoteField")
             HStack {
                 if let url = store.photoURL(for: item), let image = UIImage(contentsOfFile: url.path) {
-                    Image(uiImage: image)
-                        .resizable().scaledToFill()
-                        .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                    Button { showingPhoto = true } label: {
+                        Image(uiImage: image).resizable().scaledToFill()
+                            .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                    }.accessibilityLabel("הגדלת תמונת המוצר")
+                }
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button("צילום", systemImage: "camera") {
+                        Task {
+                            let allowed = await AVCaptureDevice.requestAccess(for: .video)
+                            if allowed { showingCamera = true } else { cameraDenied = true }
+                        }
+                    }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                 }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(item.photoFilename == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
+                    Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
                 .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
@@ -790,7 +852,7 @@ private struct ItemInlineDetails: View {
                         }
                     }
                 }
-                if item.photoFilename != nil {
+                if item.photoFilename != nil || item.photoData != nil {
                     Button("הסרת תמונה", systemImage: "xmark.circle") {
                         store.removePhoto(from: item)
                     }
@@ -801,6 +863,21 @@ private struct ItemInlineDetails: View {
         }
         .buttonStyle(.borderless)
         .padding(.vertical, 8)
+        .sheet(isPresented: $showingCamera) { ItemCamera { store.setPhoto($0, for: item) } }
+        .sheet(isPresented: $showingPhoto) {
+            if let url = store.photoURL(for: item), let photo = UIImage(contentsOfFile: url.path) {
+                NavigationStack {
+                    Image(uiImage: photo).resizable().scaledToFit()
+                        .toolbar { Button("סגירה", systemImage: "xmark") { showingPhoto = false }.labelStyle(.iconOnly) }
+                }
+            }
+        }
+        .alert("אין גישה למצלמה", isPresented: $cameraDenied) {
+            Button("הגדרות") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            }
+            Button("ביטול", role: .cancel) {}
+        } message: { Text("אפשר לאפשר גישה בהגדרות או לבחור תמונה מהספרייה.") }
     }
 
     private func saveCustomUnit() {

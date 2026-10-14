@@ -21,9 +21,11 @@ targets:
       properties:
         CFBundleDisplayName: קניות
         CFBundleDevelopmentRegion: he
+        CFBundleLocalizations: [he, en]
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
+        NSCameraUsageDescription: צילום מוצר כדי לעזור לזהות אותו ברשימת הקניות
         CKSharingSupported: true
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
@@ -59,6 +61,9 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - Tests/ShoppingDraftTests.swift
+      - App/ShoppingDraft.swift
+      - App/ShoppingSession.swift
       - Tests/PredictionEngineTests.swift
       - Tests/SyncJournalTests.swift
       - App/Models.swift

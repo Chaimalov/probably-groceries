@@ -19,12 +19,17 @@ struct ProbablyGroceriesApp: App {
         }
     }
 
+    private var usesHebrew: Bool {
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing") { return true }
+        return Bundle.main.preferredLocalizations.first != "en"
+    }
+
     var body: some Scene {
         WindowGroup {
             ShoppingView(store: store)
                 .preferredColorScheme(testAppearance)
-                .environment(\.locale, Locale(identifier: "he_IL"))
-                .environment(\.layoutDirection, .rightToLeft)
+                .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
+                .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
                 .alert("לא ניתן להצטרף כרגע", isPresented: Binding(
                     get: { invitationError != nil },
