@@ -11,7 +11,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let alert = app.alerts["רשימה חדשה לחנות"]
         alert.textFields["שם החנות"].typeText("Draft \(UUID().uuidString.prefix(6))")
         alert.buttons["יצירה"].tap()
-        app.buttons["קנייה חדשה"].firstMatch.tap()
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
         let field = app.textFields["מוצר נוסף"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
@@ -19,9 +19,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let name = "Draft Milk"
         XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
         app.buttons["החרגת \(name)"].tap()
-        app.buttons["סגירה"].firstMatch.tap()
+        app.buttons.matching(identifier: "סגירה").firstMatch.tap()
         XCTAssertFalse(app.buttons["נקנה \(name)"].exists)
-        app.buttons["קנייה חדשה"].firstMatch.tap()
+        app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
         XCTAssertTrue(app.buttons["החזרת \(name)"].waitForExistence(timeout: 5))
         app.buttons["החזרת \(name)"].tap()
         app.buttons["אישור"].tap()
