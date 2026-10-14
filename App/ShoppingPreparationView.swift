@@ -50,9 +50,17 @@ struct ShoppingPreparationView: View {
                 Section("השלמות מוצעות") {
                     ForEach($draft.entries) { $entry in
                         if visible(entry.place) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
                                     TextField("שם המוצר", text: $entry.name)
+                                    if entry.included {
+                                        Text("×\(entry.quantity) \(entry.unit ?? "")")
+                                            .font(.subheadline).foregroundStyle(.secondary)
+                                        Button("פרטי מוצר", systemImage: "info.circle") { draftDetails = entry }
+                                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                                            .font(.subheadline).foregroundStyle(.secondary)
+                                            .frame(minWidth: 44, minHeight: 44)
+                                    }
                                     Button {
                                         entry.included.toggle()
                                     } label: {
@@ -62,17 +70,9 @@ struct ShoppingPreparationView: View {
                                     .buttonStyle(.borderless)
                                     .accessibilityLabel(entry.included ? "החרגת \(entry.name)" : "החזרת \(entry.name)")
                                 }
-                                if entry.included {
-                                    HStack {
-                                        Text("×\(entry.quantity) \(entry.unit ?? "")").foregroundStyle(.secondary)
-                                        Spacer()
-                                        Button("פרטי מוצר", systemImage: "info.circle") { draftDetails = entry }
-                                            .labelStyle(.iconOnly).buttonStyle(.borderless)
-                                            .frame(minWidth: 44, minHeight: 44)
-                                    }
-                                    if let reason = entry.reason { Text(LocalizedStringKey(reason)).font(.caption).foregroundStyle(.secondary) }
+                                if entry.included, let reason = entry.reason {
+                                    Text(LocalizedStringKey(reason)).font(.caption).foregroundStyle(.secondary)
                                 }
-
                             }
                             .foregroundStyle(entry.included ? .primary : .secondary)
                         }
@@ -92,6 +92,10 @@ struct ShoppingPreparationView: View {
                     Text("האישור כולל את כל הרשימה").font(.footnote).foregroundStyle(.secondary)
                 }
             }
+            .listStyle(.plain)
+            .listRowSpacing(0)
+            .listSectionSpacing(8)
+            .environment(\.defaultMinListRowHeight, 44)
             .navigationTitle("קנייה חדשה")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

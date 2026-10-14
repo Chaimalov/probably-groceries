@@ -101,6 +101,8 @@ struct ShoppingView: View {
                                 }
                             } header: {
                                 sectionHeader(section)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                    .textCase(nil)
                                     .background {
                                         nativeDrag(.section(section), section: section)
                                     }
@@ -199,6 +201,7 @@ struct ShoppingView: View {
                 .listRowSpacing(0)
                 .listSectionSpacing(0)
                 .environment(\.defaultMinListRowHeight, 44)
+                .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: addingToSection) { _, section in
                     guard isAdding, section != nil else { return }
@@ -208,16 +211,19 @@ struct ShoppingView: View {
                         addFocused = true
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    HStack {
-                        if reordering {
+                .toolbar {
+                    if reordering {
+                        ToolbarItem(placement: .bottomBar) {
                             Text("גרור את ידיות הסידור של המוצרים")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                            Spacer()
-                        } else if editMode.isEditing {
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if editMode.isEditing {
+                        ToolbarItem(placement: .bottomBar) {
                             Text("\(selectedItemIDs.count) נבחרו")
-                                .foregroundStyle(.secondary)
-                            Spacer()
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        ToolbarSpacer(.flexible, placement: .bottomBar)
+                        ToolbarItemGroup(placement: .bottomBar) {
                             Button(selectionFullyUrgent ? "הסר דגל" : "דגל",
                                    systemImage: selectionFullyUrgent ? "flag.slash" : "flag.fill") {
                                 store.setUrgent(!selectionFullyUrgent, for: selectedItemIDs)
@@ -226,12 +232,19 @@ struct ShoppingView: View {
                             }
                             .disabled(selectedItemIDs.isEmpty)
                             Button("מחיקה", systemImage: "trash", role: .destructive) {
-                                withAnimation(.smooth) { store.remove(selectedItemIDs) }
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs) }
                                 selectedItemIDs.removeAll()
                                 editMode = .inactive
                             }
                             .disabled(selectedItemIDs.isEmpty)
-                        } else {
+                        }
+                    } else {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
+                                .labelStyle(.iconOnly)
+                        }
+                        ToolbarSpacer(.flexible, placement: .bottomBar)
+                        ToolbarItem(placement: .bottomBar) {
                             Button {
                                 addingToSection = nil
                                 isAdding = true
@@ -241,22 +254,18 @@ struct ShoppingView: View {
                                     addFocused = true
                                 }
                             } label: {
-                                Label("מוצר חדש", systemImage: "plus.circle.fill")
-                                    .font(.body.weight(.semibold))
-                                    .labelStyle(.iconOnly)
+                                Label("מוצר חדש", systemImage: "plus").labelStyle(.iconOnly)
                             }
                             .accessibilityLabel("הוספת מוצר")
-                            Spacer()
-                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-                            if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        }
+                        if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ToolbarItem(placement: .keyboard) {
                                 Button("הוסף", action: addInline)
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(.regularMaterial)
                 }
+
             }
             .navigationTitle(store.currentList.name)
             .navigationBarTitleDisplayMode(.large)
@@ -529,14 +538,14 @@ struct ShoppingView: View {
             .accessibilityLabel("הוספת מוצר למקטע \(section)")
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 2)
+        .padding(.vertical, 0)
     }
 
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
         if let product = store.product(for: item.productID) {
-            VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
                 if !editMode.isEditing {
                 Button {
                     guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
@@ -608,9 +617,6 @@ struct ShoppingView: View {
                 if item.photoData != nil || item.photoFilename != nil {
                     ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
                 }
-                Button("פרטי מוצר", systemImage: "info.circle") { detailItem = item }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                    .frame(minWidth: 44, minHeight: 44)
                 if editMode.isEditing {
                     Text("×\(item.quantity) \(item.unit ?? "")")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -628,6 +634,10 @@ struct ShoppingView: View {
                 .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                 .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
+                Button("פרטי מוצר", systemImage: "info.circle") { detailItem = item }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
             }
             if expandedItemID == item.id && !editMode.isEditing {
                 ItemInlineDetails(store: store, item: item)
