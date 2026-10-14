@@ -543,6 +543,7 @@ struct ShoppingView: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     if editingNameID == item.id {
+                        HStack(spacing: 4) {
                         TextField("שם המוצר", text: $editedName)
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.done)
@@ -552,6 +553,7 @@ struct ShoppingView: View {
                         }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
                         .frame(minWidth: 44, minHeight: 44)
+                        }
                     } else if editMode.isEditing {
                         HStack(spacing: 6) {
                             Text(product.name).foregroundStyle(.primary)
