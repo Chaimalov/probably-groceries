@@ -78,6 +78,16 @@ final class ShoppingDraftTests: XCTestCase {
         XCTAssertEqual(confirmed.items.first?.productID, product.id)
     }
 
+    func testExplicitRemovalDuringPreparationIsNotResurrected() {
+        let product = Product(id: UUID(), name: "חלב", usualQuantity: 1)
+        let draft = ShoppingDraft(listID: ShoppingList.defaultID, entries: [DraftEntry(productID: product.id, name: product.name, quantity: 1)])
+        var removal = Deferral(productID: product.id, until: .now.addingTimeInterval(86400))
+        removal.recordedAt = draft.createdAt.addingTimeInterval(1)
+        let confirmed = draft.applying(to: ShoppingData(products: [product], deferrals: [removal]), productScope: [product.id])
+        XCTAssertTrue(confirmed.items.isEmpty)
+        XCTAssertTrue(confirmed.purchases.isEmpty)
+    }
+
     func testParserPreservesAmbiguousNumbers() {
         XCTAssertEqual(ShoppingInputParser.parse("בשר טחון 2 חב"), .init(name: "בשר טחון", quantity: 2, unit: "חבילות"))
         for name in ["חלב 3%", "7 up", "ביצים 12", "קמח 0 חב"] {
