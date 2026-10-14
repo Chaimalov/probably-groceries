@@ -357,6 +357,7 @@ struct ShoppingView: View {
                 Image(systemName: "minus.circle")
             }
             .disabled(newQuantity == 1)
+            .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel("הפחתת כמות למוצר חדש")
             Text("\(newQuantity)")
                 .monospacedDigit()
@@ -367,6 +368,7 @@ struct ShoppingView: View {
                 Image(systemName: "plus.circle")
             }
             .disabled(newQuantity == 9999)
+            .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel("הגדלת כמות למוצר חדש")
         }
         .buttonStyle(.borderless)
@@ -512,6 +514,7 @@ struct ShoppingView: View {
             } label: {
                 Image(systemName: "plus.circle")
             }
+            .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel("הוספת מוצר למקטע \(section)")
         }
         .buttonStyle(.plain)
@@ -544,6 +547,11 @@ struct ShoppingView: View {
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.done)
                             .onSubmit { finishRename(item) }
+                        Button("סגירה", systemImage: "xmark") {
+                            updateEditor { editingNameID = nil; nameFocused = nil }
+                        }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .frame(minWidth: 44, minHeight: 44)
                     } else if editMode.isEditing {
                         HStack(spacing: 6) {
                             Text(product.name).foregroundStyle(.primary)
@@ -780,6 +788,7 @@ struct ItemInlineDetails: View {
                     store.updateQuantity(of: item, to: max(1, item.quantity - 1))
                 } label: { Image(systemName: "minus.circle.fill").font(.title2) }
                     .disabled(item.quantity <= 1)
+                    .frame(minWidth: 44, minHeight: 44)
                     .accessibilityLabel("הפחתת כמות")
                 Text("\(item.quantity)").monospacedDigit().font(.headline)
                     .contentTransition(.numericText())
@@ -788,6 +797,7 @@ struct ItemInlineDetails: View {
                     store.updateQuantity(of: item, to: min(9999, item.quantity + 1))
                 } label: { Image(systemName: "plus.circle.fill").font(.title2) }
                     .disabled(item.quantity >= 9999)
+                    .frame(minWidth: 44, minHeight: 44)
                     .accessibilityLabel("הגדלת כמות")
                 Menu {
                     Button("ללא יחידה") { store.updateUnit(of: item, to: nil) }

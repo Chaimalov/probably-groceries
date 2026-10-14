@@ -89,6 +89,7 @@ final class ShoppingDraftTests: XCTestCase {
     }
 
     func testParserPreservesAmbiguousNumbers() {
+        XCTAssertEqual(ShoppingInputParser.parse("מלפפון 5 יח׳"), .init(name: "מלפפון", quantity: 5, unit: "יחידות"))
         XCTAssertEqual(ShoppingInputParser.parse("בשר טחון 2 חב"), .init(name: "בשר טחון", quantity: 2, unit: "חבילות"))
         for name in ["חלב 3%", "7 up", "ביצים 12", "קמח 0 חב"] {
             XCTAssertEqual(ShoppingInputParser.parse(name).name, name)

@@ -22,7 +22,7 @@ struct QuantityEditor: View {
             .navigationTitle(name)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("ביטול") { dismiss() }
+                    Button("סגירה", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("שמירה") {

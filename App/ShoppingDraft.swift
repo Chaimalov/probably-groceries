@@ -87,7 +87,7 @@ enum ShoppingInputParser {
     static func parse(_ raw: String) -> Result {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = text.split(separator: " ").map(String.init)
-        let units = ["packs": "packs", "pack": "packs", "liters": "liters", "kg": "kg", "חב": "חבילות", "חבילות": "חבילות", "ליטר": "ליטרים", "ק״ג": "ק״ג", "יחידות": "יחידות"]
+        let units = ["packs": "packs", "pack": "packs", "liters": "liters", "kg": "kg", "חב": "חבילות", "חבילות": "חבילות", "ליטר": "ליטרים", "ק״ג": "ק״ג", "יח׳": "יחידות", "יח'": "יחידות", "יח": "יחידות", "יחידות": "יחידות"]
         // A number alone can be part of a product name (e.g. milk 3%). Only
         // parse an explicit recognized trailing unit; keep all other text.
         if parts.count >= 3, let unit = units[parts.last!],
