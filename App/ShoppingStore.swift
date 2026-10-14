@@ -92,6 +92,7 @@ final class ShoppingStore: ObservableObject {
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
         syncJournal.seed(loadedData)
         selectedListID = listID
+        migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
         }) {
@@ -165,7 +166,7 @@ final class ShoppingStore: ObservableObject {
 
     func product(for id: UUID) -> Product? { data.products.first { $0.id == id } }
 
-    private func productBelongsToCurrentScope(_ product: Product) -> Bool {
+    func productBelongsToCurrentScope(_ product: Product) -> Bool {
         let key = "product_\(product.id.uuidString)"
         if let binding = currentShare { return binding.keys.contains(key) }
         return !sharedLists.contains { $0.keys.contains(key) }
@@ -228,6 +229,12 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ item: ShoppingItem) {
         data.items.removeAll { $0.id == item.id }
+        if let bytes = item.photoData {
+            let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
+            try? FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
+            if (try? Data(contentsOf: url)) != bytes { try? bytes.write(to: url, options: .atomic) }
+            return url
+        }
         if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
     }
@@ -247,23 +254,36 @@ final class ShoppingStore: ObservableObject {
             let url = photoDirectory.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) { return url }
         }
-        guard let bytes = item.photoData else { return nil }
-        let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
-        try? FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
-        try? bytes.write(to: url, options: .atomic)
-        return url
+        return nil
+    }
+
+    private func migrateLegacyPhotos() {
+        guard !loadFailed else { return }
+        var changed = false
+        for index in data.items.indices where data.items[index].photoData == nil {
+            if let name = data.items[index].photoFilename,
+               let bytes = try? Data(contentsOf: photoDirectory.appendingPathComponent(name)),
+               let image = UIImage(data: bytes), let encoded = ItemPhotoEncoder.encode(image) {
+                data.items[index].photoData = encoded; changed = true
+            }
+        }
+        for index in data.purchases.indices where data.purchases[index].photoData == nil {
+            if let name = data.purchases[index].photoFilename,
+               let bytes = try? Data(contentsOf: photoDirectory.appendingPathComponent(name)),
+               let image = UIImage(data: bytes), let encoded = ItemPhotoEncoder.encode(image) {
+                data.purchases[index].photoData = encoded; changed = true
+            }
+        }
+        if changed { persist() }
     }
 
     func setPhoto(_ bytes: Data, for item: ShoppingItem) {
         guard let image = UIImage(data: bytes),
               let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
-        let longest = max(image.size.width, image.size.height)
-        let scale = min(1, 1200 / max(longest, 1))
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let resized = UIGraphicsImageRenderer(size: size).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+        guard let jpeg = ItemPhotoEncoder.encode(image) else {
+            storageError = "לא ניתן לצרף את התמונה. נסה תמונה אחרת."
+            return
         }
-        guard let jpeg = resized.jpegData(compressionQuality: 0.55), jpeg.count < 700_000 else { return }
         do {
             try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
             let name = "\(item.id.uuidString).jpg"
@@ -271,15 +291,15 @@ final class ShoppingStore: ObservableObject {
             data.items[index].photoFilename = name
             data.items[index].photoData = jpeg
             persist()
-        } catch { return }
+        } catch { storageError = "לא ניתן לשמור את התמונה. נסה שוב." }
     }
 
     func removePhoto(from item: ShoppingItem) {
-        guard let index = data.items.firstIndex(where: { $0.id == item.id }),
-              let name = data.items[index].photoFilename else { return }
+        guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let name = data.items[index].photoFilename
         data.items[index].photoFilename = nil
         data.items[index].photoData = nil
-        try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
+        if let name { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
     }
 
@@ -577,9 +597,11 @@ final class ShoppingStore: ObservableObject {
             .max(by: { $0.purchasedAt < $1.purchasedAt })?.quantity ?? 1
     }
 
-    func applyDraftData(_ updated: ShoppingData) {
+    func applyDraftData(_ updated: ShoppingData) -> Bool {
+        guard !loadFailed else { return false }
         data = updated
         persist()
+        return storageError == nil
     }
 
     func updatePlace(of item: ShoppingItem, to value: String) {
