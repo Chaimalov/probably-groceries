@@ -27,9 +27,10 @@ struct ShoppingDraft: Codable, Equatable {
     func additions(to data: ShoppingData) -> [DraftEntry] {
         let active = Set(data.items.filter { $0.listID == listID }.map(\.productID))
         let purchasedSinceDraft = Set(data.purchases.filter { $0.listID == listID && $0.purchasedAt >= createdAt }.map(\.productID))
+        let removedSinceDraft = Set(data.deferrals.filter { $0.listID == listID && ($0.recordedAt ?? .distantPast) >= createdAt }.map(\.productID))
         return entries.filter {
             $0.included && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            ($0.productID.map { !active.contains($0) && !purchasedSinceDraft.contains($0) } ?? true)
+            ($0.productID.map { !active.contains($0) && !purchasedSinceDraft.contains($0) && !removedSinceDraft.contains($0) } ?? true)
         }
     }
 }
@@ -60,6 +61,7 @@ extension ShoppingDraft {
                 }
             }
             guard !updated.items.contains(where: { $0.listID == listID && $0.productID == productID }),
+                  !updated.deferrals.contains(where: { $0.listID == listID && $0.productID == productID && ($0.recordedAt ?? .distantPast) >= createdAt }),
                   !updated.purchases.contains(where: { $0.listID == listID && $0.productID == productID && $0.purchasedAt >= createdAt }) else { continue }
             var item = ShoppingItem(id: entry.id, productID: productID, quantity: max(1, min(9999, entry.quantity)), addedAt: .now, listID: listID)
             item.note = entry.note
