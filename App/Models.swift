@@ -118,9 +118,10 @@ struct Purchase: Codable, Identifiable, Hashable {
 struct Deferral: Codable, Hashable {
     var productID: UUID
     var until: Date
+    var recordedAt: Date? = nil
     var listID: UUID = ShoppingList.defaultID
 
-    enum CodingKeys: String, CodingKey { case productID, until, listID }
+    enum CodingKeys: String, CodingKey { case productID, until, listID, recordedAt }
     init(productID: UUID, until: Date, listID: UUID = ShoppingList.defaultID) {
         self.productID = productID; self.until = until; self.listID = listID
     }
@@ -128,6 +129,7 @@ struct Deferral: Codable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         productID = try c.decode(UUID.self, forKey: .productID)
         until = try c.decode(Date.self, forKey: .until)
+        recordedAt = try c.decodeIfPresent(Date.self, forKey: .recordedAt)
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID) ?? ShoppingList.defaultID
     }
 }
