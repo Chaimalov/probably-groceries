@@ -44,8 +44,10 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var photoFilename: String? = nil
     var unit: String? = nil
     var sectionName: String? = nil
+    var shoppingPlace: String? = nil
+    var photoData: Data? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName, shoppingPlace, photoData }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -64,6 +66,8 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
         sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
+        shoppingPlace = try c.decodeIfPresent(String.self, forKey: .shoppingPlace)
+        photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
     }
 }
 
@@ -74,13 +78,17 @@ struct Purchase: Codable, Identifiable, Hashable {
     var purchasedAt: Date
     var sourceItemID: UUID
     var listID: UUID = ShoppingList.defaultID
+    var actorID: String? = nil
+    var originalOrder: Int? = nil
     var wasUrgent: Bool = false
     var note: String? = nil
     var photoFilename: String? = nil
     var unit: String? = nil
     var sectionName: String? = nil
+    var shoppingPlace: String? = nil
+    var photoData: Data? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, wasUrgent, note, photoFilename, unit, sectionName }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, actorID, originalOrder, wasUrgent, note, photoFilename, unit, sectionName, shoppingPlace, photoData }
     init(id: UUID, productID: UUID, quantity: Int, purchasedAt: Date,
          sourceItemID: UUID, listID: UUID = ShoppingList.defaultID, wasUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -95,11 +103,15 @@ struct Purchase: Codable, Identifiable, Hashable {
         purchasedAt = try c.decode(Date.self, forKey: .purchasedAt)
         sourceItemID = try c.decode(UUID.self, forKey: .sourceItemID)
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID) ?? ShoppingList.defaultID
+        actorID = try c.decodeIfPresent(String.self, forKey: .actorID)
+        originalOrder = try c.decodeIfPresent(Int.self, forKey: .originalOrder)
         wasUrgent = try c.decodeIfPresent(Bool.self, forKey: .wasUrgent) ?? false
         note = try c.decodeIfPresent(String.self, forKey: .note)
         photoFilename = try c.decodeIfPresent(String.self, forKey: .photoFilename)
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
         sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
+        shoppingPlace = try c.decodeIfPresent(String.self, forKey: .shoppingPlace)
+        photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
     }
 }
 
