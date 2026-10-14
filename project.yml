@@ -21,6 +21,7 @@ targets:
       properties:
         CFBundleDisplayName: קניות
         CFBundleDevelopmentRegion: he
+        CFBundleLocalizations: [he, en]
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
