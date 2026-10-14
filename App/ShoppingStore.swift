@@ -227,7 +227,15 @@ final class ShoppingStore: ObservableObject {
         add(name: suggestion.product.name, quantity: suggestion.quantity)
     }
 
+    private func recordRemoval(_ item: ShoppingItem) {
+        data.deferrals.removeAll { $0.productID == item.productID && $0.listID == item.listID }
+        var removal = Deferral(productID: item.productID, until: .now.addingTimeInterval(3 * 86400), listID: item.listID)
+        removal.recordedAt = .now
+        data.deferrals.append(removal)
+    }
+
     func remove(_ item: ShoppingItem) {
+        recordRemoval(item)
         data.items.removeAll { $0.id == item.id }
         if let bytes = item.photoData {
             let url = photoDirectory.appendingPathComponent("\(item.id.uuidString)-synced.jpg")
@@ -454,6 +462,7 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ ids: Set<UUID>) {
         for item in data.items where ids.contains(item.id) {
+            recordRemoval(item)
             if let name = item.photoFilename {
                 try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
             }
