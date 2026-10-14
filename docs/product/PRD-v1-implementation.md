@@ -20,6 +20,8 @@ Drafts are device-local and scoped to list ID. Closing retains edits. Place filt
 
 Explicit active-item removal records a timestamped temporary deferral, synced through the existing journal, so an older draft cannot resurrect the removed request. Draft exclusion itself never records a deferral or purchase.
 
+Fresh manual additions carry their own request time. A resumed draft’s age must not suppress an explicit new request merely because the product was purchased after the draft was first opened; older pending proposals remain protected against later purchases/removals.
+
 Retained requests are edited through live details, so those explicit changes apply immediately and remain if preparation is closed. Draft name edits for existing products apply only if the current product name still matches the original name; newer remote names win. Existing active quantity always wins over a suggestion. Ordinary simultaneous shared quantity edits retain the repository's entity-level last-revision policy (timestamp, deterministic payload tie break). Undo into an independently created active request adds the undone quantity and preserves its newer context, correcting purchase evidence without duplicating the product.
 
 New photos carry a compressed JPEG in the existing Codable payload, bounded below 600KB to stay below a CloudKit record's payload limit. Available legacy local attachments migrate to bounded payloads on launch. Missing local files cannot be recovered automatically. The actor identifier identifies the originating installation, not a claimed participant display name.

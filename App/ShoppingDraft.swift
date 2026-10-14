@@ -13,6 +13,8 @@ struct DraftEntry: Codable, Identifiable, Equatable {
     var photoData: Data? = nil
     var section: String? = nil
     var reason: String?
+    // Optional for drafts written before per-request timestamps existed.
+    var requestedAt: Date? = nil
 }
 
 struct ShoppingDraft: Codable, Equatable {
@@ -40,6 +42,7 @@ extension ShoppingDraft {
         guard current.lists.contains(where: { $0.id == listID }), !current.confirmedDrafts.contains(token) else { return current }
         var updated = current
         for entry in additions(to: current) {
+            let requestTime = entry.requestedAt ?? createdAt
             let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
             let productID: UUID
             if let id = entry.productID {
@@ -61,8 +64,8 @@ extension ShoppingDraft {
                 }
             }
             guard !updated.items.contains(where: { $0.listID == listID && $0.productID == productID }),
-                  !updated.deferrals.contains(where: { $0.listID == listID && $0.productID == productID && ($0.recordedAt ?? .distantPast) >= createdAt }),
-                  !updated.purchases.contains(where: { $0.listID == listID && $0.productID == productID && $0.purchasedAt >= createdAt }) else { continue }
+                  !updated.deferrals.contains(where: { $0.listID == listID && $0.productID == productID && ($0.recordedAt ?? .distantPast) >= requestTime }),
+                  !updated.purchases.contains(where: { $0.listID == listID && $0.productID == productID && $0.purchasedAt >= requestTime }) else { continue }
             var item = ShoppingItem(id: entry.id, productID: productID, quantity: max(1, min(9999, entry.quantity)), addedAt: .now, listID: listID)
             item.note = entry.note
             item.unit = entry.unit

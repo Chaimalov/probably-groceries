@@ -88,6 +88,21 @@ final class ShoppingDraftTests: XCTestCase {
         XCTAssertTrue(confirmed.purchases.isEmpty)
     }
 
+    func testFreshManualRequestInResumedDraftSurvivesHistoricalPurchase() {
+        let product = Product(id: UUID(), name: "חלב", usualQuantity: 1)
+        let purchase = Purchase(id: UUID(), productID: product.id, quantity: 1,
+                                purchasedAt: .now.addingTimeInterval(-3600), sourceItemID: UUID())
+        var draft = ShoppingDraft(listID: ShoppingList.defaultID, entries: [
+            DraftEntry(name: product.name, quantity: 3, requestedAt: .now)])
+        draft.createdAt = .now.addingTimeInterval(-86400)
+        let confirmed = draft.applying(to: ShoppingData(products: [product], purchases: [purchase]),
+                                       productScope: [product.id])
+        XCTAssertEqual(confirmed.items.count, 1)
+        XCTAssertEqual(confirmed.items.first?.productID, product.id)
+        XCTAssertEqual(confirmed.items.first?.quantity, 3)
+        XCTAssertEqual(confirmed.purchases, [purchase], "Planning must not change purchase evidence")
+    }
+
     func testParserPreservesAmbiguousNumbers() {
         XCTAssertEqual(ShoppingInputParser.parse("מלפפון 5 יח׳"), .init(name: "מלפפון", quantity: 5, unit: "יחידות"))
         XCTAssertEqual(ShoppingInputParser.parse("בשר טחון 2 חב"), .init(name: "בשר טחון", quantity: 2, unit: "חבילות"))

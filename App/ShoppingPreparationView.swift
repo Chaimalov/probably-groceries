@@ -120,7 +120,7 @@ struct ShoppingPreparationView: View {
     private func addManual() {
         let parsed = ShoppingInputParser.parse(manualName)
         guard !parsed.name.isEmpty else { return }
-        draft.entries.append(DraftEntry(name: parsed.name, quantity: parsed.quantity, unit: parsed.unit))
+        draft.entries.append(DraftEntry(name: parsed.name, quantity: parsed.quantity, unit: parsed.unit, requestedAt: .now))
         manualName = ""
         draft.unfinishedName = nil
         store.saveDraft(draft)
