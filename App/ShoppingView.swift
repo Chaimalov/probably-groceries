@@ -72,6 +72,7 @@ struct ShoppingView: View {
                                     .onMove { source, destination in
                                         store.move(from: source, to: destination, inSection: section)
                                     }
+                                    if isAdding && addingToSection == section { inlineAddRow }
                                 }
                             } header: {
                                 sectionHeader(section)
@@ -97,46 +98,9 @@ struct ShoppingView: View {
                         .listSectionSeparator(.hidden, edges: .all)
                     }
 
-                    if isAdding {
-                        Section {
-                            HStack(spacing: 12) {
-                                Image(systemName: "circle")
-                                    .font(.title2.weight(.ultraLight))
-                                    .foregroundStyle(listTint)
-                                    .frame(width: 28)
-                                TextField(addingToSection.map { "מוצר ל\($0)" } ?? "מה צריך לקנות?", text: $newName)
-                                    .focused($addFocused)
-                                    .submitLabel(.next)
-                                    .onSubmit(addInline)
-                                    .onChange(of: newName) { _, value in
-                                        if value.contains("\n") { addInline() }
-                                    }
-                                    .accessibilityIdentifier("inlineAddField")
-                                Button {
-                                    newQuantity = max(1, newQuantity - 1)
-                                } label: {
-                                    Image(systemName: "minus.circle")
-                                }
-                                .disabled(newQuantity == 1)
-                                .accessibilityLabel("הפחתת כמות למוצר חדש")
-                                Text("\(newQuantity)")
-                                    .monospacedDigit()
-                                    .frame(minWidth: 20)
-                                Button {
-                                    newQuantity = min(9999, newQuantity + 1)
-                                } label: {
-                                    Image(systemName: "plus.circle")
-                                }
-                                .disabled(newQuantity == 9999)
-                                .accessibilityLabel("הגדלת כמות למוצר חדש")
-                            }
-                            .buttonStyle(.borderless)
-                            .id("new-item")
-                            .selectionDisabled(true)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                        }
-                        .listSectionSeparator(.hidden)
+                    if isAdding && (!showsSections || addingToSection == nil) {
+                        Section { inlineAddRow }
+                            .listSectionSeparator(.hidden)
                     }
 
                     if !likely.isEmpty { suggestionSection("כנראה צריך", items: likely) }
@@ -202,6 +166,14 @@ struct ShoppingView: View {
                 .listSectionSpacing(0)
                 .environment(\.defaultMinListRowHeight, 44)
                 .scrollDismissesKeyboard(.interactively)
+                .onChange(of: addingToSection) { _, section in
+                    guard isAdding, section != nil else { return }
+                    Task { @MainActor in
+                        await Task.yield()
+                        scroll.scrollTo("new-item", anchor: .bottom)
+                        addFocused = true
+                    }
+                }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     HStack {
                         if reordering {
@@ -265,6 +237,12 @@ struct ShoppingView: View {
                     }
                 }
             }
+            .onChange(of: nameFocused) { oldID, newID in
+                if oldID != newID, let oldID, editingNameID == oldID,
+                   let item = store.items.first(where: { $0.id == oldID }) {
+                    finishRename(item)
+                }
+            }
             .sheet(item: $editingCategory) { CategoryEditor(store: store, item: $0) }
             .sheet(isPresented: $showingAppearance) { ListAppearanceEditor(store: store) }
             .onChange(of: editMode) { _, mode in
@@ -316,6 +294,45 @@ struct ShoppingView: View {
             }
             #endif
         }
+    }
+
+    private var inlineAddRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "circle")
+                .font(.title2.weight(.ultraLight))
+                .foregroundStyle(listTint)
+                .frame(width: 28)
+            TextField(addingToSection.map { "מוצר ל\($0)" } ?? "מה צריך לקנות?", text: $newName)
+                .focused($addFocused)
+                .submitLabel(.next)
+                .onSubmit(addInline)
+                .onChange(of: newName) { _, value in
+                    if value.contains("\n") { addInline() }
+                }
+                .accessibilityIdentifier("inlineAddField")
+            Button {
+                newQuantity = max(1, newQuantity - 1)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .disabled(newQuantity == 1)
+            .accessibilityLabel("הפחתת כמות למוצר חדש")
+            Text("\(newQuantity)")
+                .monospacedDigit()
+                .frame(minWidth: 20)
+            Button {
+                newQuantity = min(9999, newQuantity + 1)
+            } label: {
+                Image(systemName: "plus.circle")
+            }
+            .disabled(newQuantity == 9999)
+            .accessibilityLabel("הגדלת כמות למוצר חדש")
+        }
+        .buttonStyle(.borderless)
+        .id("new-item")
+        .selectionDisabled(true)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
 
     private var listPicker: some View {
@@ -409,8 +426,9 @@ struct ShoppingView: View {
         let names = existing + used.filter { !existing.contains($0) }
         var seen = Set<String>()
         let unique = names.filter { seen.insert($0).inserted }
-        return store.items.contains(where: { store.section(for: $0) == "אחר" }) && !unique.contains("אחר")
-            ? unique + ["אחר"] : unique
+        let needsOther = store.items.contains(where: { store.section(for: $0) == "אחר" }) ||
+            (isAdding && addingToSection == "אחר")
+        return needsOther && !unique.contains("אחר") ? unique + ["אחר"] : unique
     }
 
     private func items(in section: String) -> [ShoppingItem] {
@@ -436,7 +454,8 @@ struct ShoppingView: View {
             .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
             .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
             Button {
-                addingToSection = section == "אחר" ? nil : section
+                collapsedSections.remove(section)
+                addingToSection = section
                 isAdding = true
                 addFocused = true
             } label: {
@@ -483,6 +502,10 @@ struct ShoppingView: View {
                         }
                     } else {
                         Button {
+                            if let previousID = editingNameID,
+                               let previous = store.items.first(where: { $0.id == previousID }) {
+                                finishRename(previous)
+                            }
                             editedName = product.name
                             editingNameID = item.id
                             nameFocused = item.id
@@ -520,7 +543,9 @@ struct ShoppingView: View {
                     }
                 }
                 .font(.subheadline.weight(.medium))
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 44, minHeight: 44)
                 .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                 .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
@@ -550,11 +575,22 @@ struct ShoppingView: View {
             .background {
                 nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil)
             }
+            .accessibilityAction(named: "העברה למעלה") { moveItem(item, down: false) }
+            .accessibilityAction(named: "העברה למטה") { moveItem(item, down: true) }
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
                 itemFrames[item.id] = frame
             }
         }
+    }
+
+    private func moveItem(_ item: ShoppingItem, down: Bool) {
+        let section = showsSections ? store.section(for: item) : nil
+        let ordered = section.map { items(in: $0) } ?? store.items
+        guard let index = ordered.firstIndex(where: { $0.id == item.id }) else { return }
+        let neighbor = index + (down ? 1 : -1)
+        guard ordered.indices.contains(neighbor) else { return }
+        store.place([item.id], inSection: section, relativeTo: ordered[neighbor].id, after: down)
     }
 
     private func nativeDrag(_ entry: ShoppingDragEntry, section: String?) -> some View {
