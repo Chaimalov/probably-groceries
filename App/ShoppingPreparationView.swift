@@ -133,10 +133,12 @@ struct ItemDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var place = ""
     @State private var name = ""
+    @State private var originalName = ""
     @FocusState private var nameFocused: Bool
     private func saveName() {
-        guard store.items.contains(where: { $0.id == item.id }) else { return }
+        guard name != originalName, store.items.contains(where: { $0.id == item.id }) else { return }
         store.rename(item, to: name)
+        originalName = name
     }
     var body: some View {
         NavigationStack {
@@ -164,6 +166,7 @@ struct ItemDetailsSheet: View {
             .onAppear {
                 place = item.shoppingPlace ?? ""
                 name = store.product(for: item.productID)?.name ?? ""
+                originalName = name
             }
             .onDisappear(perform: saveName)
         }
