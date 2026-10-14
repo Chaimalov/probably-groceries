@@ -24,7 +24,7 @@ struct ShoppingView: View {
     @State private var sectionName = ""
     @State private var collapsedSections: Set<String> = []
     @State private var selectedItemIDs: Set<UUID> = []
-    @State private var itemFrames: [UUID: CGRect] = [:]
+    @State private var itemFrames = ShoppingItemFrameRegistry()
     @State private var editMode: EditMode = .inactive
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
@@ -156,7 +156,7 @@ struct ShoppingView: View {
                     TwoFingerSelectionGesture { from, to in
                         guard !reordering else { return }
                         let crossed = store.items.compactMap { item -> UUID? in
-                            guard let frame = itemFrames[item.id],
+                            guard let frame = itemFrames.frames[item.id],
                                   frame.minY <= max(from.y, to.y),
                                   frame.maxY >= min(from.y, to.y),
                                   frame.minX <= to.x, frame.maxX >= to.x else { return nil }
@@ -356,7 +356,7 @@ struct ShoppingView: View {
                     isAdding = false
                     addingToSection = nil
                     selectedItemIDs.removeAll()
-                    itemFrames.removeAll()
+                    itemFrames.frames.removeAll()
                     reordering = false
                     editMode = .inactive
                 }
@@ -594,8 +594,9 @@ struct ShoppingView: View {
             .accessibilityAction(named: "העברה למטה") { moveItem(item, down: true) }
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
-                itemFrames[item.id] = frame
+                itemFrames.frames[item.id] = frame
             }
+            .onDisappear { itemFrames.frames[item.id] = nil }
         }
     }
 
@@ -689,10 +690,12 @@ struct ShoppingView: View {
     private func addInline() {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store.add(name: trimmed, quantity: newQuantity, department: addingToSection)
-        newQuantity = 1
-        newName = ""
-        addFocused = true
+        updateEditor {
+            store.add(name: trimmed, quantity: newQuantity, department: addingToSection)
+            newQuantity = 1
+            newName = ""
+            addFocused = true
+        }
     }
 
     private func finishRename(_ item: ShoppingItem) {
@@ -806,3 +809,10 @@ private struct ItemInlineDetails: View {
     }
 }
 
+
+// Selection hit testing consumes these frames inside a gesture callback, not
+// while rendering. Publishing every geometry change back into SwiftUI creates
+// a layout/update feedback loop during native List and keyboard animations.
+private final class ShoppingItemFrameRegistry {
+    var frames: [UUID: CGRect] = [:]
+}

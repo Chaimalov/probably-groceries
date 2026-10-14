@@ -47,3 +47,4 @@ The actual prototype images from the previous conversation are not stored in thi
 
 - Recent purchases are optionally visible through the overflow menu; the preference persists. Hiding the section never deletes purchase events. Undo and full-history affordances use icons with Hebrew accessibility labels. Keep words where an icon cannot communicate a choice, such as menu entries and unit names.
 - Opening inline details must not run a second SwiftUI geometry/fade animation alongside the native List update. Preserve the summary note and photo marker so the row's main content doesn't jump when details expand. Editor transactions suppress extra animations; completion and undo retain short Reduce Motion-aware transitions.
+- Gesture hit-test frames use a non-observable registry. Geometry changes must not invalidate the whole list on each animation frame. Remove invisible rows from that registry. Inline Enter/add updates use the same non-animated editor transaction.
