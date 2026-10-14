@@ -841,7 +841,7 @@ struct ItemInlineDetails: View {
                     }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                 }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(item.photoFilename == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
+                    Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
                 .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
