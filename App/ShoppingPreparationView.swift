@@ -207,9 +207,10 @@ private struct DraftEntryDetails: View {
                     Text("ללא מקטע").tag("")
                     ForEach(Array(Set(sections + [entry.section].compactMap { $0 })).sorted(), id: \.self) { Text($0).tag($0) }
                 }
-                if let bytes = entry.photoData, let image = UIImage(data: bytes) {
+                if entry.photoData != nil {
                     Button { photoExpanded = true } label: {
-                        Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 180)
+                        ItemPhotoThumbnail(bytes: entry.photoData, fileURL: nil, name: entry.name, fullImage: true)
+                            .frame(maxHeight: 180)
                     }.accessibilityLabel("הגדלת תמונת המוצר")
                     Button("הסרת תמונה", systemImage: "trash", role: .destructive) { entry.photoData = nil }
                 }

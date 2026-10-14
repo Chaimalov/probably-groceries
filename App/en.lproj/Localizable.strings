@@ -138,5 +138,7 @@
 "קופסאות" = "boxes";
 "שקיות" = "bags";
 "גלילים" = "rolls";
-\n"טוען תמונה" = "Loading photo";
-\n"התמונה אינה זמינה" = "Photo unavailable";
+
+"טוען תמונה" = "Loading photo";
+
+"התמונה אינה זמינה" = "Photo unavailable";
