@@ -136,7 +136,11 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let field = app.textFields["inlineAddField"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
-        field.typeText(first + "\n")
+        field.typeText(first + " 5 יח׳")
+        XCTAssertEqual(app.staticTexts["newItemQuantity"].label, "5")
+        for _ in 0..<4 { app.buttons["הפחתת כמות למוצר חדש"].tap() }
+        XCTAssertEqual(app.staticTexts["newItemQuantity"].label, "1")
+        field.typeText("\n")
         let buy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", first)).firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         XCTAssertTrue(field.exists, "Enter should keep inline add available")

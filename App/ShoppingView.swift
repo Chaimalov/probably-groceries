@@ -12,6 +12,7 @@ struct ShoppingView: View {
     @State private var newName = ""
     @State private var newQuantity = 1
     @State private var preserveRawInput = false
+    @State private var newQuantityOverridden = false
     @State private var editedName = ""
     @State private var expandedItemID: UUID?
     @State private var editingCategory: ShoppingItem?
@@ -348,10 +349,15 @@ struct ShoppingView: View {
                 .submitLabel(.next)
                 .onSubmit(addInline)
                 .onChange(of: newName) { _, value in
+                    if !preserveRawInput && !newQuantityOverridden {
+                        let parsed = ShoppingInputParser.parse(value)
+                        if parsed.unit != nil { newQuantity = parsed.quantity }
+                    }
                     if value.contains("\n") { addInline() }
                 }
                 .accessibilityIdentifier("inlineAddField")
             Button {
+                newQuantityOverridden = true
                 newQuantity = max(1, newQuantity - 1)
             } label: {
                 Image(systemName: "minus.circle")
@@ -362,7 +368,9 @@ struct ShoppingView: View {
             Text("\(newQuantity)")
                 .monospacedDigit()
                 .frame(minWidth: 20)
+                .accessibilityIdentifier("newItemQuantity")
             Button {
+                newQuantityOverridden = true
                 newQuantity = min(9999, newQuantity + 1)
             } label: {
                 Image(systemName: "plus.circle")
@@ -375,8 +383,11 @@ struct ShoppingView: View {
         let parsed = ShoppingInputParser.parse(newName)
         if parsed.unit != nil && !preserveRawInput {
             HStack {
-                Text("\(parsed.name) · ×\(parsed.quantity) \(parsed.unit ?? "")").font(.caption).foregroundStyle(.secondary)
-                Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") { preserveRawInput = true }
+                Text("\(parsed.name) · ×\(newQuantity) \(parsed.unit ?? "")").font(.caption).foregroundStyle(.secondary)
+                Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") {
+                    preserveRawInput = true
+                    if !newQuantityOverridden { newQuantity = 1 }
+                }
                     .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
             }
         }
@@ -747,12 +758,13 @@ struct ShoppingView: View {
         guard !trimmed.isEmpty else { return }
         updateEditor {
             let parsed = preserveRawInput ? ShoppingInputParser.Result(name: trimmed, quantity: newQuantity, unit: nil) : ShoppingInputParser.parse(trimmed)
-            store.add(name: parsed.name, quantity: parsed.unit == nil ? newQuantity : parsed.quantity, department: addingToSection)
+            store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity, department: addingToSection)
             if let unit = parsed.unit, let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
                 store.updateUnit(of: item, to: unit)
             }
             newQuantity = 1
             preserveRawInput = false
+            newQuantityOverridden = false
             newName = ""
             addFocused = true
         }
