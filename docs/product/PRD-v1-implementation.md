@@ -16,23 +16,23 @@ Brief: Groceries-PRD-v1.md, version 1.0 (14 October 2026).
 
 ## Policies
 
-Drafts are device-local and scoped to list ID. Closing retains edits. Place filters select a subset of the same draft. Confirmation includes all included proposals, including hidden ones, and never creates purchase evidence. Stable draft-row IDs plus active product deduplication make retries safe. A local confirmation token prevents repeated same-device submission. Cross-device new manually named products still have the existing product identity limitation: independently created identities are not automatically merged by fuzzy matching.
+Drafts are device-local and scoped to list ID. Closing retains edits. Place filters select a subset of the same draft. Confirmation includes all included proposals, including hidden ones, and never creates purchase evidence. Stable draft-row IDs plus active product deduplication make retries safe. A local confirmation receipt is saved atomically in shopping.json with the additions; it prevents repeated submission even after restart and later purchase. Confirmation stays open after storage failure for retry. Cross-device new manually named products still have the existing product identity limitation: independently created identities are not automatically merged by fuzzy matching.
 
 Retained requests are edited through live details, so those explicit changes apply immediately and remain if preparation is closed. Draft name edits for existing products apply only if the current product name still matches the original name; newer remote names win. Existing active quantity always wins over a suggestion. Ordinary simultaneous shared quantity edits retain the repository's entity-level last-revision policy (timestamp, deterministic payload tie break). Undo into an independently created active request adds the undone quantity and preserves its newer context, correcting purchase evidence without duplicating the product.
 
-New photos carry a compressed JPEG in the existing Codable payload, bounded below 700KB to stay below a CloudKit record's payload limit. Legacy local-only attachments remain local until replaced; no automatic migration of missing files. The actor identifier identifies the originating installation, not a claimed participant display name.
+New photos carry a compressed JPEG in the existing Codable payload, bounded below 600KB to stay below a CloudKit record's payload limit. Available legacy local attachments migrate to bounded payloads on launch. Missing local files cannot be recovered automatically. The actor identifier identifies the originating installation, not a claimed participant display name.
 
 ## Validation
 
-Added focused unit checks for draft filtering against current active identities, exclusion/persistence, ambiguous natural input and session boundaries. Existing purchase/undo, predictor, revision journal and native UI tests remain required in the iOS workflow.
+Added atomic receipt/idempotency, concurrent request/rename, exact-name batch deduplication, hidden inclusion/context and no-learning-on-exclusion checks; added simulator close/resume/exclude/confirm coverage. Added focused unit checks for draft filtering against current active identities, exclusion/persistence, ambiguous natural input and session boundaries. Existing purchase/undo, predictor, revision journal and native UI tests remain required in the iOS workflow.
 
 This Linux workspace cannot run Xcode or physical-device tests. CI must validate compilation and simulator behavior. Physical-device acceptance remains required for lift/multi-item drag, rapid completion, motion, keyboard/focus, camera permissions, RTL/LTR, Dynamic Type, contrast/transparency and two-account photo sync. Do not treat code or CI as device UX validation.
 
 ## Remaining first-delivery limitations
 
-- Draft proposal details use editable name/quantity/unit/place; photo/note details currently belong to retained/active requests after confirmation.
+- Draft proposal details now include editable name/quantity/unit/place, note, section and identifying photo; close/reopen preserves edits and partial manual input.
 - Natural input recognizes explicit trailing known units with a pre-commit preview and original-text undo. Other input remains unchanged.
 - Global rapid-completion guard (350ms) prevents immediate accidental check-off after reflow; needs physical-device tuning.
-- Legacy photo upload migration and explicit errors for rejected/oversize photo attachment need further work. Local list writes now show a retryable failure.
-- Full English localization remains incomplete in the existing Hebrew UI.
+- Photo compression retries at smaller sizes; load/encode/write failures are explicit. Local list writes show a retryable failure.
+- Added Hebrew/English strings and native language-dependent layout for the list/preparation/details flows. Legacy diagnostics and some sharing error messages still need English copy.
 - Following-delivery clarification threads are deliberately deferred per PRD.
