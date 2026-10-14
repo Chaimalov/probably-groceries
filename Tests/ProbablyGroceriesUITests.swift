@@ -18,16 +18,17 @@ final class ProbablyGroceriesUITests: XCTestCase {
         field.typeText("Draft Milk 2 חב\n")
         let name = "Draft Milk"
         XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
-        app.buttons["החרגת \(name)"].tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החרגת", name)).firstMatch.tap()
         app.buttons.matching(identifier: "סגירה").firstMatch.tap()
-        XCTAssertFalse(app.buttons["נקנה \(name)"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name)).firstMatch.exists)
         app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
-        XCTAssertTrue(app.buttons["החזרת \(name)"].waitForExistence(timeout: 5))
-        app.buttons["החזרת \(name)"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.tap()
         app.buttons["אישור"].tap()
-        let buy = app.buttons["נקנה \(name)"]
+        let bought = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name))
+        let buy = bought.firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons.matching(identifier: "נקנה \(name)").count, 1)
+        XCTAssertEqual(bought.count, 1)
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Confirmed preparation"
         capture.lifetime = .keepAlways
