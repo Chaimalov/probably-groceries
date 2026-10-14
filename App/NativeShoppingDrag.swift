@@ -15,9 +15,68 @@ enum ShoppingDragEntry: Hashable {
 
 // Only local, typed sessions from this list are accepted. Plain text from other
 // apps, a stale SwiftUI state value, or another list can never reorder data.
+@MainActor
 private final class ShoppingDragContext {
     let listID: UUID
+    private weak var session: UIDragSession?
+    private weak var scrollView: UIScrollView?
+    private var displayLink: CADisplayLink?
+
     init(listID: UUID) { self.listID = listID }
+
+    func startScrolling(session: UIDragSession, source: UIView?) {
+        stopScrolling()
+        var ancestor = source
+        while let view = ancestor {
+            if let scroll = view as? UIScrollView { scrollView = scroll; break }
+            ancestor = view.superview
+        }
+        guard scrollView != nil else { return }
+        self.session = session
+        let link = CADisplayLink(target: ScrollTick(context: self), selector: #selector(ScrollTick.tick(_:)))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    func stopScrolling() {
+        displayLink?.invalidate()
+        displayLink = nil
+        session = nil
+    }
+
+    fileprivate func scroll(_ link: CADisplayLink) {
+        guard let session, let scrollView, scrollView.window != nil else { stopScrolling(); return }
+        // UIDragInteraction on a custom row doesn't own the enclosing list's
+        // scrolling. Keep the drag alive when its source row scrolls offscreen.
+        let point = session.location(in: scrollView)
+        let top = scrollView.bounds.minY + scrollView.adjustedContentInset.top
+        let bottom = scrollView.bounds.maxY - scrollView.adjustedContentInset.bottom
+        let edge = min(CGFloat(64), (bottom - top) / 3)
+        guard edge > 0, point.x >= scrollView.bounds.minX, point.x <= scrollView.bounds.maxX,
+              point.y >= top - edge, point.y <= bottom + edge else { return }
+        let speed: CGFloat
+        if point.y < top + edge { speed = -min(1, (top + edge - point.y) / edge) }
+        else if point.y > bottom - edge { speed = min(1, (point.y - bottom + edge) / edge) }
+        else { return }
+        let minimum = -scrollView.adjustedContentInset.top
+        let maximum = max(minimum, scrollView.contentSize.height - scrollView.bounds.height +
+                          scrollView.adjustedContentInset.bottom)
+        let elapsed = min(link.targetTimestamp - link.timestamp, 1.0 / 30.0)
+        let offset = min(maximum, max(minimum, scrollView.contentOffset.y + speed * 360 * CGFloat(elapsed)))
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: offset), animated: false)
+    }
+
+    deinit { displayLink?.invalidate() }
+
+    @MainActor
+    private final class ScrollTick: NSObject {
+        weak var context: ShoppingDragContext?
+        init(context: ShoppingDragContext) { self.context = context }
+        @objc func tick(_ link: CADisplayLink) {
+            guard let context else { link.invalidate(); return }
+            context.scroll(link)
+        }
+    }
 }
 
 struct NativeShoppingDrag: UIViewRepresentable {
@@ -143,6 +202,20 @@ struct NativeShoppingDrag: UIViewRepresentable {
             return [makeItem()]
         }
 
+        func dragInteraction(_ interaction: UIDragInteraction, sessionWillBegin session: UIDragSession) {
+            (session.localContext as? ShoppingDragContext)?.startScrolling(session: session, source: host)
+        }
+
+        func dragInteraction(_ interaction: UIDragInteraction, session: UIDragSession,
+                             willEndWith operation: UIDropOperation) {
+            (session.localContext as? ShoppingDragContext)?.stopScrolling()
+        }
+
+        func dragInteraction(_ interaction: UIDragInteraction, session: UIDragSession,
+                             didEndWith operation: UIDropOperation) {
+            (session.localContext as? ShoppingDragContext)?.stopScrolling()
+        }
+
         func dragInteraction(_ interaction: UIDragInteraction,
                              sessionIsRestrictedToDraggingApplication session: UIDragSession) -> Bool { true }
 
@@ -160,11 +233,40 @@ struct NativeShoppingDrag: UIViewRepresentable {
             guard let host, let window = host.window,
                   let snapshot = host.snapshotView(afterScreenUpdates: false) else { return nil }
             let parameters = UIDragPreviewParameters()
-            parameters.backgroundColor = .secondarySystemGroupedBackground
+            parameters.backgroundColor = .systemBackground
             parameters.visiblePath = UIBezierPath(roundedRect: host.bounds, cornerRadius: 12)
             let rect = host.convert(host.bounds, to: window)
             return UITargetedDragPreview(view: snapshot, parameters: parameters,
                 target: UIDragPreviewTarget(container: window, center: CGPoint(x: rect.midX, y: rect.midY)))
+        }
+
+        func dragInteraction(_ interaction: UIDragInteraction, previewForCancelling item: UIDragItem,
+                             withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview? {
+            // A SwiftUI cell may have been reused while scrolling. Never animate
+            // cancellation into an unrelated row that now occupies the source cell.
+            guard item.localObject as? ShoppingDragEntry == parent.entry,
+                  let host, let window = host.window else { return nil }
+            let rect = host.convert(host.bounds, to: window)
+            return defaultPreview.retargetedPreview(with:
+                UIDragPreviewTarget(container: window, center: CGPoint(x: rect.midX, y: rect.midY)))
+        }
+
+        func dropInteraction(_ interaction: UIDropInteraction, previewForDropping item: UIDragItem,
+                             withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview? {
+            guard !UIAccessibility.isReduceMotionEnabled, let host, let window = host.window else { return nil }
+            // The list owns the actual row transition. Land the lifted preview at
+            // the insertion point rather than animating it back to its old source.
+            let rect = host.convert(host.bounds, to: window)
+            let y: CGFloat
+            if case .section = parent.entry, case .item? = item.localObject as? ShoppingDragEntry {
+                // A product dropped on a header goes into that section, which
+                // may be collapsed; fading avoids depicting an incorrect row.
+                return nil
+            } else {
+                y = insertionAfter == true ? rect.maxY : rect.minY
+            }
+            return defaultPreview.retargetedPreview(with:
+                UIDragPreviewTarget(container: window, center: CGPoint(x: rect.midX, y: y)))
         }
 
         private func entries(in session: UIDropSession) -> [ShoppingDragEntry]? {
@@ -189,7 +291,7 @@ struct NativeShoppingDrag: UIViewRepresentable {
 
         func dropInteraction(_ interaction: UIDropInteraction,
                              sessionDidUpdate session: UIDropSession) -> UIDropProposal {
-            guard entries(in: session) != nil, let host else {
+            guard let dragged = entries(in: session), let host else {
                 clearIndicator()
                 return UIDropProposal(operation: .cancel)
             }
@@ -198,10 +300,14 @@ struct NativeShoppingDrag: UIViewRepresentable {
                 UISelectionFeedbackGenerator().selectionChanged()
                 insertionAfter = after
             }
-            indicator.backgroundColor = parent.tint
-            indicator.frame = CGRect(x: 16, y: after ? host.bounds.height - 2 : 0,
-                                     width: max(0, host.bounds.width - 32), height: 2)
-            indicator.layer.cornerRadius = 1
+            let entersSection: Bool
+            if case .section = parent.entry, case .item? = dragged.first { entersSection = true }
+            else { entersSection = false }
+            indicator.backgroundColor = entersSection ? parent.tint.withAlphaComponent(0.12) : parent.tint
+            indicator.frame = entersSection ? host.bounds.insetBy(dx: 8, dy: 0) :
+                CGRect(x: 16, y: after ? host.bounds.height - 2 : 0,
+                       width: max(0, host.bounds.width - 32), height: 2)
+            indicator.layer.cornerRadius = entersSection ? 8 : 1
             indicator.isHidden = false
             host.bringSubviewToFront(indicator)
             return UIDropProposal(operation: .move)
@@ -211,7 +317,8 @@ struct NativeShoppingDrag: UIViewRepresentable {
             guard let entries = entries(in: session), let host else { return }
             if ProcessInfo.processInfo.arguments.contains("-ui-testing") { print("ShoppingDrag: row drop") }
             let after = session.location(in: host).y > host.bounds.midY
-            clearIndicator()
+            indicator.isHidden = true
+            insertionAfter = after
             parent.drop(entries, after)
         }
 
