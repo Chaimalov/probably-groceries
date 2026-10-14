@@ -79,11 +79,20 @@ private final class ShoppingDragContext {
     }
 }
 
+struct ShoppingDragPreviewContent {
+    let title: String
+    var quantity: String? = nil
+    var note: String? = nil
+    var urgent = false
+    var isSection = false
+}
+
 struct NativeShoppingDrag: UIViewRepresentable {
     let entry: ShoppingDragEntry
     let listID: UUID
     let enabled: Bool
     let tint: UIColor
+    let previewContent: ShoppingDragPreviewContent
     let drop: ([ShoppingDragEntry], Bool) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -179,6 +188,14 @@ struct NativeShoppingDrag: UIViewRepresentable {
         private func makeItem() -> UIDragItem {
             let item = UIDragItem(itemProvider: NSItemProvider(object: parent.entry.representation as NSString))
             item.localObject = parent.entry
+            // Use the same content-backed image for lift and flocking. A UIKit
+            // snapshot of SwiftUI's hosting cell can contain only its background.
+            if let image = makePreviewView()?.image {
+                let parameters = previewParameters(for: CGRect(origin: .zero, size: image.size))
+                item.previewProvider = {
+                    UIDragPreview(view: UIImageView(image: image), parameters: parameters)
+                }
+            }
             return item
         }
 
@@ -228,15 +245,81 @@ struct NativeShoppingDrag: UIViewRepresentable {
         func dragInteraction(_ interaction: UIDragInteraction,
                              sessionAllowsMoveOperation session: UIDragSession) -> Bool { true }
 
-        func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem,
-                             session: UIDragSession) -> UITargetedDragPreview? {
-            guard let host, let window = host.window,
-                  let snapshot = host.snapshotView(afterScreenUpdates: false) else { return nil }
+        private func previewParameters(for bounds: CGRect) -> UIDragPreviewParameters {
             let parameters = UIDragPreviewParameters()
             parameters.backgroundColor = .systemBackground
-            parameters.visiblePath = UIBezierPath(roundedRect: host.bounds, cornerRadius: 12)
+            parameters.visiblePath = UIBezierPath(roundedRect: bounds, cornerRadius: 12)
+            return parameters
+        }
+
+        private func makePreviewView() -> UIImageView? {
+            guard let host, let window = host.window else { return nil }
+            let content = parent.previewContent
+            let tint = parent.tint
+            let font = UIFont.preferredFont(forTextStyle: content.isSection ? .headline : .body,
+                                           compatibleWith: host.traitCollection)
+            let detailFont = UIFont.preferredFont(forTextStyle: .caption1, compatibleWith: host.traitCollection)
+            let hasNote = content.note?.isEmpty == false
+            let height = max(44, font.lineHeight + (hasNote ? detailFont.lineHeight + 2 : 0) + 16)
+            let size = CGSize(width: max(44, host.bounds.width), height: height)
+            let rtl = host.effectiveUserInterfaceLayoutDirection == .rightToLeft
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = window.screen.scale
+            let renderer = UIGraphicsImageRenderer(size: size, format: format)
+            var image: UIImage!
+            host.traitCollection.performAsCurrent {
+                image = renderer.image { context in
+                    UIColor.systemBackground.setFill()
+                    context.fill(CGRect(origin: .zero, size: size))
+                    let style = NSMutableParagraphStyle()
+                    style.alignment = rtl ? .right : .left
+                    style.lineBreakMode = .byTruncatingTail
+                    let quantity = content.quantity ?? ""
+                    let quantityFont = UIFont.preferredFont(forTextStyle: .subheadline,
+                                                            compatibleWith: host.traitCollection)
+                    let quantityWidth = min(size.width * 0.28,
+                        (quantity as NSString).size(withAttributes: [.font: quantityFont]).width)
+                    let trailingWidth = quantityWidth + (content.urgent ? 24 : 0)
+                    let textX: CGFloat = rtl ? 16 + trailingWidth + 12 : 58
+                    let textWidth = max(0, size.width - 32 - 42 - trailingWidth - 12)
+                    let titleY = (height - font.lineHeight - (hasNote ? detailFont.lineHeight + 2 : 0)) / 2
+                    (content.title as NSString).draw(in: CGRect(x: textX, y: titleY,
+                        width: textWidth, height: font.lineHeight + 1), withAttributes:
+                        [.font: font, .foregroundColor: content.isSection ? tint : UIColor.label,
+                         .paragraphStyle: style])
+                    if let note = content.note, hasNote {
+                        (note as NSString).draw(in: CGRect(x: textX, y: titleY + font.lineHeight + 2,
+                            width: textWidth, height: detailFont.lineHeight + 1), withAttributes:
+                            [.font: detailFont, .foregroundColor: UIColor.secondaryLabel, .paragraphStyle: style])
+                    }
+                    let symbol = content.isSection ? "chevron.down" : "circle"
+                    let symbolSize: CGFloat = content.isSection ? 14 : 24
+                    let symbolX = rtl ? size.width - 16 - 30 : 16
+                    UIImage(systemName: symbol, withConfiguration:
+                        UIImage.SymbolConfiguration(pointSize: symbolSize, weight: .light))?
+                        .withTintColor(tint, renderingMode: .alwaysOriginal)
+                        .draw(in: CGRect(x: symbolX + (30 - symbolSize) / 2,
+                                         y: (height - symbolSize) / 2, width: symbolSize, height: symbolSize))
+                    let quantityX = rtl ? CGFloat(16) : size.width - 16 - quantityWidth
+                    (quantity as NSString).draw(in: CGRect(x: quantityX, y: (height - quantityFont.lineHeight) / 2,
+                        width: quantityWidth, height: quantityFont.lineHeight + 1), withAttributes:
+                        [.font: quantityFont, .foregroundColor: UIColor.secondaryLabel, .paragraphStyle: style])
+                    if content.urgent {
+                        let x = rtl ? quantityX + quantityWidth + 6 : quantityX - 22
+                        UIImage(systemName: "flag.fill")?.withTintColor(.systemOrange, renderingMode: .alwaysOriginal)
+                            .draw(in: CGRect(x: x, y: (height - 16) / 2, width: 16, height: 16))
+                    }
+                }
+            }
+            return UIImageView(image: image)
+        }
+
+        func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem,
+                             session: UIDragSession) -> UITargetedDragPreview? {
+            guard item.localObject as? ShoppingDragEntry == parent.entry,
+                  let host, let window = host.window, let preview = item.previewProvider?() else { return nil }
             let rect = host.convert(host.bounds, to: window)
-            return UITargetedDragPreview(view: snapshot, parameters: parameters,
+            return UITargetedDragPreview(view: preview.view, parameters: preview.parameters,
                 target: UIDragPreviewTarget(container: window, center: CGPoint(x: rect.midX, y: rect.midY)))
         }
 

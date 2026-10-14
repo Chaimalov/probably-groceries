@@ -23,7 +23,7 @@ The selected reference shows a small date and overflow control above a short hea
 - Swipe actions use icons with accessible Hebrew labels: a darker amber flag, blue section editor, and red destructive delete independent of the list color. Quantity, units, notes and photos stay available through the quantity button; tap the product name to rename. Touch and hold is reserved for lifting, so a context menu must not intercept this gesture.
 - A full swipe flags or deletes from opposite edges. List selection supports the system's two-finger multi-select gesture; selected products can be flagged or deleted together. The selection control in the menu provides a visible alternative.
 - A multi-product drop preserves the displayed order across sections, regardless of pickup order, and persists once. Cancellation and foreign-list/text drops must not reorder products or create purchase events.
-- Use native lift, stacking and cancellation previews with a visible insertion line. Attach public UIKit drag interactions to the enclosing list row/header, keeping controls and swipes available. Lift previews use the stable window as their animation target. Respect Reduce Motion and avoid animations that delay shopping.
+- Use native lift, stacking and cancellation previews with a visible insertion line. Preview images must contain the item's title and quantity; draw from the item data rather than snapshotting a SwiftUI hosting cell, which can produce an empty background. Use the same image for lift and in-flight flocking. Attach public UIKit drag interactions to the enclosing list row/header, keeping controls and swipes available. Lift previews use the stable window as their animation target. Respect Reduce Motion and avoid animations that delay shopping.
 - Hebrew and English must both lay out correctly; test long names, dynamic type, dark mode, and RTL.
 
 ## Materials and color
@@ -42,3 +42,8 @@ Small: a useful glance (count or top likely need) and deep link. Medium: a few t
 - Mobbin explorations: Reminders, Things, Todoist, Apple Journal and Apple Invites for list hierarchy, quick add, empty states and interaction details. Treat these as inspiration, not assets to copy.
 
 The actual prototype images from the previous conversation are not stored in this repository. Add selected reference screenshots only with rights and provenance understood.
+
+## Device feedback — 14 October 2026
+
+- Recent purchases are optionally visible through the overflow menu; the preference persists. Hiding the section never deletes purchase events. Undo and full-history affordances use icons with Hebrew accessibility labels. Keep words where an icon cannot communicate a choice, such as menu entries and unit names.
+- Opening inline details must not run a second SwiftUI geometry/fade animation alongside the native List update. Preserve the summary note and photo marker so the row's main content doesn't jump when details expand. Editor transactions suppress extra animations; completion and undo retain short Reduce Motion-aware transitions.

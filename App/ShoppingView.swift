@@ -29,6 +29,7 @@ struct ShoppingView: View {
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
+    @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -106,7 +107,7 @@ struct ShoppingView: View {
                     if !likely.isEmpty { suggestionSection("כנראה צריך", items: likely) }
                     if !maybe.isEmpty { suggestionSection("אולי", items: maybe) }
 
-                    if !store.recentPurchases.isEmpty {
+                    if showRecentPurchases && !store.recentPurchases.isEmpty {
                         Section("נקנו לאחרונה") {
                             ForEach(store.recentPurchases) { purchase in
                                 if let product = store.product(for: purchase.productID) {
@@ -115,8 +116,17 @@ struct ShoppingView: View {
                                             .foregroundStyle(.tertiary)
                                         Text(product.name).foregroundStyle(.secondary)
                                         Spacer()
-                                        Button("ביטול") { withAnimation { store.undo(purchase) } }
-                                            .font(.subheadline)
+                                        Button {
+                                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                                                store.undo(purchase)
+                                            }
+                                        } label: {
+                                            Image(systemName: "arrow.uturn.backward")
+                                                .frame(minWidth: 44, minHeight: 44)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .accessibilityLabel("ביטול")
+                                        .accessibilityHint("ביטול הקנייה של \(product.name)")
                                     }
                                     .swipeActions {
                                         Button("ביטול קנייה", systemImage: "arrow.uturn.backward") {
@@ -130,8 +140,9 @@ struct ShoppingView: View {
                                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                                 }
                             }
-                            Button("לכל הקניות") { showingHistory = true }
-                                .font(.subheadline)
+                            Button("לכל הקניות", systemImage: "clock.arrow.circlepath") { showingHistory = true }
+                                .labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
                                 .listRowSeparator(.hidden)
                                 .selectionDisabled(true)
                         }
@@ -209,6 +220,7 @@ struct ShoppingView: View {
                             } label: {
                                 Label("מוצר חדש", systemImage: "plus.circle.fill")
                                     .font(.body.weight(.semibold))
+                                    .labelStyle(.iconOnly)
                             }
                             .accessibilityLabel("הוספת מוצר")
                             Spacer()
@@ -380,6 +392,7 @@ struct ShoppingView: View {
                 reordering = true
                 editMode = .active
             }
+            Toggle("הצגת נקנו לאחרונה", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
             Button("בחירת פריטים", systemImage: "checkmark.circle") {
                 addFocused = false
@@ -506,9 +519,11 @@ struct ShoppingView: View {
                                let previous = store.items.first(where: { $0.id == previousID }) {
                                 finishRename(previous)
                             }
-                            editedName = product.name
-                            editingNameID = item.id
-                            nameFocused = item.id
+                            updateEditor {
+                                editedName = product.name
+                                editingNameID = item.id
+                                nameFocused = item.id
+                            }
                         } label: {
                             HStack(spacing: 6) {
                                 Text(product.name).foregroundStyle(.primary)
@@ -524,12 +539,12 @@ struct ShoppingView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    if let note = item.note, !note.isEmpty, expandedItemID != item.id {
+                    if let note = item.note, !note.isEmpty {
                         Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
-                if item.photoFilename != nil, expandedItemID != item.id {
+                if item.photoFilename != nil {
                     Image(systemName: "photo").foregroundStyle(.secondary)
                 }
                 if editMode.isEditing {
@@ -538,7 +553,7 @@ struct ShoppingView: View {
                 } else {
                 Button("×\(item.quantity) \(item.unit ?? "")") {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                    updateEditor {
                         expandedItemID = expandedItemID == item.id ? nil : item.id
                     }
                 }
@@ -553,7 +568,7 @@ struct ShoppingView: View {
             if expandedItemID == item.id && !editMode.isEditing {
                 ItemInlineDetails(store: store, item: item)
                     .padding(.leading, 42)
-                    .transition(.opacity)
+                    .transition(.identity)
             }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -593,10 +608,32 @@ struct ShoppingView: View {
         store.place([item.id], inSection: section, relativeTo: ordered[neighbor].id, after: down)
     }
 
+    private func dragPreviewContent(for entry: ShoppingDragEntry) -> ShoppingDragPreviewContent {
+        switch entry {
+        case .section(let name):
+            return ShoppingDragPreviewContent(title: name, isSection: true)
+        case .item(let id):
+            guard let item = store.items.first(where: { $0.id == id }),
+                  let product = store.product(for: item.productID) else {
+                return ShoppingDragPreviewContent(title: "מוצר")
+            }
+            return ShoppingDragPreviewContent(title: product.name,
+                quantity: "×\(item.quantity) \(item.unit ?? "")", note: item.note, urgent: item.isUrgent)
+        }
+    }
+
+    private func updateEditor(_ update: () -> Void) {
+        // UIKit's List self-sizing and keyboard already update geometry. A
+        // concurrent SwiftUI transition causes the same height to animate twice.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction, update)
+    }
+
     private func nativeDrag(_ entry: ShoppingDragEntry, section: String?) -> some View {
         NativeShoppingDrag(entry: entry, listID: store.selectedListID,
                            enabled: !editMode.isEditing && editingNameID == nil,
-                           tint: UIColor(listTint)) { entries, after in
+                           tint: UIColor(listTint), previewContent: dragPreviewContent(for: entry)) { entries, after in
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 if case .section(let source)? = entries.first,
                    case .section(let target) = entry {
@@ -660,7 +697,7 @@ struct ShoppingView: View {
 
     private func finishRename(_ item: ShoppingItem) {
         store.rename(item, to: editedName)
-        editingNameID = nil
+        updateEditor { editingNameID = nil }
     }
 }
 
