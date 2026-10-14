@@ -42,3 +42,11 @@ This Linux workspace cannot run Xcode or physical-device tests. CI must validate
 - Photo compression retries at smaller sizes; load/encode/write failures are explicit. Local list writes show a retryable failure.
 - Added Hebrew/English strings and native language-dependent layout for the list/preparation/details flows. Legacy diagnostics and some sharing error messages still need English copy.
 - Following-delivery clarification threads are deliberately deferred per PRD.
+
+## Delivery evidence — 14 October 2026
+
+PR #19 merged into main, with follow-up fixes for stable current route ordering, 44pt quantity/edit targets, reversible Hebrew quantity shorthand, explicit quantity overrides, fresh manual requests in resumed drafts, and asynchronous thumbnail/full-photo preparation.
+
+Final code source: `0adcc13f0848d50f0592188afd66dcffd271dda6`. iOS workflow `38558878726` passed all **26 domain tests and 5 simulator UI tests**, and exported screenshots/results. TestFlight workflow `38560534218` uploaded **0.1.0 (42)**; Apple reported `processing=VALID`, `internal=IN_BETA_TESTING`, confirming availability to existing internal testers.
+
+Simulator tests cover inline natural-input quantity override, add/purchase/undo/relaunch, purchased visibility, selection, list/section customization, item/section drag persistence, draft close/resume/exclude/confirm, and new-draft reset after confirmation. Physical-device motion, rapid taps, camera/gallery permissions, large Dynamic Type/contrast/transparency, English layout and two-account photo sync still require device validation. Exported captures are automated test evidence, not a claim of physical-device visual inspection. Item clarification threads remain the following delivery as specified in the PRD.
