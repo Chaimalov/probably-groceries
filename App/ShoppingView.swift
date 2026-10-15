@@ -221,6 +221,8 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color(uiColor: .systemGroupedBackground))
                 .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
                 .frame(maxWidth: .infinity)
                 .listRowSeparator(.hidden, edges: .all)
@@ -248,7 +250,7 @@ struct ShoppingView: View {
                 .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(0)
-                .environment(\.defaultMinListRowHeight, 52)
+                .environment(\.defaultMinListRowHeight, 54)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
                 .inspector(isPresented: Binding(
@@ -627,38 +629,47 @@ if reordering {
     }
 
     private func sectionHeader(_ section: String) -> some View {
-        HStack {
-            Button {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                    if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(section)
-                        .font(.headline)
-                        .foregroundStyle(Color(uiColor: .label))
-                    Spacer(minLength: 8)
-                    Image(systemName: collapsedSections.contains(section) ? "chevron.left" : "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color(uiColor: .secondaryLabel))
-                }
-                .padding(.leading, 48)
-                .contentShape(Rectangle())
+        Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
             }
-            .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
-            .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
-
+        } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(listTint)
+                    .frame(width: 3, height: 19)
+                Text(section)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text("\(items(in: section).count)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsedSections.contains(section) ? 90 : 0))
+                    .frame(width: 18, height: 18)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 42)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
+        .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
+        .padding(.top, 9)
+        .padding(.bottom, 5)
     }
 
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
         if let product = store.product(for: item.productID) {
             VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .top, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
                 if !editMode.isEditing {
                 Button {
                     guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
@@ -668,8 +679,9 @@ if reordering {
                     else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
                 } label: {
                     Circle()
-                        .strokeBorder(listTint, lineWidth: 2)
-                        .frame(width: 24, height: 24)
+                        .strokeBorder(listTint.opacity(0.85), lineWidth: 2.25)
+                        .background(Circle().fill(listTint.opacity(0.07)))
+                        .frame(width: 25, height: 25)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
