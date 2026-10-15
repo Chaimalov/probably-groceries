@@ -498,7 +498,7 @@ if reordering {
         .selectionDisabled(true)
          .listRowBackground(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(Color(uiColor: .secondarySystemBackground))
                 .padding(.horizontal, 8)
         )
         .listRowSeparator(.hidden)
@@ -748,7 +748,7 @@ if reordering {
             }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemGroupedBackground) : Color.clear)
+                    .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
                     .padding(.horizontal, 8)
             )
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
