@@ -252,7 +252,7 @@ struct ShoppingView: View {
                 .listSectionSpacing(0)
                 .environment(\.defaultMinListRowHeight, 54)
                 .environment(\.defaultMinListHeaderHeight, 0)
-                .scrollDismissesKeyboard(.interactively)
+                .scrollDismissesKeyboard(.immediately)
                 .inspector(isPresented: Binding(
                     get: { detailItem != nil },
                     set: { if !$0 { detailItem = nil } }
@@ -393,8 +393,12 @@ if reordering {
                                 beginAdding()
                                 Task { @MainActor in
                                     await Task.yield()
-                                    scroll.scrollTo("new-item", anchor: .bottom)
-                                    addFocused = true
+                                    var transaction = Transaction(animation: nil)
+                                    transaction.disablesAnimations = true
+                                    withTransaction(transaction) {
+                                        scroll.scrollTo("new-item", anchor: .bottom)
+                                        addFocused = true
+                                    }
                                 }
                             }
                             .labelStyle(.iconOnly)
@@ -506,6 +510,7 @@ if reordering {
                 .padding(.bottom, 12)
             }
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, hasNewName ? 8 : 4)
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
@@ -794,11 +799,11 @@ if reordering {
                     .transition(.identity)
             }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, editingNameID == item.id ? 9 : 3)
+            .padding(.horizontal, 12)
+            .padding(.vertical, editingNameID == item.id ? 8 : 2)
             .background(Color(uiColor: .secondarySystemGroupedBackground),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .padding(.vertical, 2)
+            .padding(.vertical, 1)
             .listRowBackground(Color.clear)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
