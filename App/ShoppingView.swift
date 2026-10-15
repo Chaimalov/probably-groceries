@@ -267,8 +267,8 @@ struct ShoppingView: View {
             .navigationTitle(store.currentList.name)
             .navigationBarTitleDisplayMode(isAdding || editingNameID != nil ? .inline : .large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { listPicker }
-                ToolbarItem(placement: .topBarTrailing) { optionsMenu }
+                ToolbarItem(placement: .topBarLeading) { listPicker.tint(Color(uiColor: .label)) }
+                ToolbarItem(placement: .topBarTrailing) { optionsMenu.tint(Color(uiColor: .label)) }
                 if !editMode.isEditing && (isAdding || editingNameID != nil) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
@@ -427,8 +427,8 @@ if reordering {
                     }
                     .accessibilityIdentifier("inlineAddField")
                 if hasNewName {
-                    Button("×\(newQuantity)") { quantityExpanded.toggle() }
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    Button("×\(newQuantity) \(newUnit ?? "")") { quantityExpanded.toggle() }
+                        .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
                         .frame(minWidth: 44, minHeight: 44)
                         .accessibilityIdentifier("newItemQuantityButton")
                         .accessibilityLabel("עריכת כמות למוצר חדש")
@@ -454,10 +454,12 @@ if reordering {
                     HStack(spacing: 8) {
                         Button("הערה", systemImage: "text.alignright") { showingNewNote.toggle() }
                             .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         PhotosPicker(selection: $newPhoto, matching: .images) {
                             Image(systemName: "photo.badge.plus")
                         }
                         .frame(minWidth: 44, minHeight: 44)
+                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         .accessibilityLabel("צירוף תמונה")
                         .onChange(of: newPhoto) { _, selection in
                             guard let selection else { return }
@@ -471,13 +473,15 @@ if reordering {
                             newUrgent.toggle()
                         }
                         .labelStyle(.iconOnly)
-                        .foregroundStyle(newUrgent ? Color.orange : Color.secondary)
+                        .foregroundStyle(newUrgent ? Color.orange : Color(uiColor: .label))
                         .frame(minWidth: 44, minHeight: 44)
+                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         sectionPicker
                     }
-                    .font(.subheadline)
+                    .font(.body)
                     .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
+                    .tint(Color(uiColor: .label))
+                    .foregroundStyle(Color(uiColor: .label))
                     .frame(minHeight: 44)
                     let parsed = ShoppingInputParser.parse(newName)
                     if parsed.unit != nil && !preserveRawInput {
@@ -499,7 +503,7 @@ if reordering {
         .id("new-item")
         .selectionDisabled(true)
          .listRowBackground(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(hasNewName ? Color(uiColor: .secondarySystemBackground) : Color.clear)
                 .padding(.horizontal, 8)
         )
@@ -659,6 +663,7 @@ if reordering {
                 } label: {
                     Image(systemName: "circle")
                         .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(Color(uiColor: .tertiaryLabel))
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
@@ -707,34 +712,34 @@ if reordering {
                         }
                         .buttonStyle(.plain)
                     }
-                    if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
-                        Button("×\(item.quantity) \(item.unit ?? "")") {
-                            if editingNameID != item.id {
-                                if isAdding || editingNameID != nil { closeEditor() }
-                                updateEditor {
-                                    editedName = product.name
-                                    originalEditedName = product.name
-                                    editingNameID = item.id
-                                    nameFocused = nil
-                                    quantityExpanded = true
-                                }
-                            } else {
-                                updateEditor { quantityExpanded = true }
-                            }
-                        }
-                        .font(.caption).foregroundStyle(Color(uiColor: .secondaryLabel))
-                        .buttonStyle(.borderless)
-                        .frame(minWidth: 44, minHeight: 24, alignment: .leading)
-                        .disabled(editMode.isEditing)
-                        .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
-                        .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
-                    }
                     if editingNameID != item.id, let note = item.note, !note.isEmpty {
                         Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 if item.photoData != nil || item.photoFilename != nil {
                     ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
+                }
+                if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
+                    Button("×\(item.quantity) \(item.unit ?? "")") {
+                        if editingNameID != item.id {
+                            if isAdding || editingNameID != nil { closeEditor() }
+                            updateEditor {
+                                editedName = product.name
+                                originalEditedName = product.name
+                                editingNameID = item.id
+                                nameFocused = nil
+                                quantityExpanded = true
+                            }
+                        } else {
+                            updateEditor { quantityExpanded = true }
+                        }
+                    }
+                    .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
+                    .buttonStyle(.plain)
+                    .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                    .disabled(editMode.isEditing)
+                    .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
+                    .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
                 Spacer(minLength: 0)
                 if editingNameID == item.id {
@@ -743,7 +748,7 @@ if reordering {
                         detailItem = item
                     }
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
                     .frame(minWidth: 44, minHeight: 44)
                 }
             }
@@ -755,7 +760,7 @@ if reordering {
             }
             .padding(.vertical, 3)
             .listRowBackground(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
                     .padding(.horizontal, 8)
             )
@@ -993,8 +998,9 @@ struct ItemInlineDetails: View {
                     store.toggleUrgent(item)
                 }
                 .labelStyle(.iconOnly)
-                .foregroundStyle(item.isUrgent ? Color.orange : Color.secondary)
+                .foregroundStyle(item.isUrgent ? Color.orange : Color(uiColor: .label))
                 .frame(minWidth: 44, minHeight: 44)
+                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 if item.photoData != nil || item.photoFilename != nil {
                     Button { showingPhoto = true } label: {
                         ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
@@ -1008,12 +1014,14 @@ struct ItemInlineDetails: View {
                             if allowed { showingCamera = true } else { cameraDenied = true }
                         }
                     }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
                 .labelStyle(.iconOnly)
                 .frame(minWidth: 44, minHeight: 44)
+                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
                     guard let selection else { return }

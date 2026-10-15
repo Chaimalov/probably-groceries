@@ -28,6 +28,7 @@ struct InlineQuantityControls: View {
             }
         }
         .buttonStyle(.borderless)
+        .tint(Color.primary)
     }
 
     private var stepper: some View {
@@ -39,7 +40,7 @@ struct InlineQuantityControls: View {
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(isNew ? "הפחתת כמות למוצר חדש" : "הפחתת כמות")
             Text("\(quantity)")
-                .monospacedDigit().font(.subheadline)
+                .monospacedDigit().font(.body)
                 .accessibilityIdentifier(isNew ? "newItemQuantity" : "inlineQuantity")
             Button { quantity = min(9999, quantity + 1) } label: {
                 Image(systemName: "plus.circle").font(.title3)
