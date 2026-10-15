@@ -682,7 +682,7 @@ if reordering {
                         }
                     } else {
                         Button {
-                            closeEditor()
+                            if isAdding || editingNameID != nil { closeEditor() }
                             updateEditor {
                                 editedName = product.name
                                 originalEditedName = product.name
@@ -702,7 +702,7 @@ if reordering {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                     }
                     if editingNameID != item.id, let note = item.note, !note.isEmpty {
                         Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -714,16 +714,20 @@ if reordering {
                 if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
                     Button("×\(item.quantity) \(item.unit ?? "")") {
                         if editingNameID != item.id {
-                            closeEditor()
-                            editedName = product.name
-                            originalEditedName = product.name
-                            editingNameID = item.id
-                            quantityExpanded = false
+                            if isAdding || editingNameID != nil { closeEditor() }
+                            updateEditor {
+                                editedName = product.name
+                                originalEditedName = product.name
+                                editingNameID = item.id
+                                nameFocused = nil
+                                quantityExpanded = true
+                            }
+                        } else {
+                            updateEditor { quantityExpanded = true }
                         }
-                        updateEditor { quantityExpanded = true }
                     }
                     .font(.subheadline).foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .frame(minWidth: 44, minHeight: 44)
                     .disabled(editMode.isEditing)
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")

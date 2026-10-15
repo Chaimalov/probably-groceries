@@ -16,4 +16,4 @@ Simulator UI jobs use the explicit `ProbablyGroceriesUI` scheme: only the UI tes
 
 UI jobs pass `-collect-test-diagnostics never`: failures still retain XCTest results and screenshots, but skip the simulator-wide sysdiagnose that can keep Xcode running long after the test verdict. In the October 15 iPad run, the assertion finished at 06:09:21 while diagnostics continued until the 06:15:55 timeout.
 
-UI jobs explicitly await simulator boot before starting XCTest, so app launch does not race the cold simulator’s system services.
+UI jobs compile with `build-for-testing` before booting iOS, then await simulator boot and use `test-without-building` with the same derived-data directory. This keeps the cold simulator’s services from competing with Swift compilation on the runner.
