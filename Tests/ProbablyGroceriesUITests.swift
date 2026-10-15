@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class ProbablyGroceriesUITests: XCTestCase {
     func testPreparationCloseResumeExcludeAndConfirmOnce() {
@@ -11,6 +12,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let alert = app.alerts["רשימה חדשה לחנות"]
         alert.textFields["שם החנות"].typeText("Draft \(UUID().uuidString.prefix(6))")
         alert.buttons["יצירה"].tap()
+        app.buttons["אפשרויות נוספות"].tap()
         app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
         let field = app.textFields["מוצר נוסף"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -21,6 +23,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החרגת", name)).firstMatch.tap()
         app.buttons.matching(identifier: "סגירה").firstMatch.tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name)).firstMatch.exists)
+        app.buttons["אפשרויות נוספות"].tap()
         app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.waitForExistence(timeout: 5))
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "החזרת", name)).firstMatch.tap()
@@ -29,6 +32,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let buy = bought.firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         XCTAssertEqual(bought.count, 1)
+        app.buttons["אפשרויות נוספות"].tap()
         app.buttons.matching(identifier: "קנייה חדשה").firstMatch.tap()
         XCTAssertTrue(app.textFields["מוצר נוסף"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.textFields["שם המוצר"].exists, "Confirmed draft must not reopen as unfinished")
@@ -137,6 +141,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         field.typeText(first + " 5 יח׳")
+        app.buttons["newItemQuantityButton"].tap()
         XCTAssertEqual(app.staticTexts["newItemQuantity"].label, "5")
         for _ in 0..<4 { app.buttons["הפחתת כמות למוצר חדש"].tap() }
         XCTAssertEqual(app.staticTexts["newItemQuantity"].label, "1")
@@ -179,6 +184,61 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
     }
 
+    func testInlineEditorFocusAndAdaptiveLayout() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+        let name = "Editor \(UUID().uuidString.prefix(8))"
+        app.buttons["הוספת מוצר"].tap()
+        let field = app.textFields["inlineAddField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["הגדלת כמות למוצר חדש"].exists)
+        field.typeText(name)
+        app.buttons["הערה"].tap()
+        let draftNote = app.descendants(matching: .any)["newItemNoteField"]
+        XCTAssertTrue(draftNote.waitForExistence(timeout: 5))
+        draftNote.tap()
+        draftNote.typeText("Original note")
+        app.buttons["סיום עריכה"].tap()
+        let buy = app.buttons["נקנה " + name]
+        XCTAssertTrue(buy.waitForExistence(timeout: 5), "Done must commit a nonempty draft")
+        XCTAssertFalse(field.exists, "A finished editor must leave no permanent input row")
+        app.buttons[name].tap()
+        let rename = app.textFields["שם המוצר"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.typeText(" Updated")
+        let note = app.descendants(matching: .any)["itemNoteField"]
+        note.tap()
+        note.typeText(" Updated")
+        XCTAssertTrue(note.exists, "Moving focus to the note must keep this editor open")
+        app.buttons["סיום עריכה"].tap()
+        let updated = name + " Updated"
+        XCTAssertTrue(app.buttons[updated].waitForExistence(timeout: 5))
+        app.buttons[updated].tap()
+        app.buttons["פרטי מוצר"].tap()
+        XCTAssertTrue(app.textFields["אופציונלי"].waitForExistence(timeout: 5))
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertTrue(app.buttons["אפשרויות נוספות"].isHittable, "The list stays accessible beside the iPad inspector")
+        }
+        let details = XCTAttachment(screenshot: app.screenshot())
+        details.name = "Adaptive item details"
+        details.lifetime = .keepAlways
+        add(details)
+        app.buttons.matching(identifier: "סגירה").firstMatch.tap()
+        app.buttons["סיום עריכה"].tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons[updated].waitForExistence(timeout: 10))
+        app.buttons[updated].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["itemNoteField"].value as? String, "Original note Updated")
+        app.buttons["סיום עריכה"].tap()
+        app.buttons["נקנה " + updated].tap()
+        XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 5))
+        app.buttons.matching(identifier: "ביטול").firstMatch.tap()
+        XCTAssertTrue(app.buttons[updated].waitForExistence(timeout: 5))
+    }
+
     func testMultipleSelectionFlagsItemsTogether() {
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
@@ -215,13 +275,17 @@ final class ProbablyGroceriesUITests: XCTestCase {
         sectionAlert.buttons["יצירה"].tap()
         XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 10))
 
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@",
-                                         section, "הוספת מוצר למקטע")).firstMatch.tap()
+        app.buttons["הוספת מוצר"].tap()
         let item = "Eggs \(UUID().uuidString.prefix(6))"
         let field = app.textFields["inlineAddField"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
-        field.typeText(item + "\n")
+        field.typeText(item)
+        app.buttons["בחירת מקטע למוצר חדש"].tap()
+        app.buttons[section].tap()
+        field.tap()
+        field.typeText("\n")
+        app.buttons["סיום עריכה"].tap()
         let buy = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", item, "נקנה")).firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
