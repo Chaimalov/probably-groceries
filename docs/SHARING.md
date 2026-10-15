@@ -1,9 +1,12 @@
 # Household CloudKit sharing
 
-Implementation prepared against main `af862af48425a7f1fb0f1bf6c40eb292e1297318`.
-Published for review in PR #13 after GitHub write access was restored.
-This is not yet a verified two-account device build; Xcode CI validates the
-simulator build and local unit/UI flows, not signed CloudKit sharing.
+Sharing shipped in TestFlight build 24. Xcode CI passed the simulator build and
+local unit/UI flows. Signed entitlements and TestFlight processing were verified,
+but this is not yet a verified two-account sharing build. A device report exposed
+a missing Production schema type: `cloudkit.share`. On 2026-10-05, the missing
+type was imported into Development and deployed through CloudKit Console after
+explicit approval of its permissions. Production now visibly contains the type.
+The installed app's retry and two-account checks still require device validation.
 
 ## User flow
 
@@ -52,17 +55,14 @@ simulator build and local unit/UI flows, not signed CloudKit sharing.
 
 ## Build and verification gate
 
-1. Apply the patch on the stated commit, generate with XcodeGen, and run the
-   existing simulator build and test jobs on Xcode 27. New unit cases cover scope
-   isolation, tombstone routing after restart, old-journal decoding, concurrent
-   check-off and undo. The local environment had no Swift/Xcode compiler; these
-   XCTest cases have **not** been executed. A Swift grammar parser checked syntax,
-   and `git diff --check` checked patch formatting; neither is a type check.
-2. Keep `CKSharingSupported: true` in the generated Info.plist and preserve the
-   existing CloudKit entitlement/signing setup. Both accounts must use the same
-   CloudKit environment. For TestFlight, deploy the existing `ShoppingEntity`
-   schema (`modifiedAt`, `payload`, `deleted`) to Production if not already done.
-   Zone-change fetches require no query indexes.
+1. Generate with XcodeGen and run the existing simulator build and test jobs on
+   Xcode 27. CI has passed the local unit/UI cases, including scope isolation,
+   tombstone routing after restart, old-journal decoding, concurrent check-off and
+   undo. Unsigned simulator checks do not validate CloudKit account access or
+   the Production schema.
+2. Complete the **CloudKit schema release gate** below before relying on sharing
+   in TestFlight. Keep `CKSharingSupported: true` and the existing CloudKit signing
+   entitlements. Both accounts must use the same CloudKit environment.
 3. Owner device A: create a private second-store list, add notes and history to
    the target list, open sharing, and invite device B on another Apple Account.
    Confirm only the target list/history is visible to B and its default list stays.
@@ -80,6 +80,50 @@ simulator build and local unit/UI flows, not signed CloudKit sharing.
    Apple Account and confirm sync pauses without cross-account copying.
 
 Issue #8 should remain open until the signed two-account checks pass.
+
+## CloudKit schema release gate
+
+TestFlight uses Production. A successful archive/upload does not deploy CloudKit
+schema changes. Build 24 reported:
+
+`Cannot create new type cloudkit.share in production schema`
+
+This blocks saving the zone-wide share before Apple's invitation UI is presented.
+Repeated retries or another TestFlight upload cannot create a missing Production
+type. Complete these steps with the Apple Developer account that manages
+`iCloud.com.chaimalov.probablygroceries`:
+
+1. Open [CloudKit Console](https://icloud.developer.apple.com/), select that exact
+   container and Development, then inspect Schema → Record Types.
+2. If `cloudkit.share` is absent, either save one CKShare in a Development-signed
+   device build, or import a text schema using CloudKit Console. The Console route
+   was validated for this container on 2026-10-05: export the current Development
+   schema, append the `cloudkit.share` definition used in
+   [Apple's sample schema](https://github.com/apple/ml-comlet/blob/main/ckschema.ckdb),
+   upload it with **Import Schema**, and require **Validation Passed** before
+   import. Import replaces the entire Development schema, so retain all existing
+   types, fields, indexes and roles. The committed [schema snapshot](CLOUDKIT.ckdb)
+   records this deployment; export the live schema again before future changes.
+   The type uses the system fields plus `cloudkit.thumbnailImageData`,
+   `cloudkit.title` and `cloudkit.type`. Its grants are WRITE to `_creator`, CREATE
+   to `_icloud` and READ to `_world`, matching the Apple sample. These public-DB
+   schema grants do not override private-database ownership or CKShare participant
+   permissions. The app continues to use a private zone and `publicPermission = .none`.
+3. Confirm Development contains `cloudkit.share` and `ShoppingEntity` with
+   `modifiedAt`, `payload` and `deleted`. Use **Deploy Schema Changes** to deploy
+   the schema to Production, and verify the types appear there. Review the exact
+   diff before deployment: the 2026-10-05 change added only the share type, its
+   record-ID index and its grants; existing ShoppingEntity and Users definitions
+   were unchanged. This deploys the
+   schema, not the development test records. Zone-change fetches need no query
+   indexes.
+4. On the existing TestFlight build, reopen sharing or tap **ניסיון נוסף**. Verify
+   that Apple's invitation UI appears, then complete the two-account checks above.
+   Do not mark issue #8 complete from the schema deployment alone.
+
+References:
+- [Apple: Deploying an iCloud container's schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema)
+- [Matching device failure and development-share bootstrap on Apple's developer forums](https://developer.apple.com/forums/thread/840248)
 
 Apple references used:
 - https://developer.apple.com/documentation/cloudkit/ckshare/init(recordzoneid:)
