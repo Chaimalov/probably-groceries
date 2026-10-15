@@ -251,6 +251,16 @@ struct ShoppingView: View {
                 .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
+                .inspector(isPresented: Binding(
+                    get: { detailItem != nil },
+                    set: { if !$0 { detailItem = nil } }
+                )) {
+                    if let detailItem {
+                        ItemDetailsSheet(store: store, item: detailItem)
+                            .id(detailItem.id)
+                            .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
+                    }
+                }
                 .toolbar { bottomActions(scroll) }
 
             }
@@ -292,16 +302,6 @@ struct ShoppingView: View {
                 }
             }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
-            .inspector(isPresented: Binding(
-                get: { detailItem != nil },
-                set: { if !$0 { detailItem = nil } }
-            )) {
-                if let detailItem {
-                    ItemDetailsSheet(store: store, item: detailItem)
-                        .id(detailItem.id)
-                        .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
-                }
-            }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
