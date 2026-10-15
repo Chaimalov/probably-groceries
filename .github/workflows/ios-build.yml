@@ -87,6 +87,7 @@ jobs:
           -scheme ProbablyGroceriesUI -configuration Debug \
           -destination "platform=iOS Simulator,id=$DEVICE_ID" \
           -parallel-testing-enabled NO \
+          -collect-test-diagnostics never \
           -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
           "${selection[@]}" CODE_SIGNING_ALLOWED=NO test
     - name: Export screenshots
