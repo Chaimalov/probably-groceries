@@ -80,3 +80,30 @@ targets:
         SWIFT_VERSION: 5.0
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
+
+schemes:
+  ProbablyGroceries:
+    build:
+      targets:
+        ProbablyGroceries: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ProbablyGroceriesPredictionTests
+        - ProbablyGroceriesUITests
+  ProbablyGroceriesUI:
+    build:
+      targets:
+        ProbablyGroceries: all
+        ProbablyGroceriesUITests: [test]
+    run:
+      config: Debug
+      executable: ProbablyGroceries
+      debugEnabled: false
+    test:
+      config: Debug
+      debugEnabled: false
+      targets:
+        - ProbablyGroceriesUITests

@@ -14,7 +14,14 @@ struct ShoppingView: View {
     @State private var preserveRawInput = false
     @State private var newQuantityOverridden = false
     @State private var editedName = ""
-    @State private var expandedItemID: UUID?
+    @State private var quantityExpanded = false
+    @State private var newUnit: String?
+    @State private var newNote = ""
+    @State private var newUrgent = false
+    @State private var newPhotoData: Data?
+    @State private var newPhoto: PhotosPickerItem?
+    @State private var showingNewNote = false
+    @State private var originalEditedName = ""
     @State private var editingCategory: ShoppingItem?
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
@@ -36,8 +43,10 @@ struct ShoppingView: View {
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
+    @AppStorage("showEmptySections") private var showEmptySections = false
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
 
     private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
@@ -57,6 +66,46 @@ struct ShoppingView: View {
     }
 
     var body: some View {
+        Group {
+            if sizeClass == .regular {
+                NavigationSplitView {
+                    listSidebar
+                } detail: {
+                    shoppingContent
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                shoppingContent
+            }
+        }
+    }
+
+    private var listSidebar: some View {
+        List {
+            Section("הרשימות שלנו") {
+                ForEach(store.data.lists) { list in
+                    Button { switchList(to: list.id) } label: {
+                        HStack {
+                            Label(list.name, systemImage: list.symbolName)
+                            Spacer()
+                            if list.id == store.selectedListID {
+                                Image(systemName: "checkmark").accessibilityLabel("הרשימה הנוכחית")
+                            }
+                        }
+                    }
+                    .listRowBackground(list.id == store.selectedListID ? listTint.opacity(0.12) : Color.clear)
+                }
+            }
+            Button("רשימה חדשה לחנות", systemImage: "plus") {
+                listName = ""; showingNewList = true
+            }
+        }
+        .navigationTitle("קניות")
+        .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
+        .tint(listTint)
+    }
+
+    private var shoppingContent: some View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
@@ -66,7 +115,7 @@ struct ShoppingView: View {
                             Button("ניסיון שמירה נוסף") { store.retryLocalSave() }
                         }
                     }
-                    if let binding = store.currentShare {
+                    if let binding = store.currentShare, !binding.accessible {
                         Section {
                             Label(binding.accessible ? "שיתוף דרך iCloud" : "השיתוף אינו זמין — השינויים נשמרים במכשיר",
                                   systemImage: binding.accessible ? "person.2" : "icloud.slash")
@@ -92,12 +141,10 @@ struct ShoppingView: View {
                                             .moveDisabled(!reordering)
                                             .listRowSeparator(.hidden, edges: .all)
                                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                            .listRowBackground(Color.clear)
                                     }
                                     .onMove { source, destination in
                                         store.move(from: source, to: destination, inSection: section)
                                     }
-                                    if isAdding && addingToSection == section { inlineAddRow }
                                 }
                             } header: {
                                 sectionHeader(section)
@@ -116,7 +163,6 @@ struct ShoppingView: View {
                                     .moveDisabled(!reordering)
                                     .listRowSeparator(.hidden, edges: .all)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                    .listRowBackground(Color.clear)
                             }
                             .onMove { source, destination in
                                 store.move(from: source, to: destination, inSection: nil)
@@ -125,7 +171,7 @@ struct ShoppingView: View {
                         .listSectionSeparator(.hidden, edges: .all)
                     }
 
-                    if isAdding && (!showsSections || addingToSection == nil) {
+                    if isAdding {
                         Section { inlineAddRow }
                             .listSectionSeparator(.hidden)
                     }
@@ -175,6 +221,8 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
+                .frame(maxWidth: sizeClass == .regular ? 760 : .infinity)
+                .frame(maxWidth: .infinity)
                 .listRowSeparator(.hidden, edges: .all)
                 .listSectionSeparator(.hidden, edges: .all)
                 .overlay {
@@ -189,7 +237,7 @@ struct ShoppingView: View {
                         }
                         guard !crossed.isEmpty else { return }
                         if !editMode.isEditing {
-                            addFocused = false
+                            closeEditor()
                             editMode = .active
                         }
                         selectedItemIDs.formUnion(crossed)
@@ -203,12 +251,14 @@ struct ShoppingView: View {
                 .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: addingToSection) { _, section in
-                    guard isAdding, section != nil else { return }
-                    Task { @MainActor in
-                        await Task.yield()
-                        scroll.scrollTo("new-item", anchor: .bottom)
-                        addFocused = true
+                .inspector(isPresented: Binding(
+                    get: { detailItem != nil },
+                    set: { if !$0 { detailItem = nil } }
+                )) {
+                    if let detailItem {
+                        ItemDetailsSheet(store: store, item: detailItem)
+                            .id(detailItem.id)
+                            .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
                     }
                 }
                 .toolbar { bottomActions(scroll) }
@@ -219,6 +269,13 @@ struct ShoppingView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { listPicker }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
+                if !editMode.isEditing && (isAdding || editingNameID != nil) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
+                            .labelStyle(.iconOnly)
+                            .keyboardShortcut(.return, modifiers: .command)
+                    }
+                }
                 if editMode.isEditing {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום") {
@@ -235,7 +292,12 @@ struct ShoppingView: View {
             .onChange(of: nameFocused) { oldID, newID in
                 if oldID != newID, let oldID, editingNameID == oldID,
                    let item = store.items.first(where: { $0.id == oldID }) {
-                    finishRename(item)
+                    saveRename(item)
+                }
+            }
+            .onChange(of: store.items.map(\.id)) { _, ids in
+                if let editingNameID, !ids.contains(editingNameID) {
+                    updateEditor { self.editingNameID = nil; nameFocused = nil }
                 }
             }
             .sheet(item: $editingCategory) { CategoryEditor(store: store, item: $0) }
@@ -247,11 +309,10 @@ struct ShoppingView: View {
                 }
             }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
-            .sheet(item: $detailItem) { ItemDetailsSheet(store: store, item: $0) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
-                Button("יצירה") { store.addList(name: listName) }
+                Button("יצירה") { closeEditor(); store.addList(name: listName) }
                 Button("ביטול", role: .cancel) {}
             }
             .alert("שינוי שם הרשימה", isPresented: $showingRenameList) {
@@ -264,6 +325,7 @@ struct ShoppingView: View {
                 Button("יצירה") {
                     store.addSection(sectionName)
                     groupBySection = true
+                    showEmptySections = true
                 }
                 Button("ביטול", role: .cancel) {}
             }
@@ -321,107 +383,147 @@ if reordering {
                             }
                             .disabled(selectedItemIDs.isEmpty)
                         }
-                    } else {
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-                                .labelStyle(.iconOnly)
-                        }
+                    } else if !isAdding && editingNameID == nil {
                         ToolbarSpacer(.flexible, placement: .bottomBar)
                         ToolbarItem(placement: .bottomBar) {
-                            Button {
-                                addingToSection = nil
-                                isAdding = true
+                            Button("מוצר חדש", systemImage: "plus") {
+                                beginAdding()
                                 Task { @MainActor in
                                     await Task.yield()
                                     scroll.scrollTo("new-item", anchor: .bottom)
                                     addFocused = true
                                 }
-                            } label: {
-                                Label("מוצר חדש", systemImage: "plus").labelStyle(.iconOnly)
                             }
+                            .labelStyle(.iconOnly)
                             .accessibilityLabel("הוספת מוצר")
-                        }
-                        if isAdding && !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ToolbarItem(placement: .keyboard) {
-                                Button("הוסף", action: addInline)
-                            }
+                            .keyboardShortcut("n", modifiers: .command)
                         }
                     }
     }
 
+
+    private var hasNewName: Bool {
+        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var inlineAddRow: some View {
-        VStack(alignment: .leading) {
-        HStack(spacing: 12) {
-            Image(systemName: "circle")
-                .font(.title2.weight(.ultraLight))
-                .foregroundStyle(listTint)
-                .frame(width: 28)
-            TextField(addingToSection.map { "מוצר ל\($0)" } ?? "מה צריך לקנות?", text: $newName)
-                .focused($addFocused)
-                .submitLabel(.next)
-                .onSubmit(addInline)
-                .onChange(of: newName) { _, value in
-                    if !preserveRawInput && !newQuantityOverridden {
-                        let parsed = ShoppingInputParser.parse(value)
-                        if parsed.unit != nil { newQuantity = parsed.quantity }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "circle")
+                    .font(.system(size: 24, weight: .light))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 44, height: 44)
+                TextField("מה צריך לקנות?", text: $newName)
+                    .focused($addFocused)
+                    .submitLabel(.next)
+                    .onSubmit { addInline() }
+                    .onChange(of: newName) { _, value in
+                        if !preserveRawInput && !newQuantityOverridden {
+                            let parsed = ShoppingInputParser.parse(value)
+                            newQuantity = parsed.quantity
+                        }
                     }
-                    if value.contains("\n") { addInline() }
+                    .accessibilityIdentifier("inlineAddField")
+                if hasNewName {
+                    Button("×\(newQuantity)") { quantityExpanded.toggle() }
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("newItemQuantityButton")
+                        .accessibilityLabel("עריכת כמות למוצר חדש")
+                        .accessibilityValue("\(newQuantity)")
                 }
-                .accessibilityIdentifier("inlineAddField")
-            Button {
-                newQuantityOverridden = true
-                newQuantity = max(1, newQuantity - 1)
-            } label: {
-                Image(systemName: "minus.circle")
             }
-            .disabled(newQuantity == 1)
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("הפחתת כמות למוצר חדש")
-            Text("\(newQuantity)")
-                .monospacedDigit()
-                .frame(minWidth: 20)
-                .accessibilityIdentifier("newItemQuantity")
-            Button {
-                newQuantityOverridden = true
-                newQuantity = min(9999, newQuantity + 1)
-            } label: {
-                Image(systemName: "plus.circle")
+            if hasNewName {
+                VStack(alignment: .leading, spacing: 4) {
+                    if quantityExpanded {
+                        InlineQuantityControls(quantity: Binding(
+                            get: { newQuantity },
+                            set: { newQuantity = $0; newQuantityOverridden = true }
+                        ), unit: $newUnit, isNew: true)
+                    }
+                    if showingNewNote {
+                        TextField("הערה למוצר…", text: $newNote, axis: .vertical)
+                            .lineLimit(1...3)
+                            .accessibilityIdentifier("newItemNoteField")
+                    }
+                    if let newPhotoData {
+                        ItemPhotoThumbnail(bytes: newPhotoData, fileURL: nil, name: newName, side: 44)
+                    }
+                    HStack(spacing: 8) {
+                        Button("הערה", systemImage: "text.alignright") { showingNewNote.toggle() }
+                            .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                        PhotosPicker(selection: $newPhoto, matching: .images) {
+                            Image(systemName: "photo.badge.plus")
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel("צירוף תמונה")
+                        .onChange(of: newPhoto) { _, selection in
+                            guard let selection else { return }
+                            Task {
+                                if let data = try? await selection.loadTransferable(type: Data.self), newPhoto == selection, let image = UIImage(data: data) {
+                                    newPhotoData = ItemPhotoEncoder.encode(image)
+                                }
+                            }
+                        }
+                        Button(newUrgent ? "הסר דגל" : "דחוף", systemImage: newUrgent ? "flag.fill" : "flag") {
+                            newUrgent.toggle()
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(newUrgent ? Color.orange : Color.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        sectionPicker
+                    }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 44)
+                    let parsed = ShoppingInputParser.parse(newName)
+                    if parsed.unit != nil && !preserveRawInput {
+                        HStack {
+                            Text("\(parsed.name) · ×\(newQuantity) \(newUnit ?? parsed.unit ?? "")")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") {
+                                preserveRawInput = true
+                                if !newQuantityOverridden { newQuantity = 1 }
+                            }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                        }
+                    }
+                }
+                .padding(.leading, 48)
             }
-            .disabled(newQuantity == 9999)
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("הגדלת כמות למוצר חדש")
         }
+        // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
-        let parsed = ShoppingInputParser.parse(newName)
-        if parsed.unit != nil && !preserveRawInput {
-            HStack {
-                Text("\(parsed.name) · ×\(newQuantity) \(parsed.unit ?? "")").font(.caption).foregroundStyle(.secondary)
-                Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") {
-                    preserveRawInput = true
-                    if !newQuantityOverridden { newQuantity = 1 }
-                }
-                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-            }
-        }
-        }
         .id("new-item")
         .selectionDisabled(true)
+         .listRowBackground(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(uiColor: .secondarySystemBackground))
+                .padding(.horizontal, 8)
+        )
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+    }
+
+    private var sectionPicker: some View {
+        Menu {
+            Button("אוטומטי") { addingToSection = nil }
+            ForEach(Array(Set(allSectionNames + ["אחר"])).sorted(), id: \.self) { section in
+                Button(section) { addingToSection = section }
+            }
+        } label: {
+            Label(addingToSection ?? "מקטע", systemImage: "square.grid.2x2")
+                .lineLimit(1)
+        }
+        .accessibilityLabel("בחירת מקטע למוצר חדש")
+        .accessibilityValue(addingToSection ?? "אוטומטי")
     }
 
     private var listPicker: some View {
         Menu {
             ForEach(store.data.lists) { list in
                 Button(list.name, systemImage: list.symbolName) {
-                    store.selectList(list.id)
-                    collapsedSections.removeAll()
-                    placeFilter = "הכול"
-                    addingToSection = nil
-                    selectedItemIDs.removeAll()
-                    itemFrames.frames.removeAll()
-                    reordering = false
-                    editMode = .inactive
+                    switchList(to: list.id)
                 }
             }
             Divider()
@@ -448,17 +550,17 @@ if reordering {
                 sectionName = ""; showingNewSection = true
             }
             Button("סידור מוצרים", systemImage: "line.3.horizontal") {
-                addFocused = false
-                isAdding = false
+                closeEditor()
                 addingToSection = nil
                 selectedItemIDs.removeAll()
                 reordering = true
                 editMode = .active
             }
+            Toggle("הצגת מקטעים ריקים", systemImage: "rectangle.dashed", isOn: $showEmptySections)
             Toggle("הצגת נקנו לאחרונה", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
             Button("בחירת פריטים", systemImage: "checkmark.circle") {
-                addFocused = false
+                closeEditor()
                 reordering = false
                 editMode = .active
             }
@@ -497,6 +599,10 @@ if reordering {
     }
 
     private var sectionNames: [String] {
+        allSectionNames.filter { showEmptySections || reordering || !items(in: $0).isEmpty }
+    }
+
+    private var allSectionNames: [String] {
         let existing = store.currentList.sections
         let used = store.items.map { store.section(for: $0) }.filter { $0 != "אחר" }
         let names = existing + used.filter { !existing.contains($0) }
@@ -521,24 +627,15 @@ if reordering {
                 HStack {
                     Image(systemName: collapsedSections.contains(section) ? "chevron.left" : "chevron.down")
                         .font(.caption.weight(.semibold))
-                    Text(section).font(.headline).foregroundStyle(listTint)
-                    Text("\(items(in: section).count)").foregroundStyle(.secondary)
+                    Text(section).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("\(items(in: section).count)").font(.caption).foregroundStyle(.tertiary)
                     Spacer()
                 }
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
             .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
-            Button {
-                collapsedSections.remove(section)
-                addingToSection = section
-                isAdding = true
-                addFocused = true
-            } label: {
-                Image(systemName: "plus.circle")
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("הוספת מוצר למקטע \(section)")
+
         }
         .buttonStyle(.plain)
         .padding(.vertical, 0)
@@ -571,12 +668,9 @@ if reordering {
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.done)
                             .onSubmit { finishRename(item) }
-                        Button("סגירה", systemImage: "xmark") {
-                            updateEditor { editingNameID = nil; nameFocused = nil }
+
                         }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .frame(minWidth: 44, minHeight: 44)
-                        }
+                        .frame(minHeight: 44)
                     } else if editMode.isEditing {
                         HStack(spacing: 6) {
                             Text(product.name).foregroundStyle(.primary)
@@ -588,13 +682,12 @@ if reordering {
                         }
                     } else {
                         Button {
-                            if let previousID = editingNameID,
-                               let previous = store.items.first(where: { $0.id == previousID }) {
-                                finishRename(previous)
-                            }
+                            if isAdding || editingNameID != nil { closeEditor() }
                             updateEditor {
                                 editedName = product.name
+                                originalEditedName = product.name
                                 editingNameID = item.id
+                                quantityExpanded = false
                                 nameFocused = item.id
                             }
                         } label: {
@@ -607,47 +700,61 @@ if reordering {
                                         .accessibilityLabel("דחוף")
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                     }
-                    if let note = item.note, !note.isEmpty {
+                    if editingNameID != item.id, let note = item.note, !note.isEmpty {
                         Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
-                Spacer(minLength: 4)
                 if item.photoData != nil || item.photoFilename != nil {
                     ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
                 }
-                if editMode.isEditing {
-                    Text("×\(item.quantity) \(item.unit ?? "")")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else {
-                Button("×\(item.quantity) \(item.unit ?? "")") {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    updateEditor {
-                        expandedItemID = expandedItemID == item.id ? nil : item.id
+                if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
+                    Button("×\(item.quantity) \(item.unit ?? "")") {
+                        if editingNameID != item.id {
+                            if isAdding || editingNameID != nil { closeEditor() }
+                            updateEditor {
+                                editedName = product.name
+                                originalEditedName = product.name
+                                editingNameID = item.id
+                                nameFocused = nil
+                                quantityExpanded = true
+                            }
+                        } else {
+                            updateEditor { quantityExpanded = true }
+                        }
                     }
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .disabled(editMode.isEditing)
+                    .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
+                    .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
-                .font(.subheadline.weight(.medium))
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
-                .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
-                }
-                Button("פרטי מוצר", systemImage: "info.circle") { detailItem = item }
+                Spacer(minLength: 0)
+                if editingNameID == item.id {
+                    Button("פרטי מוצר", systemImage: "info.circle") {
+                        saveRename(item)
+                        detailItem = item
+                    }
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
                     .font(.subheadline).foregroundStyle(.secondary)
                     .frame(minWidth: 44, minHeight: 44)
+                }
             }
-            if expandedItemID == item.id && !editMode.isEditing {
-                ItemInlineDetails(store: store, item: item)
+            if editingNameID == item.id && !editMode.isEditing {
+                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded)
                     .padding(.leading, 42)
                     .transition(.identity)
             }
             }
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
+                    .padding(.horizontal, 8)
+            )
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
                        systemImage: item.isUrgent ? "flag.slash" : "flag") {
@@ -710,7 +817,7 @@ if reordering {
 
     private func nativeDrag(_ entry: ShoppingDragEntry, section: String?) -> some View {
         NativeShoppingDrag(entry: entry, listID: store.selectedListID,
-                           enabled: !editMode.isEditing && editingNameID == nil,
+                           enabled: !editMode.isEditing && editingNameID == nil && !isAdding,
                            tint: UIColor(listTint), previewContent: dragPreviewContent(for: entry)) { entries, after in
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 if case .section(let source)? = entries.first,
@@ -764,103 +871,125 @@ if reordering {
         .listSectionSeparator(.hidden)
     }
 
-    private func addInline() {
+    private func beginAdding() {
+        closeEditor()
+        updateEditor { isAdding = true; addingToSection = nil; quantityExpanded = false }
+    }
+
+    private func addInline(continueAdding: Bool = true) {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         updateEditor {
             let parsed = preserveRawInput ? ShoppingInputParser.Result(name: trimmed, quantity: newQuantity, unit: nil) : ShoppingInputParser.parse(trimmed)
-            store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity, department: addingToSection)
-            if let unit = parsed.unit, let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
-                store.updateUnit(of: item, to: unit)
+            store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity,
+                      department: addingToSection, urgent: newUrgent)
+            if let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
+                if let unit = newUnit ?? parsed.unit { store.updateUnit(of: item, to: unit) }
+                if !newNote.isEmpty { store.updateNote(of: item, to: newNote) }
+                if let newPhotoData { store.setPhoto(newPhotoData, for: item) }
             }
             newQuantity = 1
             preserveRawInput = false
             newQuantityOverridden = false
             newName = ""
-            addFocused = true
+            newUnit = nil
+            newNote = ""
+            newUrgent = false
+            newPhotoData = nil
+            newPhoto = nil
+            showingNewNote = false
+            quantityExpanded = false
+            addFocused = continueAdding
         }
     }
 
-    private func finishRename(_ item: ShoppingItem) {
+    private func saveRename(_ item: ShoppingItem) {
+        guard editedName != originalEditedName else { return }
         store.rename(item, to: editedName)
-        updateEditor { editingNameID = nil }
+        originalEditedName = editedName
     }
+
+    private func finishRename(_ item: ShoppingItem) {
+        saveRename(item)
+        updateEditor { editingNameID = nil; nameFocused = nil; quantityExpanded = false }
+    }
+
+    private func closeEditor() {
+        if isAdding { addInline(continueAdding: false) }
+        if let id = editingNameID, let item = store.items.first(where: { $0.id == id }) { saveRename(item) }
+        updateEditor {
+            isAdding = false
+            newName = ""
+            newQuantity = 1
+            newQuantityOverridden = false
+            preserveRawInput = false
+            newUnit = nil
+            newNote = ""
+            newUrgent = false
+            newPhotoData = nil
+            newPhoto = nil
+            showingNewNote = false
+            addFocused = false
+            editingNameID = nil
+            nameFocused = nil
+            quantityExpanded = false
+        }
+    }
+
+    private func switchList(to id: UUID) {
+        closeEditor()
+        store.selectList(id)
+        collapsedSections.removeAll()
+        placeFilter = "הכול"
+        addingToSection = nil
+        selectedItemIDs.removeAll()
+        itemFrames.frames.removeAll()
+        reordering = false
+        editMode = .inactive
+    }
+
 }
 
 struct ItemInlineDetails: View {
-    private static let commonUnits = ["יחידות", "חבילות", "ליטרים", "מ״ל", "ק״ג", "גרם", "בקבוקים", "קופסאות", "שקיות", "גלילים"]
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
+    let showsQuantity: Bool
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showingCamera = false
     @State private var cameraDenied = false
     @State private var showingPhoto = false
     @State private var note: String
-    @State private var customUnit = ""
-    @State private var editingCustomUnit = false
-    @FocusState private var customUnitFocused: Bool
 
-    init(store: ShoppingStore, item: ShoppingItem) {
+    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true) {
         self.store = store
         self.item = item
+        self.showsQuantity = showsQuantity
         _note = State(initialValue: item.note ?? "")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 16) {
-                Button {
-                    store.updateQuantity(of: item, to: max(1, item.quantity - 1))
-                } label: { Image(systemName: "minus.circle.fill").font(.title2) }
-                    .disabled(item.quantity <= 1)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .accessibilityLabel("הפחתת כמות")
-                Text("\(item.quantity)").monospacedDigit().font(.headline)
-                    .contentTransition(.numericText())
-                    .accessibilityIdentifier("inlineQuantity")
-                Button {
-                    store.updateQuantity(of: item, to: min(9999, item.quantity + 1))
-                } label: { Image(systemName: "plus.circle.fill").font(.title2) }
-                    .disabled(item.quantity >= 9999)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .accessibilityLabel("הגדלת כמות")
-                Menu {
-                    Button("ללא יחידה") { store.updateUnit(of: item, to: nil) }
-                    ForEach(Self.commonUnits, id: \.self) { unit in
-                        Button(unit) { store.updateUnit(of: item, to: unit) }
-                    }
-                    Button("יחידה אחרת…", systemImage: "pencil") {
-                        customUnit = item.unit ?? ""
-                        editingCustomUnit = true
-                        customUnitFocused = true
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(item.unit ?? "יחידת מידה")
-                        Image(systemName: "chevron.down").font(.caption2)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(item.unit == nil ? .secondary : .primary)
-                }
-                .accessibilityLabel("בחירת יחידת מידה")
-                .accessibilityValue(item.unit ?? "ללא יחידה")
-            }
-            if editingCustomUnit {
-                HStack {
-                    TextField("שם היחידה", text: $customUnit)
-                        .focused($customUnitFocused)
-                        .submitLabel(.done)
-                        .onSubmit(saveCustomUnit)
-                        .accessibilityIdentifier("customUnitField")
-                    Button("שמירה", action: saveCustomUnit)
-                }
-                .transition(.opacity)
+            if showsQuantity {
+                InlineQuantityControls(quantity: Binding(
+                    get: { item.quantity }, set: { store.updateQuantity(of: item, to: $0) }
+                ), unit: Binding(
+                    get: { item.unit }, set: { store.updateUnit(of: item, to: $0) }
+                ))
             }
             TextField("הערה למוצר…", text: $note, axis: .vertical)
                 .lineLimit(1...3)
                 .onChange(of: note) { _, value in store.updateNote(of: item, to: value) }
                 .accessibilityIdentifier("itemNoteField")
+                .onChange(of: item.note) { _, value in
+                    if note != (value ?? "") { note = value ?? "" }
+                }
             HStack {
+                Button(item.isUrgent ? "הסר דגל" : "דחוף", systemImage: item.isUrgent ? "flag.fill" : "flag") {
+                    store.toggleUrgent(item)
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(item.isUrgent ? Color.orange : Color.secondary)
+                .frame(minWidth: 44, minHeight: 44)
                 if item.photoData != nil || item.photoFilename != nil {
                     Button { showingPhoto = true } label: {
                         ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
@@ -878,6 +1007,8 @@ struct ItemInlineDetails: View {
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
+                .labelStyle(.iconOnly)
+                .frame(minWidth: 44, minHeight: 44)
                 .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
                     guard let selection else { return }
@@ -915,10 +1046,7 @@ struct ItemInlineDetails: View {
         } message: { Text("אפשר לאפשר גישה בהגדרות או לבחור תמונה מהספרייה.") }
     }
 
-    private func saveCustomUnit() {
-        store.updateUnit(of: item, to: customUnit)
-        editingCustomUnit = false
-    }
+
 }
 
 

@@ -48,3 +48,12 @@ The actual prototype images from the previous conversation are not stored in thi
 - Recent purchases are optionally visible through the overflow menu; the preference persists. Hiding the section never deletes purchase events. Undo and full-history affordances use icons with Hebrew accessibility labels. Keep words where an icon cannot communicate a choice, such as menu entries and unit names.
 - Opening inline details must not run a second SwiftUI geometry/fade animation alongside the native List update. Preserve the summary note and photo marker so the row's main content doesn't jump when details expand. Editor transactions suppress extra animations; completion and undo retain short Reduce Motion-aware transitions.
 - Gesture hit-test frames use a non-observable registry. Geometry changes must not invalidate the whole list on each animation frame. Remove invisible rows from that registry. Inline Enter/add updates use the same non-animated editor transaction.
+
+## Inline editing and iPad — 15 October 2026
+
+- The bottom New Item action is the sole primary add affordance. It creates a temporary row in the list. Enter commits and continues; Done commits a nonempty row and dismisses the editor, or removes an empty row. Preparation remains in the overflow menu.
+- The product name opens the same active-row editing surface used by the new-item flow. Moving keyboard focus from the name to the note must save the name without closing the row. Selecting a different row or list commits the current edit first.
+- Quantity controls are disclosed by a small quantity button. Ordinary rows omit quantity one without a unit, and place meaningful quantity beside the name. Info is shown only on the active row. Quantity, unit and custom-unit editing share one component across new and saved items.
+- New rows support a note, photo, urgency and section before committing. The composer remains at a stable list position while choosing a section; only committed items enter their destination section.
+- Section headers use secondary typography. Empty sections are hidden initially; an overflow toggle reveals them for organizing and drop targets. Creating a section or entering reorder mode also reveals empty sections.
+- Regular-width windows use a native split view with a list sidebar and a centered shopping list capped at 760 points. The native inspector presents extended item details beside the list where space permits and adapts to a sheet in compact windows. Compact windows keep the phone layout. Command-N starts adding, Command-Return finishes an edit.
