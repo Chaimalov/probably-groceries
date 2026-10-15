@@ -11,3 +11,5 @@ Ordinary CI creates no screenshot or result-bundle uploads. Manual UI runs expor
 Measure runtime from completed jobs before promising a fixed minute saving. Simulator boot and debugger launch were the dominant delays in the October 14 runs; the domain assertions themselves took about 0.1 seconds. No tests have been deleted or assertions weakened.
 
 For a deliberate phone/tablet UI review, choose `layout` in the manual workflow or include `[ui:layout]` in a PR title before opening it. This opts into two simulator jobs: the shopping and editor-focus flows on iPhone, and the editor-focus/inspector flow on iPad. Ordinary PRs and pushes still skip simulator UI tests. Screenshot artifacts are named per device.
+
+Simulator UI jobs disable debugger attachment in their generated scheme while retaining XCTest assertions and screenshots. This avoids the runner’s LLDB launch stall; local Xcode schemes retain normal debugging. UI test output is streamed to make startup delays distinguishable from test failures.

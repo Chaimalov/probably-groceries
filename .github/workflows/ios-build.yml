@@ -64,6 +64,21 @@ jobs:
       run: |
         command -v xcodegen >/dev/null || brew install xcodegen
         xcodegen generate
+        # CI needs XCTest assertions and screenshots, not an LLDB attachment.
+        # Patch only the generated CI scheme; local Xcode debugging is unchanged.
+        python3 - <<'PYSCHEME'
+        from pathlib import Path
+        import xml.etree.ElementTree as ET
+        path = Path('ProbablyGroceries.xcodeproj/xcshareddata/xcschemes/ProbablyGroceries.xcscheme')
+        tree = ET.parse(path)
+        for action in ('TestAction', 'LaunchAction'):
+            node = tree.getroot().find(action)
+            if node is None:
+                raise RuntimeError(f'Missing {action} in generated scheme')
+            node.set('selectedDebuggerIdentifier', '')
+            node.set('selectedLauncherIdentifier', 'Xcode.IDEFoundation.Launcher.PosixSpawn')
+        tree.write(path, encoding='UTF-8', xml_declaration=True)
+        PYSCHEME
     - name: Test selected shopping flow on simulator
       timeout-minutes: 10
       run: |
@@ -83,7 +98,7 @@ jobs:
           all) ;;
           *) exit 2 ;;
         esac
-        xcodebuild -quiet -project ProbablyGroceries.xcodeproj \
+        xcodebuild -project ProbablyGroceries.xcodeproj \
           -scheme ProbablyGroceries -configuration Debug \
           -destination "platform=iOS Simulator,id=$DEVICE_ID" \
           -parallel-testing-enabled NO \
