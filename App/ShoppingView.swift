@@ -414,8 +414,8 @@ if reordering {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 Image(systemName: "circle")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 25, weight: .regular))
+                    .foregroundStyle(listTint.opacity(0.8))
                     .frame(width: 44, height: 44)
                 TextField("מה צריך לקנות?", text: $newName)
                     .multilineTextAlignment(.leading)
@@ -433,7 +433,10 @@ if reordering {
                     .accessibilityIdentifier("inlineAddField")
                 if hasNewName {
                     Button("×\(newQuantity) \(newUnit ?? "")") { quantityExpanded.toggle() }
-                        .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color(uiColor: .secondaryLabel))
+                        .padding(.horizontal, 10)
+                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .accessibilityIdentifier("newItemQuantityButton")
                         .accessibilityLabel("עריכת כמות למוצר חדש")
@@ -508,11 +511,9 @@ if reordering {
         .buttonStyle(.borderless)
         .id("new-item")
         .selectionDisabled(true)
-         .listRowBackground(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(hasNewName ? Color(uiColor: .secondarySystemBackground) : Color.clear)
-                .padding(.horizontal, 8)
-        )
+         .listRowBackground(Color.clear)
+        .background(Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
@@ -762,11 +763,14 @@ if reordering {
                             updateEditor { quantityExpanded = true }
                         }
                     }
-                    .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
-                    .lineLimit(2)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color(uiColor: .secondaryLabel))
+                    .padding(.horizontal, 10)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                    .lineLimit(1)
                     .multilineTextAlignment(.trailing)
                     .buttonStyle(.plain)
-                    .frame(minWidth: 44, maxWidth: 130, minHeight: 44, alignment: .trailing)
+                    .frame(minWidth: 44, maxWidth: 150, minHeight: 36, alignment: .center)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.leading, 8)
                     .disabled(editMode.isEditing)
@@ -790,12 +794,12 @@ if reordering {
                     .transition(.identity)
             }
             }
-            .padding(.vertical, editingNameID == item.id ? 8 : 4)
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
-                    .padding(.horizontal, 8)
-            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, editingNameID == item.id ? 9 : 3)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.vertical, 2)
+            .listRowBackground(Color.clear)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
                        systemImage: item.isUrgent ? "flag.slash" : "flag") {
