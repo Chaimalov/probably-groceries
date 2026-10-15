@@ -57,3 +57,12 @@ The actual prototype images from the previous conversation are not stored in thi
 - New rows support a note, photo, urgency and section before committing. The composer remains at a stable list position while choosing a section; only committed items enter their destination section.
 - Section headers use secondary typography. Empty sections are hidden initially; an overflow toggle reveals them for organizing and drop targets. Creating a section or entering reorder mode also reveals empty sections.
 - Regular-width windows use a native split view with a list sidebar and a centered shopping list capped at 760 points. The native inspector presents extended item details beside the list where space permits and adapts to a sheet in compact windows. Compact windows keep the phone layout. Command-N starts adding, Command-Return finishes an edit.
+
+
+## Visual system — device iteration, 15 October 2026
+
+- Align section titles, product names and editor notes on the same text column (48pt after the row leading inset). Put section disclosure at the trailing edge; keep counts in accessibility labels instead of adding visual noise.
+- Use native body type for product names and quantities, subheadline for notes, and headline for sections. Quantity remains in the product row; long names wrap rather than shrink. Maintain 44pt controls and a 52pt minimum ordinary row.
+- Use one continuous 28pt rounded surface only for the active editor, with interior padding. Both add and edit tools use the same neutral circular button style and visible pressed state. Keep native Liquid Glass in navigation/toolbars, not product content.
+- Preserve list identity on its symbol and intentional actions. Ordinary text and optional tools use semantic neutral colors. The iPad detail column is bounded to 680pt.
+- References: Apple HIG Layout, Materials, Accessibility; Apple Support Reminders screenshots; user's Hebrew Reminders editing reference. Device feedback remains the visual acceptance step; Release compilation is not visual verification.

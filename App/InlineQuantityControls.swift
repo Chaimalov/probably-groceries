@@ -79,3 +79,15 @@ struct InlineQuantityControls: View {
         customUnitFocused = false
     }
 }
+
+
+/// One visual treatment for optional tools in both the draft and saved-row editor.
+struct ShoppingToolButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body)
+            .frame(minWidth: 44, minHeight: 44)
+            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}

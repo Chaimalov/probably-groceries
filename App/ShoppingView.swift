@@ -221,7 +221,7 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
-                .frame(maxWidth: sizeClass == .regular ? 760 : .infinity)
+                .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
                 .frame(maxWidth: .infinity)
                 .listRowSeparator(.hidden, edges: .all)
                 .listSectionSeparator(.hidden, edges: .all)
@@ -248,7 +248,7 @@ struct ShoppingView: View {
                 .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(0)
-                .environment(\.defaultMinListRowHeight, 44)
+                .environment(\.defaultMinListRowHeight, 52)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
                 .inspector(isPresented: Binding(
@@ -274,6 +274,7 @@ struct ShoppingView: View {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
                             .labelStyle(.iconOnly)
                             .keyboardShortcut(.return, modifiers: .command)
+                            .tint(listTint)
                     }
                 }
                 if editMode.isEditing {
@@ -330,7 +331,7 @@ struct ShoppingView: View {
                 Button("ביטול", role: .cancel) {}
             }
         }
-        .tint(listTint)
+        .tint(Color(uiColor: .label))
         .sheet(isPresented: $showingSharing) {
             if let listID = sharingListID { ListSharingSheet(store: store, listID: listID) }
         }
@@ -397,6 +398,7 @@ if reordering {
                             .labelStyle(.iconOnly)
                             .accessibilityLabel("הוספת מוצר")
                             .keyboardShortcut("n", modifiers: .command)
+                            .tint(listTint)
                         }
                     }
     }
@@ -416,6 +418,7 @@ if reordering {
                 TextField("מה צריך לקנות?", text: $newName)
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(Color(uiColor: .label))
+                    .tint(listTint)
                     .focused($addFocused)
                     .submitLabel(.next)
                     .onSubmit { addInline() }
@@ -454,12 +457,10 @@ if reordering {
                     HStack(spacing: 8) {
                         Button("הערה", systemImage: "text.alignright") { showingNewNote.toggle() }
                             .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         PhotosPicker(selection: $newPhoto, matching: .images) {
                             Image(systemName: "photo.badge.plus")
                         }
                         .frame(minWidth: 44, minHeight: 44)
-                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         .accessibilityLabel("צירוף תמונה")
                         .onChange(of: newPhoto) { _, selection in
                             guard let selection else { return }
@@ -475,11 +476,10 @@ if reordering {
                         .labelStyle(.iconOnly)
                         .foregroundStyle(newUrgent ? Color.orange : Color(uiColor: .label))
                         .frame(minWidth: 44, minHeight: 44)
-                            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                         sectionPicker
                     }
                     .font(.body)
-                    .buttonStyle(.borderless)
+                    .buttonStyle(ShoppingToolButtonStyle())
                     .tint(Color(uiColor: .label))
                     .foregroundStyle(Color(uiColor: .label))
                     .frame(minHeight: 44)
@@ -496,14 +496,18 @@ if reordering {
                     }
                 }
                 .padding(.leading, 48)
+                .padding(.trailing, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
         }
+        .padding(.vertical, hasNewName ? 8 : 4)
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
         .id("new-item")
         .selectionDisabled(true)
          .listRowBackground(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(hasNewName ? Color(uiColor: .secondarySystemBackground) : Color.clear)
                 .padding(.horizontal, 8)
         )
@@ -518,8 +522,7 @@ if reordering {
                 Button(section) { addingToSection = section }
             }
         } label: {
-            Label(addingToSection ?? "מקטע", systemImage: "square.grid.2x2")
-                .lineLimit(1)
+            Image(systemName: "square.grid.2x2")
         }
         .accessibilityLabel("בחירת מקטע למוצר חדש")
         .accessibilityValue(addingToSection ?? "אוטומטי")
@@ -588,7 +591,7 @@ if reordering {
             .disabled(true)
             #endif
         } label: {
-            Image(systemName: "ellipsis.circle").font(.title3)
+            Image(systemName: "ellipsis").font(.title3)
         }
         .accessibilityLabel("אפשרויות נוספות")
     }
@@ -630,13 +633,16 @@ if reordering {
                     if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
+                    Text(section)
+                        .font(.headline)
+                        .foregroundStyle(Color(uiColor: .label))
+                    Spacer(minLength: 8)
                     Image(systemName: collapsedSections.contains(section) ? "chevron.left" : "chevron.down")
                         .font(.caption.weight(.semibold))
-                    Text(section).font(.headline).foregroundStyle(listTint)
-                    Text("\(items(in: section).count)").font(.subheadline).foregroundStyle(Color(uiColor: .secondaryLabel))
-                    Spacer()
+                        .foregroundStyle(Color(uiColor: .secondaryLabel))
                 }
+                .padding(.leading, 48)
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
@@ -644,15 +650,15 @@ if reordering {
 
         }
         .buttonStyle(.plain)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
         if let product = store.product(for: item.productID) {
             VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
+            HStack(alignment: .top, spacing: 4) {
                 if !editMode.isEditing {
                 Button {
                     guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
@@ -673,6 +679,7 @@ if reordering {
                     if editingNameID == item.id {
                         HStack(spacing: 4) {
                         TextField("שם המוצר", text: $editedName)
+                            .tint(listTint)
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.done)
                             .onSubmit { finishRename(item) }
@@ -681,7 +688,11 @@ if reordering {
                         .frame(minHeight: 44)
                     } else if editMode.isEditing {
                         HStack(spacing: 6) {
-                            Text(product.name).foregroundStyle(Color(uiColor: .label))
+                            Text(product.name)
+                                    .font(.body)
+                                    .foregroundStyle(Color(uiColor: .label))
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
                             if item.isUrgent {
                                 Image(systemName: "flag.fill")
                                     .foregroundStyle(.orange)
@@ -700,7 +711,11 @@ if reordering {
                             }
                         } label: {
                             HStack(spacing: 6) {
-                                Text(product.name).foregroundStyle(Color(uiColor: .label))
+                                Text(product.name)
+                                    .font(.body)
+                                    .foregroundStyle(Color(uiColor: .label))
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 if item.isUrgent {
                                     Image(systemName: "flag.fill")
                                         .font(.caption)
@@ -708,12 +723,13 @@ if reordering {
                                         .accessibilityLabel("דחוף")
                                 }
                             }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                     if editingNameID != item.id, let note = item.note, !note.isEmpty {
-                        Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(note).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 if item.photoData != nil || item.photoFilename != nil {
@@ -735,14 +751,16 @@ if reordering {
                         }
                     }
                     .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
                     .buttonStyle(.plain)
-                    .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-                    .padding(.leading, 6)
+                    .frame(minWidth: 44, maxWidth: 130, minHeight: 44, alignment: .trailing)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.leading, 8)
                     .disabled(editMode.isEditing)
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                     .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
-                Spacer(minLength: 0)
                 if editingNameID == item.id {
                     Button("פרטי מוצר", systemImage: "info.circle") {
                         saveRename(item)
@@ -755,12 +773,14 @@ if reordering {
             }
             if editingNameID == item.id && !editMode.isEditing {
                 ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded)
-                    .padding(.leading, 42)
+                    .padding(.leading, 48)
+                    .padding(.trailing, 12)
                     .transition(.identity)
             }
             }
+            .padding(.vertical, editingNameID == item.id ? 8 : 4)
             .listRowBackground(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
                     .padding(.horizontal, 8)
             )
@@ -987,20 +1007,21 @@ struct ItemInlineDetails: View {
                 ))
             }
             TextField("הערה למוצר…", text: $note, axis: .vertical)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .lineLimit(1...3)
                 .onChange(of: note) { _, value in store.updateNote(of: item, to: value) }
                 .accessibilityIdentifier("itemNoteField")
                 .onChange(of: item.note) { _, value in
                     if note != (value ?? "") { note = value ?? "" }
                 }
-            HStack {
+            HStack(spacing: 8) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף", systemImage: item.isUrgent ? "flag.fill" : "flag") {
                     store.toggleUrgent(item)
                 }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(item.isUrgent ? Color.orange : Color(uiColor: .label))
                 .frame(minWidth: 44, minHeight: 44)
-                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 if item.photoData != nil || item.photoFilename != nil {
                     Button { showingPhoto = true } label: {
                         ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
@@ -1014,15 +1035,12 @@ struct ItemInlineDetails: View {
                             if allowed { showingCamera = true } else { cameraDenied = true }
                         }
                     }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
                 .labelStyle(.iconOnly)
                 .frame(minWidth: 44, minHeight: 44)
-                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
-                .buttonStyle(.borderless)
                 .onChange(of: selectedPhoto) { _, selection in
                     guard let selection else { return }
                     Task {
@@ -1038,7 +1056,10 @@ struct ItemInlineDetails: View {
                     .labelStyle(.iconOnly)
                 }
             }
-            .font(.subheadline)
+            .font(.body)
+            .tint(Color(uiColor: .label))
+            .foregroundStyle(Color(uiColor: .label))
+            .buttonStyle(ShoppingToolButtonStyle())
         }
         .buttonStyle(.borderless)
         .padding(.vertical, 8)
