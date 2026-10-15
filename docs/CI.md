@@ -12,4 +12,4 @@ Measure runtime from completed jobs before promising a fixed minute saving. Simu
 
 For a deliberate phone/tablet UI review, choose `layout` in the manual workflow or include `[ui:layout]` in a PR title before opening it. This opts into two simulator jobs: the shopping and editor-focus flows on iPhone, and the editor-focus/inspector flow on iPad. Ordinary PRs and pushes still skip simulator UI tests. Screenshot artifacts are named per device.
 
-Simulator UI jobs disable debugger attachment in their generated scheme while retaining XCTest assertions and screenshots. This avoids the runner’s LLDB launch stall; local Xcode schemes retain normal debugging. UI test output is streamed to make startup delays distinguishable from test failures.
+Simulator UI jobs use the explicit `ProbablyGroceriesUI` scheme: only the UI test target, with debugger attachment disabled, retaining XCTest assertions and screenshots. The ordinary `ProbablyGroceries` scheme retains local debugging and both test targets. UI test output is streamed to make startup delays distinguishable from test failures.
