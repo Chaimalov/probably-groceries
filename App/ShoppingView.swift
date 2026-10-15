@@ -135,6 +135,14 @@ struct ShoppingView: View {
                     if showsSections {
                         ForEach(sectionNames, id: \.self) { section in
                             Section {
+                                sectionHeader(section)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
+                                    .selectionDisabled(true)
+                                    .background {
+                                        nativeDrag(.section(section), section: section)
+                                    }
                                 if !collapsedSections.contains(section) {
                                     ForEach(items(in: section)) { item in
                                         itemRow(item)
@@ -146,13 +154,6 @@ struct ShoppingView: View {
                                         store.move(from: source, to: destination, inSection: section)
                                     }
                                 }
-                            } header: {
-                                sectionHeader(section)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                    .textCase(nil)
-                                    .background {
-                                        nativeDrag(.section(section), section: section)
-                                    }
                             }
                             .listSectionSeparator(.hidden, edges: .all)
                         }
@@ -221,7 +222,6 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
-                .listRowBackground(Color.clear)
                 .scrollContentBackground(.hidden)
                 .background(Color(uiColor: .systemGroupedBackground))
                 .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
@@ -668,7 +668,6 @@ if reordering {
         .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
         .padding(.top, 16)
         .padding(.bottom, 3)
-        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     @ViewBuilder
