@@ -720,7 +720,7 @@ if reordering {
                             editingNameID = item.id
                             quantityExpanded = false
                         }
-                        updateEditor { quantityExpanded.toggle() }
+                        updateEditor { quantityExpanded = true }
                     }
                     .font(.subheadline).foregroundStyle(.secondary)
                     .buttonStyle(.plain)

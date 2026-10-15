@@ -202,7 +202,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         draftNote.tap()
         draftNote.typeText("Original note")
         app.buttons["סיום עריכה"].tap()
-        let buy = app.buttons["נקנה " + name]
+        let buy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", name)).firstMatch
         XCTAssertTrue(buy.waitForExistence(timeout: 5), "Done must commit a nonempty draft")
         XCTAssertFalse(field.exists, "A finished editor must leave no permanent input row")
         app.buttons[name].tap()
@@ -234,7 +234,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons[updated].tap()
         XCTAssertEqual(app.descendants(matching: .any)["itemNoteField"].value as? String, "Original note Updated")
         app.buttons["סיום עריכה"].tap()
-        app.buttons["נקנה " + updated].tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", updated)).firstMatch.tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 5))
         app.buttons.matching(identifier: "ביטול").firstMatch.tap()
         XCTAssertTrue(app.buttons[updated].waitForExistence(timeout: 5))
