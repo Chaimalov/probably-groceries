@@ -268,7 +268,7 @@ struct ShoppingView: View {
 
             }
             .navigationTitle(store.currentList.name)
-            .navigationBarTitleDisplayMode(isAdding || editingNameID != nil ? .inline : .large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { listPicker.tint(listTint) }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu.tint(Color(uiColor: .label)) }
