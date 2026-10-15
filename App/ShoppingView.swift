@@ -221,6 +221,7 @@ struct ShoppingView: View {
                     }
                 }
                 .listStyle(.plain)
+                .listRowBackground(Color.clear)
                 .scrollContentBackground(.hidden)
                 .background(Color(uiColor: .systemGroupedBackground))
                 .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
@@ -518,7 +519,7 @@ if reordering {
         .selectionDisabled(true)
          .listRowBackground(Color.clear)
         .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
@@ -658,17 +659,16 @@ if reordering {
                     .rotationEffect(.degrees(collapsedSections.contains(section) ? 90 : 0))
                     .frame(width: 18, height: 18)
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 42)
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .padding(.horizontal, 4)
+            .frame(minHeight: 38)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
         .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
-        .padding(.top, 9)
-        .padding(.bottom, 5)
+        .padding(.top, 16)
+        .padding(.bottom, 3)
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     @ViewBuilder
@@ -799,11 +799,10 @@ if reordering {
                     .transition(.identity)
             }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 4)
             .padding(.vertical, editingNameID == item.id ? 8 : 2)
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .padding(.vertical, 1)
+            .background(editingNameID == item.id ? Color(uiColor: .secondarySystemGroupedBackground) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .listRowBackground(Color.clear)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
