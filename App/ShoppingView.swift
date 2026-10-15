@@ -269,6 +269,13 @@ struct ShoppingView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { listPicker }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
+                if !editMode.isEditing && (isAdding || editingNameID != nil) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
+                            .labelStyle(.iconOnly)
+                            .keyboardShortcut(.return, modifiers: .command)
+                    }
+                }
                 if editMode.isEditing {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום") {
@@ -376,14 +383,7 @@ if reordering {
                             }
                             .disabled(selectedItemIDs.isEmpty)
                         }
-                    } else if isAdding || editingNameID != nil {
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
-                                .labelStyle(.iconOnly)
-                                .keyboardShortcut(.return, modifiers: .command)
-                        }
-                    } else {
+                    } else if !isAdding && editingNameID == nil {
                         ToolbarSpacer(.flexible, placement: .bottomBar)
                         ToolbarItem(placement: .bottomBar) {
                             Button("מוצר חדש", systemImage: "plus") {
@@ -492,6 +492,8 @@ if reordering {
                 .padding(.leading, 48)
             }
         }
+        // Automatic List button styling makes multiple row buttons fire together.
+        .buttonStyle(.borderless)
         .id("new-item")
         .selectionDisabled(true)
          .listRowBackground(

@@ -130,6 +130,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
     }
 
     func testInlineAddEnterPurchaseUndoAndPersistence() {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
         app.launch()
