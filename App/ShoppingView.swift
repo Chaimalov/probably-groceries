@@ -267,7 +267,7 @@ struct ShoppingView: View {
             .navigationTitle(store.currentList.name)
             .navigationBarTitleDisplayMode(isAdding || editingNameID != nil ? .inline : .large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { listPicker.tint(Color(uiColor: .label)) }
+                ToolbarItem(placement: .topBarLeading) { listPicker.tint(listTint) }
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu.tint(Color(uiColor: .label)) }
                 if !editMode.isEditing && (isAdding || editingNameID != nil) {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -633,7 +633,7 @@ if reordering {
                 HStack {
                     Image(systemName: collapsedSections.contains(section) ? "chevron.left" : "chevron.down")
                         .font(.caption.weight(.semibold))
-                    Text(section).font(.headline).foregroundStyle(Color(uiColor: .label))
+                    Text(section).font(.headline).foregroundStyle(listTint)
                     Text("\(items(in: section).count)").font(.subheadline).foregroundStyle(Color(uiColor: .secondaryLabel))
                     Spacer()
                 }
@@ -644,8 +644,8 @@ if reordering {
 
         }
         .buttonStyle(.plain)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
     @ViewBuilder
@@ -661,9 +661,9 @@ if reordering {
                     if reduceMotion { store.buy(item) }
                     else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
                 } label: {
-                    Image(systemName: "circle")
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundStyle(Color(uiColor: .tertiaryLabel))
+                    Circle()
+                        .strokeBorder(listTint, lineWidth: 2)
+                        .frame(width: 24, height: 24)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
@@ -737,6 +737,7 @@ if reordering {
                     .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
                     .buttonStyle(.plain)
                     .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                    .padding(.leading, 6)
                     .disabled(editMode.isEditing)
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                     .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
@@ -758,7 +759,6 @@ if reordering {
                     .transition(.identity)
             }
             }
-            .padding(.vertical, 3)
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(editingNameID == item.id ? Color(uiColor: .secondarySystemBackground) : Color.clear)
