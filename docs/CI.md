@@ -15,3 +15,5 @@ For a deliberate phone/tablet UI review, choose `layout` in the manual workflow 
 Simulator UI jobs use the explicit `ProbablyGroceriesUI` scheme: only the UI test target, with debugger attachment disabled, retaining XCTest assertions and screenshots. The ordinary `ProbablyGroceries` scheme retains local debugging and both test targets. UI test output is streamed to make startup delays distinguishable from test failures.
 
 UI jobs pass `-collect-test-diagnostics never`: failures still retain XCTest results and screenshots, but skip the simulator-wide sysdiagnose that can keep Xcode running long after the test verdict. In the October 15 iPad run, the assertion finished at 06:09:21 while diagnostics continued until the 06:15:55 timeout.
+
+UI jobs explicitly await simulator boot before starting XCTest, so app launch does not race the cold simulator’s system services.
