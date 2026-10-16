@@ -4,7 +4,12 @@ struct GroceryWidgetSnapshot: Codable {
     struct Row: Codable, Identifiable {
         let id: UUID
         let name: String
+        let unit: String?
         let quantity: Int
+
+        init(id: UUID, name: String, quantity: Int, unit: String? = nil) {
+            self.id = id; self.name = name; self.quantity = quantity; self.unit = unit
+        }
     }
     let listID: UUID
     let title: String
