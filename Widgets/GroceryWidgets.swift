@@ -60,8 +60,9 @@ struct GroceryProvider: AppIntentTimelineProvider {
 
     private func selected(_ configuration: GroceryWidgetConfiguration) -> GroceryWidgetSnapshot? {
         let all = GroceryWidgetBridge.readAll()
-        if let id = configuration.list?.id,
-           let snapshot = all.first(where: { $0.listID.uuidString == id }) { return snapshot }
+        if let id = configuration.list?.id {
+            return all.first(where: { $0.listID.uuidString == id })
+        }
         return GroceryWidgetBridge.read() ?? all.first
     }
 }
@@ -72,6 +73,9 @@ struct GroceryWidgetView: View {
 
     private var tint: Color {
         switch entry.snapshot?.tintName {
+        case "mint": .mint
+        case "teal": .teal
+        case "indigo": .indigo
         case "blue": .blue
         case "orange": .orange
         case "red": .red
@@ -114,8 +118,8 @@ struct GroceryWidgetView: View {
                                 .foregroundStyle(tint.opacity(0.8))
                             Text(row.name).lineLimit(1)
                             Spacer(minLength: 0)
-                            if row.quantity > 1 {
-                                Text("×\(row.quantity)")
+                            if row.quantity > 1 || row.unit != nil {
+                                Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -146,7 +150,7 @@ struct GroceryWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.layoutDirection, .rightToLeft)
         .containerBackground(.background, for: .widget)
-        .widgetURL(URL(string: "probablygroceries://open"))
+        .widgetURL(entry.snapshot.map { URL(string: "probablygroceries://list/\($0.listID.uuidString)")! })
     }
 }
 
