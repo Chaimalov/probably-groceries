@@ -16,10 +16,23 @@ struct GroceryWidgetSnapshot: Codable {
 enum GroceryWidgetBridge {
     static let suite = "group.com.chaimalov.probablygroceries"
     static let key = "groceryWidgetSnapshot"
+    static let allKey = "groceryWidgetSnapshots"
 
     static func read() -> GroceryWidgetSnapshot? {
         guard let data = UserDefaults(suiteName: suite)?.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(GroceryWidgetSnapshot.self, from: data)
+    }
+
+    static func readAll() -> [GroceryWidgetSnapshot] {
+        guard let data = UserDefaults(suiteName: suite)?.data(forKey: allKey) else {
+            return read().map { [$0] } ?? []
+        }
+        return (try? JSONDecoder().decode([GroceryWidgetSnapshot].self, from: data)) ?? []
+    }
+
+    static func publishAll(_ snapshots: [GroceryWidgetSnapshot]) {
+        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+        UserDefaults(suiteName: suite)?.set(data, forKey: allKey)
     }
 
     static func publish(_ snapshot: GroceryWidgetSnapshot) {
