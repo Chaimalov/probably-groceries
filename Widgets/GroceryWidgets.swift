@@ -91,7 +91,7 @@ struct GroceryWidgetView: View {
             if family == .systemMedium {
                 HStack {
                     Spacer()
-                    Link(destination: URL(string: "probablygroceries://add")!) {
+                    Link(destination: URL(string: "probablygroceries://add/\(snapshot?.listID.uuidString ?? "")")!) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                             .foregroundStyle(tint)
