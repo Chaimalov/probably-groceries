@@ -33,6 +33,9 @@ targets:
         UILaunchScreen: {}
         NSCameraUsageDescription: צילום מוצר כדי לעזור לזהות אותו ברשימת הקניות
         CKSharingSupported: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - probablygroceries
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
