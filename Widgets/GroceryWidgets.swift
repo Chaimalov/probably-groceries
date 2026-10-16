@@ -64,7 +64,7 @@ struct GroceryWidgetView: View {
                     .foregroundStyle(.secondary)
             } else if let snapshot, !snapshot.rows.isEmpty {
                 ForEach(snapshot.rows.prefix(4)) { row in
-                    Link(destination: URL(string: "probablygroceries://list/\(snapshot.listID.uuidString)/item/\(row.id.uuidString)")!) {
+                    Button(intent: BuyGroceryIntent(itemID: row.id.uuidString)) {
                         HStack(spacing: 9) {
                             Image(systemName: "circle")
                                 .foregroundStyle(tint.opacity(0.8))
@@ -77,7 +77,7 @@ struct GroceryWidgetView: View {
                         }
                         .font(.subheadline)
                     }
-                    .tint(.primary)
+                    .buttonStyle(.plain)
                 }
                 Spacer(minLength: 0)
             } else {
