@@ -655,15 +655,30 @@ final class ShoppingStore: ObservableObject {
 
     private func publishWidgetSnapshot() {
         guard !loadFailed else { return }
-        let list = currentList
-        let rows = items.map { item in
-            GroceryWidgetSnapshot.Row(id: item.id,
-                                      name: product(for: item.productID)?.name ?? "מוצר",
-                                      quantity: item.quantity)
+        let snapshots = data.lists.map { list in
+            let rows = data.items.filter { $0.listID == list.id }
+                .sorted {
+                    switch ($0.manualOrder, $1.manualOrder) {
+                    case let (a?, b?) where a != b: return a < b
+                    case (_?, nil): return true
+                    case (nil, _?): return false
+                    default: return $0.addedAt < $1.addedAt
+                    }
+                }
+                .map { item in
+                    GroceryWidgetSnapshot.Row(
+                        id: item.id,
+                        name: data.products.first(where: { $0.id == item.productID })?.name ?? "מוצר",
+                        quantity: item.quantity)
+                }
+            return GroceryWidgetSnapshot(
+                listID: list.id, title: list.name, tintName: list.tintName,
+                total: rows.count, rows: Array(rows.prefix(4)))
         }
-        GroceryWidgetBridge.publish(GroceryWidgetSnapshot(
-            listID: list.id, title: list.name, tintName: list.tintName,
-            total: rows.count, rows: Array(rows.prefix(4))))
+        GroceryWidgetBridge.publishAll(snapshots)
+        if let selected = snapshots.first(where: { $0.listID == selectedListID }) {
+            GroceryWidgetBridge.publish(selected)
+        }
         WidgetCenter.shared.reloadTimelines(ofKind: "GroceryWidgets")
     }
 
