@@ -708,8 +708,14 @@ if reordering {
         } label: {
             HStack(spacing: 8) {
                 Text(section)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                if collapsedSections.contains(section) {
+                    Text("\(items(in: section).count)")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 8)
                 Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
                     .font(.caption.weight(.semibold))
