@@ -19,8 +19,11 @@ struct BuyGroceryIntent: AppIntent {
             return .result()
         }
         let request = ["itemID": itemID, "requestedAt": String(Date().timeIntervalSince1970)]
-        // Store the newest request. The app verifies the row still exists.
-        defaults.set(request, forKey: "pendingWidgetPurchase")
+        // Preserve rapid check-offs instead of overwriting the previous tap.
+        var pending = defaults.array(forKey: "pendingWidgetPurchases") as? [[String: String]] ?? []
+        pending.removeAll { $0["itemID"] == itemID }
+        pending.append(request)
+        defaults.set(Array(pending.suffix(50)), forKey: "pendingWidgetPurchases")
         return .result()
     }
 }
