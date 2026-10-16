@@ -168,7 +168,7 @@ struct GroceryWidgetView: View {
                 HStack(spacing: 5) {
                     Text(row.name).font(.body).lineLimit(1)
                     Spacer(minLength: 2)
-                    if row.quantity > 1 || row.unit != nil {
+                    if family != .systemExtraLarge && (row.quantity > 1 || row.unit != nil) {
                         Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
                             .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
@@ -178,7 +178,29 @@ struct GroceryWidgetView: View {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("עריכת \(row.name)")
+            if family == .systemExtraLarge {
+                quantityButton(row, listID: listID, delta: -1)
+                    .disabled(row.quantity <= 1)
+                Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
+                    .font(.subheadline).monospacedDigit().lineLimit(1)
+                    .frame(minWidth: 20)
+                quantityButton(row, listID: listID, delta: 1)
+                    .disabled(row.quantity >= 9999)
+            }
         }
+    }
+
+    private func quantityButton(_ row: GroceryWidgetSnapshot.Row, listID: UUID, delta: Int) -> some View {
+        Button(intent: AdjustGroceryQuantityIntent(itemID: row.id.uuidString,
+               listID: listID.uuidString, delta: delta)) {
+            Image(systemName: delta > 0 ? "plus" : "minus")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 32, height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(delta > 0 ? "הגדלת" : "הקטנת") הכמות של \(row.name)")
     }
 
     private func footer(_ snapshot: GroceryWidgetSnapshot, page: WidgetPage, capacity: Int) -> some View {
