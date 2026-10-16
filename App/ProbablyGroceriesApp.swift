@@ -73,18 +73,21 @@ struct ProbablyGroceriesApp: App {
 
     private func processWidgetPurchase() {
         let defaults = UserDefaults(suiteName: GroceryWidgetBridge.suite)
-        guard let request = defaults?.dictionary(forKey: "pendingWidgetPurchase") as? [String: String],
-              let value = request["itemID"],
-              let id = UUID(uuidString: value) else { return }
-        defaults?.removeObject(forKey: "pendingWidgetPurchase")
-        guard let rawTime = request["requestedAt"],
-              let timestamp = Double(rawTime),
-              Date().timeIntervalSince1970 - timestamp < 120,
-              Date().timeIntervalSince1970 >= timestamp - 10 else { return }
-        // Only act on a still-active row; repeated check-offs are idempotent.
-        guard let item = store.data.items.first(where: { $0.id == id }) else { return }
-        store.selectList(item.listID)
-        store.buy(item)
+        guard let requests = defaults?.array(forKey: "pendingWidgetPurchases") as? [[String: String]],
+              !requests.isEmpty else { return }
+        defaults?.removeObject(forKey: "pendingWidgetPurchases")
+        let now = Date().timeIntervalSince1970
+        for request in requests {
+            guard let value = request["itemID"],
+                  let id = UUID(uuidString: value),
+                  let rawTime = request["requestedAt"],
+                  let timestamp = Double(rawTime),
+                  now - timestamp < 120, now >= timestamp - 10 else { continue }
+            // Duplicate requests cannot purchase a row more than once.
+            guard let item = store.data.items.first(where: { $0.id == id }) else { continue }
+            store.selectList(item.listID)
+            store.buy(item)
+        }
     }
 
     private func acceptPending() {
