@@ -5,6 +5,13 @@ import WidgetKit
 
 @MainActor
 final class ShoppingStore: ObservableObject {
+    static let shared = ShoppingStore()
+    struct WidgetNavigation: Identifiable {
+        let id = UUID()
+        var itemID: UUID? = nil
+    }
+    @Published var widgetNavigation: WidgetNavigation?
+
     @Published private(set) var data: ShoppingData
     @Published private(set) var selectedListID: UUID
     @Published private(set) var storageError: String?
@@ -140,9 +147,11 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    var items: [ShoppingItem] {
-        let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
-        return data.items.filter { $0.listID == selectedListID }.sorted { left, right in
+    var items: [ShoppingItem] { orderedItems(in: selectedListID) }
+
+    private func orderedItems(in listID: UUID) -> [ShoppingItem] {
+        let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == listID })
+        return data.items.filter { $0.listID == listID }.sorted { left, right in
             switch (left.manualOrder, right.manualOrder) {
             case let (a?, b?) where a != b: return a < b
             case (_?, nil): return true
@@ -508,9 +517,10 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
-        let originalOrder = items.firstIndex(where: { $0.id == current.id })
-        // Freeze the remaining route before new learning changes positions.
-        for (order, visible) in items.enumerated() {
+        let route = orderedItems(in: current.listID)
+        let originalOrder = route.firstIndex(where: { $0.id == current.id })
+        // Freeze this item's list, even if a widget targets a different list.
+        for (order, visible) in route.enumerated() {
             if let index = data.items.firstIndex(where: { $0.id == visible.id }) {
                 data.items[index].manualOrder = order
             }
@@ -682,7 +692,7 @@ final class ShoppingStore: ObservableObject {
                 }
             return GroceryWidgetSnapshot(
                 listID: list.id, title: list.name, tintName: list.tintName,
-                total: rows.count, rows: Array(rows.prefix(4)))
+                total: rows.count, rows: rows)
         }
         GroceryWidgetBridge.publishAll(snapshots)
         if let selected = snapshots.first(where: { $0.listID == selectedListID }) {

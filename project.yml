@@ -9,7 +9,7 @@ targets:
     platform: iOS
     sources:
       - App
-      - Shared/GroceryWidgetSnapshot.swift
+      - Shared
     dependencies:
       - target: GroceryWidgets
         embed: true
@@ -58,7 +58,7 @@ targets:
     platform: iOS
     sources:
       - Widgets
-      - Shared/GroceryWidgetSnapshot.swift
+      - Shared
     entitlements:
       path: Widgets/GroceryWidgets.entitlements
       properties:
@@ -74,6 +74,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
         PRODUCT_BUNDLE_IDENTIFIER: com.chaimalov.probablygroceries.widgets
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
@@ -109,6 +110,9 @@ targets:
       - App/SyncJournal.swift
       - App/SharedListBinding.swift
       - Tests/SharedListBindingTests.swift
+      - Shared/WidgetPage.swift
+      - Shared/GroceryWidgetSnapshot.swift
+      - Tests/WidgetDataTests.swift
     dependencies:
       - target: ProbablyGroceries
     settings:

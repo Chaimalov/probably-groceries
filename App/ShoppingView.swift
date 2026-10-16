@@ -77,10 +77,6 @@ struct ShoppingView: View {
                 shoppingContent
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .groceryWidgetAdd)) { _ in
-            isAdding = true
-            Task { @MainActor in addFocused = true }
-        }
     }
 
     private var listSidebar: some View {
@@ -285,6 +281,36 @@ struct ShoppingView: View {
                     }
                 }
                 .toolbar { bottomActions(scroll) }
+                .task(id: store.widgetNavigation?.id) {
+                    guard let request = store.widgetNavigation else { return }
+                    // Resolve after list-switch handlers have finished, including cold launches.
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    defer {
+                        if store.widgetNavigation?.id == request.id { store.widgetNavigation = nil }
+                    }
+                    closeEditor()
+                    placeFilter = "הכול"
+                    editMode = .inactive
+                    reordering = false
+                    if let id = request.itemID,
+                       let item = store.items.first(where: { $0.id == id }),
+                       let product = store.product(for: item.productID) {
+                        collapsedSections.remove(store.section(for: item))
+                        updateEditor {
+                            editedName = product.name
+                            originalEditedName = product.name
+                            editingNameID = item.id
+                            quantityExpanded = true
+                            nameFocused = item.id
+                        }
+                        await Task.yield()
+                        scroll.scrollTo(item.id, anchor: .center)
+                    } else if request.itemID == nil {
+                        beginAdding()
+                        addFocused = true
+                    }
+                }
 
             }
             .navigationTitle(store.currentList.name)
@@ -682,8 +708,14 @@ if reordering {
         } label: {
             HStack(spacing: 8) {
                 Text(section)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                if collapsedSections.contains(section) {
+                    Text("\(items(in: section).count)")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 8)
                 Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
                     .font(.caption.weight(.semibold))

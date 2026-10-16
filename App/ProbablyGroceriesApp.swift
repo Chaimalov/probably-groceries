@@ -3,10 +3,8 @@ import SwiftUI
 @main
 struct ProbablyGroceriesApp: App {
     @UIApplicationDelegateAdaptor(SharingAppDelegate.self) private var appDelegate
-    @StateObject private var store = ShoppingStore()
+    @StateObject private var store = ShoppingStore.shared
     @StateObject private var invitations = ShareInvitationInbox.shared
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var widgetPurchaseWatcher: Task<Void, Never>?
     @State private var accepting = false
     @State private var invitationError: String?
 
@@ -33,20 +31,20 @@ struct ProbablyGroceriesApp: App {
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
                 .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
-                .onAppear { watchWidgetPurchases() }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { watchWidgetPurchases() }
-                    else { widgetPurchaseWatcher?.cancel() }
-                }
                 .onOpenURL { url in
                     guard url.scheme == "probablygroceries" else { return }
                     let parts = url.pathComponents.filter { $0 != "/" }
                     if url.host == "list", let id = parts.first.flatMap(UUID.init(uuidString:)) {
                         store.selectList(id)
                     }
+                    if url.host == "edit", let id = parts.first.flatMap(UUID.init(uuidString:)),
+                       let item = store.data.items.first(where: { $0.id == id }) {
+                        store.selectList(item.listID)
+                        store.widgetNavigation = ShoppingStore.WidgetNavigation(itemID: id)
+                    }
                     if url.host == "add" {
                         if let id = parts.first.flatMap(UUID.init(uuidString:)) { store.selectList(id) }
-                        NotificationCenter.default.post(name: .groceryWidgetAdd, object: nil)
+                        store.widgetNavigation = ShoppingStore.WidgetNavigation()
                     }
                 }
                 .alert("לא ניתן להצטרף כרגע", isPresented: Binding(
@@ -55,38 +53,6 @@ struct ProbablyGroceriesApp: App {
                     Button("ניסיון נוסף") { invitations.retry() }
                     Button("מאוחר יותר", role: .cancel) {}
                 } message: { Text(invitationError ?? "") }
-        }
-    }
-
-    private func watchWidgetPurchases() {
-        widgetPurchaseWatcher?.cancel()
-        widgetPurchaseWatcher = Task { @MainActor in
-            // AppIntent can finish after the app has already become active.
-            // Short-lived polling closes that launch race without a permanent timer.
-            for _ in 0..<40 {
-                guard !Task.isCancelled else { return }
-                processWidgetPurchase()
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-        }
-    }
-
-    private func processWidgetPurchase() {
-        let defaults = UserDefaults(suiteName: GroceryWidgetBridge.suite)
-        guard let requests = defaults?.array(forKey: "pendingWidgetPurchases") as? [[String: String]],
-              !requests.isEmpty else { return }
-        defaults?.removeObject(forKey: "pendingWidgetPurchases")
-        let now = Date().timeIntervalSince1970
-        for request in requests {
-            guard let value = request["itemID"],
-                  let id = UUID(uuidString: value),
-                  let rawTime = request["requestedAt"],
-                  let timestamp = Double(rawTime),
-                  now - timestamp < 120, now >= timestamp - 10 else { continue }
-            // Duplicate requests cannot purchase a row more than once.
-            guard let item = store.data.items.first(where: { $0.id == id }) else { continue }
-            store.selectList(item.listID)
-            store.buy(item)
         }
     }
 
@@ -103,9 +69,4 @@ struct ProbablyGroceriesApp: App {
             }
         }
     }
-}
-
-
-extension Notification.Name {
-    static let groceryWidgetAdd = Notification.Name("groceryWidgetAdd")
 }
