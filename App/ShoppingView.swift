@@ -109,17 +109,17 @@ struct ShoppingView: View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
-                    listIntroduction
-                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 16, trailing: 20))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .selectionDisabled(true)
-                    if store.items.isEmpty && !isAdding {
-                        ContentUnavailableView {
-                            Label("מקום לכל מה שצריך", systemImage: "basket")
-                        } description: {
-                            Text("מוסיפים כאן דברים שנגמרו בבית, וקונים יחד מתוך אותה רשימה.")
+                    if store.items.isEmpty && !isAdding && !reordering {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("הרשימה פנויה")
+                                .font(.title3.weight(.semibold))
+                            Text("אפשר להוסיף מוצר או להכין את הקנייה הבאה.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 20)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .selectionDisabled(true)
@@ -638,7 +638,11 @@ if reordering {
     }
 
     private var sectionNames: [String] {
-        allSectionNames.filter { showEmptySections || reordering || !items(in: $0).isEmpty }
+        // An empty household list should not become a screen of empty categories.
+        // Explicit organization still exposes them as drag targets.
+        allSectionNames.filter {
+            reordering || !items(in: $0).isEmpty || (showEmptySections && !store.items.isEmpty)
+        }
     }
 
     private var allSectionNames: [String] {
@@ -656,20 +660,6 @@ if reordering {
         visibleItems.filter { store.section(for: $0) == section }
     }
 
-    private var listIntroduction: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(store.currentList.name)
-                .font(.largeTitle.bold())
-                .foregroundStyle(listTint)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Text(store.items.isEmpty ? "הרשימה שלנו" : "\(store.items.count) מוצרים לקנייה")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private func sectionHeader(_ section: String) -> some View {
         Button {
             withAnimation(reduceMotion ? nil : .snappy(duration: 0.22, extraBounce: 0)) {
@@ -678,14 +668,14 @@ if reordering {
         } label: {
             HStack(spacing: 8) {
                 Text(section)
-                    .font(.headline)
-                    .foregroundStyle(listTint)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            .padding(.leading, 56)
+            .padding(.leading, 4)
             .padding(.trailing, 8)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -693,7 +683,7 @@ if reordering {
         .buttonStyle(.plain)
         .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
         .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
-        .padding(.top, 6)
+        .padding(.top, 4)
     }
 
     @ViewBuilder
