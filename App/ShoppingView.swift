@@ -77,6 +77,10 @@ struct ShoppingView: View {
                 shoppingContent
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .groceryWidgetAdd)) { _ in
+            isAdding = true
+            Task { @MainActor in addFocused = true }
+        }
     }
 
     private var listSidebar: some View {
