@@ -93,7 +93,7 @@ final class ShoppingStore: ObservableObject {
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
         syncJournal.seed(loadedData)
         selectedListID = listID
-        publishWidgetSnapshot()
+        if !loadFailed { publishWidgetSnapshot() }
         migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
@@ -654,6 +654,7 @@ final class ShoppingStore: ObservableObject {
     }
 
     private func publishWidgetSnapshot() {
+        guard !loadFailed else { return }
         let list = currentList
         let rows = items.map { item in
             GroceryWidgetSnapshot.Row(id: item.id,
