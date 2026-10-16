@@ -74,6 +74,7 @@ struct GroceryProvider: AppIntentTimelineProvider {
 struct GroceryWidgetView: View {
     @Environment(\.widgetFamily) private var family
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var mediumRowHeight: CGFloat = 30
     let entry: GroceryEntry
 
     private var tint: Color {
@@ -91,6 +92,90 @@ struct GroceryWidgetView: View {
     }
 
     var body: some View {
+        Group {
+            if family == .systemMedium {
+                mediumWidget
+            } else {
+                expandedWidget
+            }
+        }
+        .environment(\.layoutDirection, .rightToLeft)
+        .containerBackground(.background, for: .widget)
+        .widgetURL(entry.snapshot.map { listURL($0.listID) })
+    }
+
+    private var mediumWidget: some View {
+        GeometryReader { geometry in
+            let snapshot = entry.snapshot
+            let capacity = min(4, max(1, Int(geometry.size.height / mediumRowHeight)))
+            HStack(alignment: .top, spacing: 16) {
+                // In RTL the summary occupies the right-hand edge, like Reminders.
+                VStack(alignment: .leading, spacing: 3) {
+                    Image(systemName: snapshot?.symbolName ?? "basket")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(tint, in: Circle())
+                        .widgetAccentable()
+                    Spacer(minLength: 4)
+                    Text("\(snapshot?.total ?? 0)")
+                        .font(.system(size: 38, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text(snapshot?.title ?? "קניות")
+                        .font(.headline).foregroundStyle(tint)
+                        .lineLimit(2)
+                }
+                .frame(width: min(108, max(78, geometry.size.width * 0.28)),
+                       height: geometry.size.height, alignment: .leading)
+
+                if let snapshot, !snapshot.rows.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(snapshot.rows.prefix(capacity))) { row in
+                            mediumRow(row, listID: snapshot.listID)
+                                .frame(height: geometry.size.height / CGFloat(capacity))
+                        }
+                        if snapshot.rows.count < capacity { Spacer(minLength: 0) }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    Text(snapshot == nil ? "פתחו את האפליקציה כדי להתחיל" : "הכול נקנה!")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func mediumRow(_ row: GroceryWidgetSnapshot.Row, listID: UUID) -> some View {
+        HStack(spacing: 7) {
+            Button(intent: BuyGroceryIntent(itemID: row.id.uuidString, listID: listID.uuidString)) {
+                Image(systemName: "circle")
+                    .font(.system(size: 25, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("סימון \(row.name) כנקנה")
+            Link(destination: URL(string: "probablygroceries://edit/\(row.id.uuidString)")!) {
+                HStack(spacing: 4) {
+                    Text(row.name).font(.body).lineLimit(1)
+                    if row.quantity > 1 || row.unit != nil {
+                        Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("עריכת \(row.name)")
+        }
+    }
+
+    private var expandedWidget: some View {
         GeometryReader { geometry in
             let columns = family == .systemExtraLarge ? 2 : 1
             let height = family == .systemMedium ? max(32, rowHeight - 8) : rowHeight
@@ -137,9 +222,6 @@ struct GroceryWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .environment(\.layoutDirection, .rightToLeft)
-        .containerBackground(.background, for: .widget)
-        .widgetURL(entry.snapshot.map { listURL($0.listID) })
     }
 
     private var header: some View {
