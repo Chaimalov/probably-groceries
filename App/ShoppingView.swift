@@ -43,7 +43,6 @@ struct ShoppingView: View {
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
-    @AppStorage("showEmptySections") private var showEmptySections = false
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -161,6 +160,7 @@ struct ShoppingView: View {
                                 if !collapsedSections.contains(section) {
                                     ForEach(items(in: section)) { item in
                                         itemRow(item)
+                                    .listRowBackground(Theme.canvas)
                                             .moveDisabled(!reordering)
                                             .listRowSeparator(.hidden, edges: .all)
                                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
@@ -176,6 +176,7 @@ struct ShoppingView: View {
                         Section {
                             ForEach(visibleItems) { item in
                                 itemRow(item)
+                                    .listRowBackground(Theme.canvas)
                                     .moveDisabled(!reordering)
                                     .listRowSeparator(.hidden, edges: .all)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
@@ -344,7 +345,10 @@ struct ShoppingView: View {
                 Button("יצירה") {
                     store.addSection(sectionName)
                     groupBySection = true
-                    showEmptySections = true
+                    closeEditor()
+                    selectedItemIDs.removeAll()
+                    reordering = true
+                    editMode = .active
                 }
                 Button("ביטול", role: .cancel) {}
             }
@@ -595,7 +599,6 @@ if reordering {
                 reordering = true
                 editMode = .active
             }
-            Toggle("הצגת מקטעים ריקים", systemImage: "rectangle.dashed", isOn: $showEmptySections)
             Toggle("הצגת נקנו לאחרונה", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
             Button("בחירת פריטים", systemImage: "checkmark.circle") {
@@ -641,7 +644,7 @@ if reordering {
         // An empty household list should not become a screen of empty categories.
         // Explicit organization still exposes them as drag targets.
         allSectionNames.filter {
-            reordering || !items(in: $0).isEmpty || (showEmptySections && !store.items.isEmpty)
+            reordering || !items(in: $0).isEmpty
         }
     }
 
@@ -658,6 +661,13 @@ if reordering {
 
     private func items(in section: String) -> [ShoppingItem] {
         visibleItems.filter { store.section(for: $0) == section }
+    }
+
+    private func quantityLabel(_ quantity: Int, unit: String?) -> String {
+        guard let unit, !unit.isEmpty else { return "×\(quantity)" }
+        let singular = ["יחידות": "יחידה", "חבילות": "חבילה", "ליטרים": "ליטר",
+                        "בקבוקים": "בקבוק", "קופסאות": "קופסה", "שקיות": "שקית", "גלילים": "גליל"]
+        return "\(quantity) \(quantity == 1 ? (singular[unit] ?? unit) : unit)"
     }
 
     private func sectionHeader(_ section: String) -> some View {
@@ -768,7 +778,7 @@ if reordering {
                     ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
                 }
                 if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
-                    Button("×\(item.quantity) \(item.unit ?? "")") {
+                    Button(quantityLabel(item.quantity, unit: item.unit)) {
                         if editingNameID != item.id {
                             if isAdding || editingNameID != nil { closeEditor() }
                             updateEditor {
@@ -782,17 +792,13 @@ if reordering {
                             updateEditor { quantityExpanded = true }
                         }
                     }
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Theme.control, in: Capsule())
-                    .lineLimit(1)
+                    .font(.body)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
                     .multilineTextAlignment(.trailing)
                     .buttonStyle(.plain)
-                    .frame(minWidth: 44, maxWidth: 170, minHeight: 44, alignment: .center)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.leading, 8)
+                    .frame(minWidth: 44, maxWidth: 110, minHeight: 44, alignment: .trailing)
                     .disabled(editMode.isEditing)
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                     .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
