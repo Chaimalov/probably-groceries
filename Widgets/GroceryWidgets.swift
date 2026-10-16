@@ -2,20 +2,39 @@ import SwiftUI
 import AppIntents
 import WidgetKit
 
+struct GroceryListEntity: AppEntity {
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "רשימת קניות"
+    static var defaultQuery = GroceryListQuery()
+
+    let id: String
+    let name: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(name)")
+    }
+}
+
+struct GroceryListQuery: EntityQuery {
+    func entities(for identifiers: [String]) async throws -> [GroceryListEntity] {
+        GroceryWidgetBridge.readAll()
+            .filter { identifiers.contains($0.listID.uuidString) }
+            .map { GroceryListEntity(id: $0.listID.uuidString, name: $0.title) }
+    }
+
+    func suggestedEntities() async throws -> [GroceryListEntity] {
+        GroceryWidgetBridge.readAll()
+            .map { GroceryListEntity(id: $0.listID.uuidString, name: $0.title) }
+    }
+}
+
 struct GroceryWidgetConfiguration: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "רשימת קניות"
     static var description = IntentDescription("בחירת הרשימה שתוצג")
 
-    @Parameter(title: "רשימה", optionsProvider: GroceryListOptions())
-    var listID: String?
+    @Parameter(title: "רשימה")
+    var list: GroceryListEntity?
 
     init() {}
-}
-
-struct GroceryListOptions: DynamicOptionsProvider {
-    func results() async throws -> [String] {
-        GroceryWidgetBridge.readAll().map { $0.listID.uuidString }
-    }
 }
 
 struct GroceryEntry: TimelineEntry {
@@ -41,7 +60,7 @@ struct GroceryProvider: AppIntentTimelineProvider {
 
     private func selected(_ configuration: GroceryWidgetConfiguration) -> GroceryWidgetSnapshot? {
         let all = GroceryWidgetBridge.readAll()
-        if let id = configuration.listID,
+        if let id = configuration.list?.id,
            let snapshot = all.first(where: { $0.listID.uuidString == id }) { return snapshot }
         return GroceryWidgetBridge.read() ?? all.first
     }
