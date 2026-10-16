@@ -6,6 +6,7 @@ struct ProbablyGroceriesApp: App {
     @StateObject private var store = ShoppingStore()
     @StateObject private var invitations = ShareInvitationInbox.shared
     @Environment(\.scenePhase) private var scenePhase
+    @State private var widgetPurchaseWatcher: Task<Void, Never>?
     @State private var accepting = false
     @State private var invitationError: String?
 
@@ -32,9 +33,10 @@ struct ProbablyGroceriesApp: App {
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
                 .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
-                .onAppear { processWidgetPurchase() }
+                .onAppear { watchWidgetPurchases() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { processWidgetPurchase() }
+                    if phase == .active { watchWidgetPurchases() }
+                    else { widgetPurchaseWatcher?.cancel() }
                 }
                 .onOpenURL { url in
                     guard url.scheme == "probablygroceries" else { return }
@@ -53,6 +55,19 @@ struct ProbablyGroceriesApp: App {
                     Button("ניסיון נוסף") { invitations.retry() }
                     Button("מאוחר יותר", role: .cancel) {}
                 } message: { Text(invitationError ?? "") }
+        }
+    }
+
+    private func watchWidgetPurchases() {
+        widgetPurchaseWatcher?.cancel()
+        widgetPurchaseWatcher = Task { @MainActor in
+            // AppIntent can finish after the app has already become active.
+            // Short-lived polling closes that launch race without a permanent timer.
+            for _ in 0..<40 {
+                guard !Task.isCancelled else { return }
+                processWidgetPurchase()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
         }
     }
 
