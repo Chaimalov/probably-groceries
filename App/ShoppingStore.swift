@@ -656,20 +656,29 @@ final class ShoppingStore: ObservableObject {
     private func publishWidgetSnapshot() {
         guard !loadFailed else { return }
         let snapshots = data.lists.map { list in
+            let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == list.id })
             let rows = data.items.filter { $0.listID == list.id }
                 .sorted {
                     switch ($0.manualOrder, $1.manualOrder) {
                     case let (a?, b?) where a != b: return a < b
                     case (_?, nil): return true
                     case (nil, _?): return false
-                    default: return $0.addedAt < $1.addedAt
+                    default: break
+                    }
+                    switch (positions[$0.productID], positions[$1.productID]) {
+                    case let (a?, b?) where a != b: return a < b
+                    case (_?, nil): return true
+                    case (nil, _?): return false
+                    default:
+                        if $0.addedAt != $1.addedAt { return $0.addedAt < $1.addedAt }
+                        return $0.id.uuidString < $1.id.uuidString
                     }
                 }
                 .map { item in
                     GroceryWidgetSnapshot.Row(
                         id: item.id,
                         name: data.products.first(where: { $0.id == item.productID })?.name ?? "מוצר",
-                        quantity: item.quantity)
+                        quantity: item.quantity, unit: item.unit)
                 }
             return GroceryWidgetSnapshot(
                 listID: list.id, title: list.name, tintName: list.tintName,
