@@ -1,4 +1,5 @@
 import SwiftUI
+import AppIntents
 import WidgetKit
 
 struct GroceryEntry: TimelineEntry {
