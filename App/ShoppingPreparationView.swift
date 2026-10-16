@@ -92,11 +92,14 @@ struct ShoppingPreparationView: View {
                     Text("האישור כולל את כל הרשימה").font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .listStyle(.plain)
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.canvas)
             .listRowSpacing(0)
             .listSectionSpacing(8)
             .environment(\.defaultMinListRowHeight, 44)
             .navigationTitle("קנייה חדשה")
+            .tint(Theme.tint(for: store.currentList.tintName))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("סגירה", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)

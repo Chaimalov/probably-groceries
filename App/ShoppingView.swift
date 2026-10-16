@@ -1,1111 +1,1 @@
-import SwiftUI
-import UIKit
-import PhotosUI
-import AVFoundation
-
-struct ShoppingView: View {
-    @ObservedObject var store: ShoppingStore
-    @State private var showingSharing = false
-    @State private var sharingListID: UUID?
-    @State private var isAdding = false
-    @State private var addingToSection: String?
-    @State private var newName = ""
-    @State private var newQuantity = 1
-    @State private var preserveRawInput = false
-    @State private var newQuantityOverridden = false
-    @State private var editedName = ""
-    @State private var quantityExpanded = false
-    @State private var newUnit: String?
-    @State private var newNote = ""
-    @State private var newUrgent = false
-    @State private var newPhotoData: Data?
-    @State private var newPhoto: PhotosPickerItem?
-    @State private var showingNewNote = false
-    @State private var originalEditedName = ""
-    @State private var editingCategory: ShoppingItem?
-    @State private var editingNameID: UUID?
-    @State private var showingHistory = false
-    @State private var showingPreparation = false
-    @State private var detailItem: ShoppingItem?
-    @State private var placeFilter = "×”×›×•×œ"
-    @State private var lastMarkAt = Date.distantPast
-    @State private var showingNewList = false
-    @State private var showingRenameList = false
-    @State private var showingNewSection = false
-    @State private var showingAppearance = false
-    @State private var reordering = false
-    @State private var listName = ""
-    @State private var sectionName = ""
-    @State private var collapsedSections: Set<String> = []
-    @State private var selectedItemIDs: Set<UUID> = []
-    @State private var itemFrames = ShoppingItemFrameRegistry()
-    @State private var editMode: EditMode = .inactive
-    @FocusState private var addFocused: Bool
-    @FocusState private var nameFocused: UUID?
-    @AppStorage("groupShoppingByCategory") private var groupBySection = true
-    @AppStorage("showEmptySections") private var showEmptySections = false
-    @AppStorage("showRecentPurchases") private var showRecentPurchases = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.scenePhase) private var scenePhase
-
-    private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
-    private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
-    private var listTint: Color { Theme.tint(for: store.currentList.tintName) }
-    private var showsSections: Bool {
-        groupBySection && (!store.currentList.sections.isEmpty || store.items.contains {
-            store.section(for: $0) != "××—×¨"
-        })
-    }
-    private var selectionFullyUrgent: Bool {
-        !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
-    }
-
-    private var visibleItems: [ShoppingItem] {
-        store.items.filter { placeFilter == "×”×›×•×œ" || (placeFilter == "×œ×œ× ×ž×§×•×" ? $0.shoppingPlace == nil : $0.shoppingPlace == placeFilter) }
-    }
-
-    var body: some View {
-        Group {
-            if sizeClass == .regular {
-                NavigationSplitView {
-                    listSidebar
-                } detail: {
-                    shoppingContent
-                }
-                .navigationSplitViewStyle(.balanced)
-            } else {
-                shoppingContent
-            }
-        }
-    }
-
-    private var listSidebar: some View {
-        List {
-            Section("×”×¨×©×™×ž×•×ª ×©×œ× ×•") {
-                ForEach(store.data.lists) { list in
-                    Button { switchList(to: list.id) } label: {
-                        HStack {
-                            Label(list.name, systemImage: list.symbolName)
-                            Spacer()
-                            if list.id == store.selectedListID {
-                                Image(systemName: "checkmark").accessibilityLabel("×”×¨×©×™×ž×” ×”× ×•×›×—×™×ª")
-                            }
-                        }
-                    }
-                    .listRowBackground(list.id == store.selectedListID ? listTint.opacity(0.12) : Color.clear)
-                }
-            }
-            Button("×¨×©×™×ž×” ×—×“×©×” ×œ×—× ×•×ª", systemImage: "plus") {
-                listName = ""; showingNewList = true
-            }
-        }
-        .navigationTitle("×§× ×™×•×ª")
-        .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
-        .tint(listTint)
-    }
-
-    private var shoppingContent: some View {
-        NavigationStack {
-            ScrollViewReader { scroll in
-                List(selection: reordering ? nil : $selectedItemIDs) {
-                    if let error = store.storageError {
-                        Section {
-                            Text(LocalizedStringKey(error)).foregroundStyle(.red)
-                            Button("× ×™×¡×™×•×Ÿ ×©×ž×™×¨×” × ×•×¡×£") { store.retryLocalSave() }
-                        }
-                    }
-                    if let binding = store.currentShare, !binding.accessible {
-                        Section {
-                            Label(binding.accessible ? "×©×™×ª×•×£ ×“×¨×š iCloud" : "×”×©×™×ª×•×£ ××™× ×• ×–×ž×™×Ÿ â€” ×”×©×™× ×•×™×™× × ×©×ž×¨×™× ×‘×ž×›×©×™×¨",
-                                  systemImage: binding.accessible ? "person.2" : "icloud.slash")
-                                .font(.caption).foregroundStyle(.secondary)
-                                .listRowSeparator(.hidden)
-                                .selectionDisabled(true)
-                        }
-                        .listSectionSeparator(.hidden)
-                    }
-                    if !Set(store.items.compactMap(\.shoppingPlace)).isEmpty {
-                        Picker("×ž×§×•× ×§× ×™×™×”", selection: $placeFilter) {
-                            Text("×”×›×•×œ").tag("×”×›×•×œ")
-                            Text("×œ×œ× ×ž×§×•×").tag("×œ×œ× ×ž×§×•×")
-                            ForEach(Array(Set(store.items.compactMap(\.shoppingPlace))).sorted(), id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-                    if showsSections {
-                        ForEach(sectionNames, id: \.self) { section in
-                            Section {
-                                sectionHeader(section)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Color.clear)
-                                    .selectionDisabled(true)
-                                    .background {
-                                        nativeDrag(.section(section), section: section)
-                                    }
-                                if !collapsedSections.contains(section) {
-                                    ForEach(items(in: section)) { item in
-                                        itemRow(item)
-                                            .moveDisabled(!reordering)
-                                            .listRowSeparator(.hidden, edges: .all)
-                                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                    }
-                                    .onMove { source, destination in
-                                        store.move(from: source, to: destination, inSection: section)
-                                    }
-                                }
-                            }
-                            .listSectionSeparator(.hidden, edges: .all)
-                        }
-                    } else {
-                        Section {
-                            ForEach(visibleItems) { item in
-                                itemRow(item)
-                                    .moveDisabled(!reordering)
-                                    .listRowSeparator(.hidden, edges: .all)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            }
-                            .onMove { source, destination in
-                                store.move(from: source, to: destination, inSection: nil)
-                            }
-                        }
-                        .listSectionSeparator(.hidden, edges: .all)
-                    }
-
-                    if isAdding {
-                        Section { inlineAddRow }
-                            .listSectionSeparator(.hidden)
-                    }
-
-
-
-                    if showRecentPurchases && !store.recentPurchases.isEmpty {
-                        Section("× ×§× ×• ×œ××—×¨×•× ×”") {
-                            ForEach(store.recentPurchases) { purchase in
-                                if let product = store.product(for: purchase.productID) {
-                                    HStack {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.tertiary)
-                                        Text(product.name).foregroundStyle(.secondary)
-                                        Spacer()
-                                        Button {
-                                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                                                store.undo(purchase)
-                                            }
-                                        } label: {
-                                            Image(systemName: "arrow.uturn.backward")
-                                                .frame(minWidth: 44, minHeight: 44)
-                                        }
-                                        .buttonStyle(.borderless)
-                                        .accessibilityLabel("×‘×™×˜×•×œ")
-                                        .accessibilityHint("×‘×™×˜×•×œ ×”×§× ×™×™×” ×©×œ \(product.name)")
-                                    }
-                                    .swipeActions {
-                                        Button("×‘×™×˜×•×œ ×§× ×™×™×”", systemImage: "arrow.uturn.backward") {
-                                            store.undo(purchase)
-                                        }
-                                        .labelStyle(.iconOnly)
-                                        .tint(Color(uiColor: .systemBlue))
-                                    }
-                                    .listRowSeparator(.hidden)
-                                    .selectionDisabled(true)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                }
-                            }
-                            Button("×œ×›×œ ×”×§× ×™×•×ª", systemImage: "clock.arrow.circlepath") { showingHistory = true }
-                                .labelStyle(.iconOnly)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .listRowSeparator(.hidden)
-                                .selectionDisabled(true)
-                        }
-                        .listSectionSeparator(.hidden)
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Color(uiColor: .systemGroupedBackground))
-                .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
-                .frame(maxWidth: .infinity)
-                .listRowSeparator(.hidden, edges: .all)
-                .listSectionSeparator(.hidden, edges: .all)
-                .overlay {
-                    TwoFingerSelectionGesture { from, to in
-                        guard !reordering else { return }
-                        let crossed = store.items.compactMap { item -> UUID? in
-                            guard let frame = itemFrames.frames[item.id],
-                                  frame.minY <= max(from.y, to.y),
-                                  frame.maxY >= min(from.y, to.y),
-                                  frame.minX <= to.x, frame.maxX >= to.x else { return nil }
-                            return item.id
-                        }
-                        guard !crossed.isEmpty else { return }
-                        if !editMode.isEditing {
-                            closeEditor()
-                            editMode = .active
-                        }
-                        selectedItemIDs.formUnion(crossed)
-                    }
-                    .frame(width: 0, height: 0)
-                    .allowsHitTesting(false)
-                }
-                .environment(\.editMode, $editMode)
-                .listRowSpacing(0)
-                .listSectionSpacing(0)
-                .environment(\.defaultMinListRowHeight, 54)
-                .environment(\.defaultMinListHeaderHeight, 0)
-                .scrollDismissesKeyboard(.immediately)
-                .inspector(isPresented: Binding(
-                    get: { detailItem != nil },
-                    set: { if !$0 { detailItem = nil } }
-                )) {
-                    if let detailItem {
-                        ItemDetailsSheet(store: store, item: detailItem)
-                            .id(detailItem.id)
-                            .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
-                    }
-                }
-                .toolbar { bottomActions(scroll) }
-
-            }
-            .navigationTitle(store.currentList.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { listPicker.tint(listTint) }
-                ToolbarItem(placement: .topBarTrailing) { optionsMenu.tint(Color(uiColor: .label)) }
-                if !editMode.isEditing && (isAdding || editingNameID != nil) {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("×¡×™×•× ×¢×¨×™×›×”", systemImage: "checkmark") { closeEditor() }
-                            .labelStyle(.iconOnly)
-                            .keyboardShortcut(.return, modifiers: .command)
-                            .tint(listTint)
-                    }
-                }
-                if editMode.isEditing {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("×¡×™×•×") {
-                            selectedItemIDs.removeAll()
-                            reordering = false
-                            editMode = .inactive
-                        }
-                    }
-                }
-            }
-            .onChange(of: store.items) { _, items in
-                if placeFilter != "×”×›×•×œ" && placeFilter != "×œ×œ× ×ž×§×•×" && !items.contains(where: { $0.shoppingPlace == placeFilter }) { placeFilter = "×”×›×•×œ" }
-            }
-            .onChange(of: nameFocused) { oldID, newID in
-                if oldID != newID, let oldID, editingNameID == oldID,
-                   let item = store.items.first(where: { $0.id == oldID }) {
-                    saveRename(item)
-                }
-            }
-            .onChange(of: store.items.map(\.id)) { _, ids in
-                if let editingNameID, !ids.contains(editingNameID) {
-                    updateEditor { self.editingNameID = nil; nameFocused = nil }
-                }
-            }
-            .sheet(item: $editingCategory) { CategoryEditor(store: store, item: $0) }
-            .sheet(isPresented: $showingAppearance) { ListAppearanceEditor(store: store) }
-            .onChange(of: editMode) { _, mode in
-                if !mode.isEditing {
-                    selectedItemIDs.removeAll()
-                    reordering = false
-                }
-            }
-            .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
-            .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
-            .alert("×¨×©×™×ž×” ×—×“×©×” ×œ×—× ×•×ª", isPresented: $showingNewList) {
-                TextField("×©× ×”×—× ×•×ª", text: $listName)
-                Button("×™×¦×™×¨×”") { closeEditor(); store.addList(name: listName) }
-                Button("×‘×™×˜×•×œ", role: .cancel) {}
-            }
-            .alert("×©×™× ×•×™ ×©× ×”×¨×©×™×ž×”", isPresented: $showingRenameList) {
-                TextField("×©× ×”×—× ×•×ª", text: $listName)
-                Button("×©×ž×™×¨×”") { store.renameCurrentList(to: listName) }
-                Button("×‘×™×˜×•×œ", role: .cancel) {}
-            }
-            .alert("×ž×§×˜×¢ ×—×“×©", isPresented: $showingNewSection) {
-                TextField("×©× ×”×ž×§×˜×¢", text: $sectionName)
-                Button("×™×¦×™×¨×”") {
-                    store.addSection(sectionName)
-                    groupBySection = true
-                    showEmptySections = true
-                }
-                Button("×‘×™×˜×•×œ", role: .cancel) {}
-            }
-        }
-        .tint(Color(uiColor: .label))
-        .sheet(isPresented: $showingSharing) {
-            if let listID = sharingListID { ListSharingSheet(store: store, listID: listID) }
-        }
-        .task {
-            #if !targetEnvironment(simulator)
-            store.cloudSync.start()
-            #endif
-        }
-        .onChange(of: scenePhase) { _, phase in
-            #if !targetEnvironment(simulator)
-            if phase == .active { store.cloudSync.start() }
-            #endif
-        }
-        .task(id: scenePhase) {
-            #if !targetEnvironment(simulator)
-            guard scenePhase == .active else { return }
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if !store.sharedLists.isEmpty { await store.cloudSync.synchronize() }
-            }
-            #endif
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func bottomActions(_ scroll: ScrollViewProxy) -> some ToolbarContent {
-if reordering {
-                        ToolbarItem(placement: .bottomBar) {
-                            Text("×’×¨×•×¨ ××ª ×™×“×™×•×ª ×”×¡×™×“×•×¨ ×©×œ ×”×ž×•×¦×¨×™×")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else if editMode.isEditing {
-                        ToolbarItem(placement: .bottomBar) {
-                            Text("\(selectedItemIDs.count) × ×‘×—×¨×•")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItemGroup(placement: .bottomBar) {
-                            Button(selectionFullyUrgent ? "×”×¡×¨ ×“×’×œ" : "×“×’×œ",
-                                   systemImage: selectionFullyUrgent ? "flag.slash" : "flag.fill") {
-                                store.setUrgent(!selectionFullyUrgent, for: selectedItemIDs)
-                                selectedItemIDs.removeAll()
-                                editMode = .inactive
-                            }
-                            .disabled(selectedItemIDs.isEmpty)
-                            Button("×ž×—×™×§×”", systemImage: "trash", role: .destructive) {
-                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs) }
-                                selectedItemIDs.removeAll()
-                                editMode = .inactive
-                            }
-                            .disabled(selectedItemIDs.isEmpty)
-                        }
-                    } else if !isAdding && editingNameID == nil {
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("×ž×•×¦×¨ ×—×“×©", systemImage: "plus") {
-                                beginAdding()
-                                Task { @MainActor in
-                                    await Task.yield()
-                                    var transaction = Transaction(animation: nil)
-                                    transaction.disablesAnimations = true
-                                    withTransaction(transaction) {
-                                        scroll.scrollTo("new-item", anchor: .bottom)
-                                        addFocused = true
-                                    }
-                                }
-                            }
-                            .labelStyle(.iconOnly)
-                            .accessibilityLabel("×”×•×¡×¤×ª ×ž×•×¦×¨")
-                            .keyboardShortcut("n", modifiers: .command)
-                            .tint(listTint)
-                        }
-                    }
-    }
-
-
-    private var hasNewName: Bool {
-        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var inlineAddRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: "circle")
-                    .font(.system(size: 25, weight: .regular))
-                    .foregroundStyle(listTint.opacity(0.8))
-                    .frame(width: 44, height: 44)
-                TextField("×ž×” ×¦×¨×™×š ×œ×§× ×•×ª?", text: $newName)
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(Color(uiColor: .label))
-                    .tint(listTint)
-                    .focused($addFocused)
-                    .submitLabel(.next)
-                    .onSubmit { addInline() }
-                    .onChange(of: newName) { _, value in
-                        if !preserveRawInput && !newQuantityOverridden {
-                            let parsed = ShoppingInputParser.parse(value)
-                            newQuantity = parsed.quantity
-                        }
-                    }
-                    .accessibilityIdentifier("inlineAddField")
-                if hasNewName {
-                    Button("Ã—\(newQuantity) \(newUnit ?? "")") { quantityExpanded.toggle() }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color(uiColor: .secondaryLabel))
-                        .padding(.horizontal, 10)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityIdentifier("newItemQuantityButton")
-                        .accessibilityLabel("×¢×¨×™×›×ª ×›×ž×•×ª ×œ×ž×•×¦×¨ ×—×“×©")
-                        .accessibilityValue("\(newQuantity)")
-                }
-            }
-            if hasNewName {
-                VStack(alignment: .leading, spacing: 4) {
-                    if quantityExpanded {
-                        InlineQuantityControls(quantity: Binding(
-                            get: { newQuantity },
-                            set: { newQuantity = $0; newQuantityOverridden = true }
-                        ), unit: $newUnit, isNew: true)
-                    }
-                    if showingNewNote {
-                        TextField("×”×¢×¨×” ×œ×ž×•×¦×¨â€¦", text: $newNote, axis: .vertical)
-                            .lineLimit(1...3)
-                            .accessibilityIdentifier("newItemNoteField")
-                    }
-                    if let newPhotoData {
-                        ItemPhotoThumbnail(bytes: newPhotoData, fileURL: nil, name: newName, side: 44)
-                    }
-                    HStack(spacing: 8) {
-                        Button("×”×¢×¨×”", systemImage: "text.alignright") { showingNewNote.toggle() }
-                            .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                        PhotosPicker(selection: $newPhoto, matching: .images) {
-                            Image(systemName: "photo.badge.plus")
-                        }
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel("×¦×™×¨×•×£ ×ª×ž×•× ×”")
-                        .onChange(of: newPhoto) { _, selection in
-                            guard let selection else { return }
-                            Task {
-                                if let data = try? await selection.loadTransferable(type: Data.self), newPhoto == selection, let image = UIImage(data: data) {
-                                    newPhotoData = ItemPhotoEncoder.encode(image)
-                                }
-                            }
-                        }
-                        Button(newUrgent ? "×”×¡×¨ ×“×’×œ" : "×“×—×•×£", systemImage: newUrgent ? "flag.fill" : "flag") {
-                            newUrgent.toggle()
-                        }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(newUrgent ? Color.orange : Color(uiColor: .label))
-                        .frame(minWidth: 44, minHeight: 44)
-                        sectionPicker
-                    }
-                    .font(.body)
-                    .buttonStyle(ShoppingToolButtonStyle())
-                    .tint(Color(uiColor: .label))
-                    .foregroundStyle(Color(uiColor: .label))
-                    .frame(minHeight: 44)
-                    let parsed = ShoppingInputParser.parse(newName)
-                    if parsed.unit != nil && !preserveRawInput {
-                        HStack {
-                            Text("\(parsed.name) Â· Ã—\(newQuantity) \(newUnit ?? parsed.unit ?? "")")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Button("×©×ž×™×¨×ª ×”×˜×§×¡×˜ ×”×ž×§×•×¨×™", systemImage: "arrow.uturn.backward") {
-                                preserveRawInput = true
-                                if !newQuantityOverridden { newQuantity = 1 }
-                            }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                        }
-                    }
-                }
-                .padding(.leading, 48)
-                .padding(.trailing, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, hasNewName ? 8 : 4)
-        // Automatic List button styling makes multiple row buttons fire together.
-        .buttonStyle(.borderless)
-        .id("new-item")
-        .selectionDisabled(true)
-         .listRowBackground(Color.clear)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-    }
-
-    private var sectionPicker: some View {
-        Menu {
-            Button("××•×˜×•×ž×˜×™") { addingToSection = nil }
-            ForEach(Array(Set(allSectionNames + ["××—×¨"])).sorted(), id: \.self) { section in
-                Button(section) { addingToSection = section }
-            }
-        } label: {
-            Image(systemName: "square.grid.2x2")
-        }
-        .accessibilityLabel("×‘×—×™×¨×ª ×ž×§×˜×¢ ×œ×ž×•×¦×¨ ×—×“×©")
-        .accessibilityValue(addingToSection ?? "××•×˜×•×ž×˜×™")
-    }
-
-    private var listPicker: some View {
-        Menu {
-            ForEach(store.data.lists) { list in
-                Button(list.name, systemImage: list.symbolName) {
-                    switchList(to: list.id)
-                }
-            }
-            Divider()
-            Button("×¨×©×™×ž×” ×—×“×©×” ×œ×—× ×•×ª", systemImage: "plus") {
-                listName = ""; showingNewList = true
-            }
-            Button("×©×™× ×•×™ ×©× ×”×¨×©×™×ž×”", systemImage: "pencil") {
-                listName = store.currentList.name; showingRenameList = true
-            }
-            Button("×¦×‘×¢ ×•×¡×ž×œ ×”×¨×©×™×ž×”", systemImage: "paintpalette") { showingAppearance = true }
-        } label: {
-            Image(systemName: store.currentList.symbolName)
-                .font(.title3)
-        }
-        .accessibilityLabel("×‘×—×™×¨×ª ×—× ×•×ª, \(store.currentList.name)")
-    }
-
-    private var optionsMenu: some View {
-        Menu {
-            Button("×§× ×™×™×” ×—×“×©×”", systemImage: "cart.badge.plus") { showingPreparation = true }
-            Button(groupBySection ? "×”×¦×’×” ×œ×¤×™ ×ž×¡×œ×•×œ ×”×§× ×™×™×”" : "×”×¦×’×ª ×ž×§×˜×¢×™×",
-                   systemImage: "square.stack") { groupBySection.toggle() }
-            Button("×ž×§×˜×¢ ×—×“×©", systemImage: "plus.rectangle.on.rectangle") {
-                sectionName = ""; showingNewSection = true
-            }
-            Button("×¡×™×“×•×¨ ×ž×•×¦×¨×™×", systemImage: "line.3.horizontal") {
-                closeEditor()
-                addingToSection = nil
-                selectedItemIDs.removeAll()
-                reordering = true
-                editMode = .active
-            }
-            Toggle("×”×¦×’×ª ×ž×§×˜×¢×™× ×¨×™×§×™×", systemImage: "rectangle.dashed", isOn: $showEmptySections)
-            Toggle("×”×¦×’×ª × ×§× ×• ×œ××—×¨×•× ×”", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
-            Button("×”×™×¡×˜×•×¨×™×™×ª ×§× ×™×•×ª", systemImage: "clock") { showingHistory = true }
-            Button("×‘×—×™×¨×ª ×¤×¨×™×˜×™×", systemImage: "checkmark.circle") {
-                closeEditor()
-                reordering = false
-                editMode = .active
-            }
-            Divider()
-            Button(store.currentShare == nil ? "×©×™×ª×•×£ ×”×¨×©×™×ž×”â€¦" : "× ×™×”×•×œ ×”×©×™×ª×•×£â€¦",
-                   systemImage: "person.2") {
-                sharingListID = store.selectedListID
-                showingSharing = true
-            }
-            #if targetEnvironment(simulator)
-            .disabled(true)
-            #endif
-            Button(LocalizedStringKey(syncLabel), systemImage: "arrow.triangle.2.circlepath.icloud") {
-                #if !targetEnvironment(simulator)
-                Task { await store.cloudSync.synchronize() }
-                #endif
-            }
-            #if targetEnvironment(simulator)
-            .disabled(true)
-            #endif
-        } label: {
-            Image(systemName: "ellipsis").font(.title3)
-        }
-        .accessibilityLabel("××¤×©×¨×•×™×•×ª × ×•×¡×¤×•×ª")
-    }
-
-    private var syncLabel: String {
-        switch store.syncStatus {
-        case .local: return "×¡× ×›×¨×•×Ÿ iCloud"
-        case .syncing: return "×ž×¡× ×›×¨×Ÿ ×¢× iCloudâ€¦"
-        case .current: return "iCloud ×ž×¢×•×“×›×Ÿ"
-        case .unavailable: return "iCloud ××™× ×• ×–×ž×™×Ÿ â€” × ×¡×” ×©×•×‘"
-        case .accountChanged: return "×—×©×‘×•×Ÿ iCloud ×”×©×ª× ×” â€” ×”× ×ª×•× ×™× × ×©×ž×¨×• ×‘×ž×›×©×™×¨"
-        case .failed: return "×”×¡× ×›×¨×•×Ÿ ×ž×ž×ª×™×Ÿ ×œ×—×™×‘×•×¨ â€” × ×¡×” ×©×•×‘"
-        }
-    }
-
-    private var sectionNames: [String] {
-        allSectionNames.filter { showEmptySections || reordering || !items(in: $0).isEmpty }
-    }
-
-    private var allSectionNames: [String] {
-        let existing = store.currentList.sections
-        let used = store.items.map { store.section(for: $0) }.filter { $0 != "××—×¨" }
-        let names = existing + used.filter { !existing.contains($0) }
-        var seen = Set<String>()
-        let unique = names.filter { seen.insert($0).inserted }
-        let needsOther = store.items.contains(where: { store.section(for: $0) == "××—×¨" }) ||
-            (isAdding && addingToSection == "××—×¨")
-        return needsOther && !unique.contains("××—×¨") ? unique + ["××—×¨"] : unique
-    }
-
-    private func items(in section: String) -> [ShoppingItem] {
-        visibleItems.filter { store.section(for: $0) == section }
-    }
-
-    private func sectionHeader(_ section: String) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                if !collapsedSections.insert(section).inserted { collapsedSections.remove(section) }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(listTint)
-                    .frame(width: 3, height: 19)
-                Text(section)
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 8)
-                Text("\(items(in: section).count)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(collapsedSections.contains(section) ? 90 : 0))
-                    .frame(width: 18, height: 18)
-            }
-            .padding(.horizontal, 4)
-            .frame(minHeight: 38)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(section), \(items(in: section).count) ×ž×•×¦×¨×™×")
-        .accessibilityHint(collapsedSections.contains(section) ? "×”×¨×—×‘×ª ×ž×§×˜×¢" : "×¦×ž×¦×•× ×ž×§×˜×¢")
-        .padding(.top, 16)
-        .padding(.bottom, 3)
-    }
-
-    @ViewBuilder
-    private func itemRow(_ item: ShoppingItem) -> some View {
-        if let product = store.product(for: item.productID) {
-            VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 8) {
-                if !editMode.isEditing {
-                Button {
-                    guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
-                    lastMarkAt = .now
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    if reduceMotion { store.buy(item) }
-                    else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
-                } label: {
-                    Circle()
-                        .strokeBorder(listTint.opacity(0.85), lineWidth: 2.25)
-                        .background(Circle().fill(listTint.opacity(0.07)))
-                        .frame(width: 25, height: 25)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("× ×§× ×” \(product.name)")
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    if editingNameID == item.id {
-                        HStack(spacing: 4) {
-                        TextField("×©× ×”×ž×•×¦×¨", text: $editedName)
-                            .tint(listTint)
-                            .focused($nameFocused, equals: item.id)
-                            .submitLabel(.done)
-                            .onSubmit { finishRename(item) }
-
-                        }
-                        .frame(minHeight: 44)
-                    } else if editMode.isEditing {
-                        HStack(spacing: 6) {
-                            Text(product.name)
-                                    .font(.body)
-                                    .foregroundStyle(Color(uiColor: .label))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            if item.isUrgent {
-                                Image(systemName: "flag.fill")
-                                    .foregroundStyle(.orange)
-                                    .accessibilityLabel("×“×—×•×£")
-                            }
-                        }
-                    } else {
-                        Button {
-                            if isAdding || editingNameID != nil { closeEditor() }
-                            updateEditor {
-                                editedName = product.name
-                                originalEditedName = product.name
-                                editingNameID = item.id
-                                quantityExpanded = false
-                                nameFocused = item.id
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(product.name)
-                                    .font(.body)
-                                    .foregroundStyle(Color(uiColor: .label))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                if item.isUrgent {
-                                    Image(systemName: "flag.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.orange)
-                                        .accessibilityLabel("×“×—×•×£")
-                                }
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if editingNameID != item.id, let note = item.note, !note.isEmpty {
-                        Text(note).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }
-                if item.photoData != nil || item.photoFilename != nil {
-                    ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item), name: product.name)
-                }
-                if item.quantity > 1 || item.unit != nil || editingNameID == item.id {
-                    Button("Ã—\(item.quantity) \(item.unit ?? "")") {
-                        if editingNameID != item.id {
-                            if isAdding || editingNameID != nil { closeEditor() }
-                            updateEditor {
-                                editedName = product.name
-                                originalEditedName = product.name
-                                editingNameID = item.id
-                                nameFocused = nil
-                                quantityExpanded = true
-                            }
-                        } else {
-                            updateEditor { quantityExpanded = true }
-                        }
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color(uiColor: .secondaryLabel))
-                    .padding(.horizontal, 10)
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
-                    .lineLimit(1)
-                    .multilineTextAlignment(.trailing)
-                    .buttonStyle(.plain)
-                    .frame(minWidth: 44, maxWidth: 150, minHeight: 36, alignment: .center)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.leading, 8)
-                    .disabled(editMode.isEditing)
-                    .accessibilityLabel("×¢×¨×™×›×ª ×›×ž×•×ª ×•×”×¢×¨×•×ª ×¢×‘×•×¨ \(product.name)")
-                    .accessibilityValue("×›×ž×•×ª \(item.quantity) \(item.unit ?? "")")
-                }
-                if editingNameID == item.id {
-                    Button("×¤×¨×˜×™ ×ž×•×¦×¨", systemImage: "info.circle") {
-                        saveRename(item)
-                        detailItem = item
-                    }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                    .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
-                    .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-            if editingNameID == item.id && !editMode.isEditing {
-                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded)
-                    .padding(.leading, 48)
-                    .padding(.trailing, 12)
-                    .transition(.identity)
-            }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, editingNameID == item.id ? 8 : 2)
-            .background(editingNameID == item.id ? Color(uiColor: .secondarySystemGroupedBackground) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .listRowBackground(Color.clear)
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                Button(item.isUrgent ? "×”×¡×¨ ×“×’×œ" : "×“×—×•×£",
-                       systemImage: item.isUrgent ? "flag.slash" : "flag") {
-                    store.toggleUrgent(item)
-                }
-                .labelStyle(.iconOnly)
-                .tint(Color(red: 0.62, green: 0.34, blue: 0.02))
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button("×”×¡×¨", systemImage: "trash", role: .destructive) { store.remove(item) }
-                    .labelStyle(.iconOnly)
-                    .tint(.red)
-                Button("×ž×§×˜×¢", systemImage: "square.grid.2x2") { editingCategory = item }
-                    .labelStyle(.iconOnly)
-                    .tint(Color(uiColor: .systemBlue))
-            }
-            .background {
-                nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil)
-            }
-            .accessibilityAction(named: "×”×¢×‘×¨×” ×œ×ž×¢×œ×”") { moveItem(item, down: false) }
-            .accessibilityAction(named: "×”×¢×‘×¨×” ×œ×ž×˜×”") { moveItem(item, down: true) }
-            .selectionDisabled(!editMode.isEditing)
-            .tag(item.id)
-            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
-                itemFrames.frames[item.id] = frame
-            }
-            .onDisappear { itemFrames.frames[item.id] = nil }
-        }
-    }
-
-    private func moveItem(_ item: ShoppingItem, down: Bool) {
-        let section = showsSections ? store.section(for: item) : nil
-        let ordered = section.map { items(in: $0) } ?? store.items
-        guard let index = ordered.firstIndex(where: { $0.id == item.id }) else { return }
-        let neighbor = index + (down ? 1 : -1)
-        guard ordered.indices.contains(neighbor) else { return }
-        store.place([item.id], inSection: section, relativeTo: ordered[neighbor].id, after: down)
-    }
-
-    private func dragPreviewContent(for entry: ShoppingDragEntry) -> ShoppingDragPreviewContent {
-        switch entry {
-        case .section(let name):
-            return ShoppingDragPreviewContent(title: name, isSection: true)
-        case .item(let id):
-            guard let item = store.items.first(where: { $0.id == id }),
-                  let product = store.product(for: item.productID) else {
-                return ShoppingDragPreviewContent(title: "×ž×•×¦×¨")
-            }
-            return ShoppingDragPreviewContent(title: product.name,
-                quantity: "Ã—\(item.quantity) \(item.unit ?? "")", note: item.note, urgent: item.isUrgent)
-        }
-    }
-
-    private func updateEditor(_ update: () -> Void) {
-        // UIKit's List self-sizing and keyboard already update geometry. A
-        // concurrent SwiftUI transition causes the same height to animate twice.
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
-        withTransaction(transaction, update)
-    }
-
-    private func nativeDrag(_ entry: ShoppingDragEntry, section: String?) -> some View {
-        NativeShoppingDrag(entry: entry, listID: store.selectedListID,
-                           enabled: !editMode.isEditing && editingNameID == nil && !isAdding,
-                           tint: UIColor(listTint), previewContent: dragPreviewContent(for: entry)) { entries, after in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                if case .section(let source)? = entries.first,
-                   case .section(let target) = entry {
-                    store.placeSection(source, relativeTo: target, after: after)
-                } else {
-                    let draggedIDs = Set(entries.compactMap { value -> UUID? in
-                        if case .item(let id) = value { return id }
-                        return nil
-                    })
-                    let visibleOrder = showsSections ? sectionNames.flatMap { items(in: $0) } : store.items
-                    let ids = visibleOrder.filter { draggedIDs.contains($0.id) }.map(\.id)
-                    let target: UUID?
-                    if case .item(let id) = entry { target = id } else { target = nil }
-                    store.place(ids, inSection: section, relativeTo: target, after: after)
-                }
-            }
-        }
-    }
-
-    private func suggestionSection(_ title: String, items: [Suggestion]) -> some View {
-        Section(title) {
-            ForEach(items) { suggestion in
-                HStack(spacing: 12) {
-                    Image(systemName: "circle.dotted")
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 30)
-                    VStack(alignment: .leading) {
-                        Text(suggestion.product.name)
-                        if suggestion.quantity > 1 || suggestion.product.preferredUnit != nil {
-                            Text("×‘×“×¨×š ×›×œ×œ Ã—\(suggestion.quantity) \(suggestion.product.preferredUnit ?? "")")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Button {
-                        store.add(suggestion)
-                    } label: { Image(systemName: "plus.circle.fill").font(.title3) }
-                        .accessibilityLabel("×”×•×¡×¤×ª \(suggestion.product.name) ×œ×¨×©×™×ž×”")
-                }
-                .swipeActions(edge: .trailing) {
-                    Button("×œ× ×¢×›×©×™×•", systemImage: "clock") { store.deferSuggestion(suggestion) }
-                        .labelStyle(.iconOnly)
-                        .tint(Color(uiColor: .systemIndigo))
-                }
-                .listRowSeparator(.hidden)
-                .selectionDisabled(true)
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            }
-        }
-        .listSectionSeparator(.hidden)
-    }
-
-    private func beginAdding() {
-        closeEditor()
-        updateEditor { isAdding = true; addingToSection = nil; quantityExpanded = false }
-    }
-
-    private func addInline(continueAdding: Bool = true) {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        updateEditor {
-            let parsed = preserveRawInput ? ShoppingInputParser.Result(name: trimmed, quantity: newQuantity, unit: nil) : ShoppingInputParser.parse(trimmed)
-            store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity,
-                      department: addingToSection, urgent: newUrgent)
-            if let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
-                if let unit = newUnit ?? parsed.unit { store.updateUnit(of: item, to: unit) }
-                if !newNote.isEmpty { store.updateNote(of: item, to: newNote) }
-                if let newPhotoData { store.setPhoto(newPhotoData, for: item) }
-            }
-            newQuantity = 1
-            preserveRawInput = false
-            newQuantityOverridden = false
-            newName = ""
-            newUnit = nil
-            newNote = ""
-            newUrgent = false
-            newPhotoData = nil
-            newPhoto = nil
-            showingNewNote = false
-            quantityExpanded = false
-            addFocused = continueAdding
-        }
-    }
-
-    private func saveRename(_ item: ShoppingItem) {
-        guard editedName != originalEditedName else { return }
-        store.rename(item, to: editedName)
-        originalEditedName = editedName
-    }
-
-    private func finishRename(_ item: ShoppingItem) {
-        saveRename(item)
-        updateEditor { editingNameID = nil; nameFocused = nil; quantityExpanded = false }
-    }
-
-    private func closeEditor() {
-        if isAdding { addInline(continueAdding: false) }
-        if let id = editingNameID, let item = store.items.first(where: { $0.id == id }) { saveRename(item) }
-        updateEditor {
-            isAdding = false
-            newName = ""
-            newQuantity = 1
-            newQuantityOverridden = false
-            preserveRawInput = false
-            newUnit = nil
-            newNote = ""
-            newUrgent = false
-            newPhotoData = nil
-            newPhoto = nil
-            showingNewNote = false
-            addFocused = false
-            editingNameID = nil
-            nameFocused = nil
-            quantityExpanded = false
-        }
-    }
-
-    private func switchList(to id: UUID) {
-        closeEditor()
-        store.selectList(id)
-        collapsedSections.removeAll()
-        placeFilter = "×”×›×•×œ"
-        addingToSection = nil
-        selectedItemIDs.removeAll()
-        itemFrames.frames.removeAll()
-        reordering = false
-        editMode = .inactive
-    }
-
-}
-
-struct ItemInlineDetails: View {
-    @ObservedObject var store: ShoppingStore
-    let item: ShoppingItem
-    let showsQuantity: Bool
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var showingCamera = false
-    @State private var cameraDenied = false
-    @State private var showingPhoto = false
-    @State private var note: String
-
-    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true) {
-        self.store = store
-        self.item = item
-        self.showsQuantity = showsQuantity
-        _note = State(initialValue: item.note ?? "")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if showsQuantity {
-                InlineQuantityControls(quantity: Binding(
-                    get: { item.quantity }, set: { store.updateQuantity(of: item, to: $0) }
-                ), unit: Binding(
-                    get: { item.unit }, set: { store.updateUnit(of: item, to: $0) }
-                ))
-            }
-            TextField("×”×¢×¨×” ×œ×ž×•×¦×¨â€¦", text: $note, axis: .vertical)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1...3)
-                .onChange(of: note) { _, value in store.updateNote(of: item, to: value) }
-                .accessibilityIdentifier("itemNoteField")
-                .onChange(of: item.note) { _, value in
-                    if note != (value ?? "") { note = value ?? "" }
-                }
-            HStack(spacing: 8) {
-                Button(item.isUrgent ? "×”×¡×¨ ×“×’×œ" : "×“×—×•×£", systemImage: item.isUrgent ? "flag.fill" : "flag") {
-                    store.toggleUrgent(item)
-                }
-                .labelStyle(.iconOnly)
-                .foregroundStyle(item.isUrgent ? Color.orange : Color(uiColor: .label))
-                .frame(minWidth: 44, minHeight: 44)
-                if item.photoData != nil || item.photoFilename != nil {
-                    Button { showingPhoto = true } label: {
-                        ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
-                                           name: store.product(for: item.productID)?.name ?? "", side: 52)
-                    }.accessibilityLabel("×”×’×“×œ×ª ×ª×ž×•× ×ª ×”×ž×•×¦×¨")
-                }
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("×¦×™×œ×•×", systemImage: "camera") {
-                        Task {
-                            let allowed = await AVCaptureDevice.requestAccess(for: .video)
-                            if allowed { showingCamera = true } else { cameraDenied = true }
-                        }
-                    }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                }
-                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(item.photoFilename == nil && item.photoData == nil ? "×¦×™×¨×•×£ ×ª×ž×•× ×”" : "×”×—×œ×¤×ª ×ª×ž×•× ×”", systemImage: "photo.badge.plus")
-                }
-                .labelStyle(.iconOnly)
-                .frame(minWidth: 44, minHeight: 44)
-                .onChange(of: selectedPhoto) { _, selection in
-                    guard let selection else { return }
-                    Task {
-                        if let data = try? await selection.loadTransferable(type: Data.self), selectedPhoto == selection {
-                            store.setPhoto(data, for: item)
-                        }
-                    }
-                }
-                if item.photoFilename != nil || item.photoData != nil {
-                    Button("×”×¡×¨×ª ×ª×ž×•× ×”", systemImage: "xmark.circle") {
-                        store.removePhoto(from: item)
-                    }
-                    .labelStyle(.iconOnly)
-                }
-            }
-            .font(.body)
-            .tint(Color(uiColor: .label))
-            .foregroundStyle(Color(uiColor: .label))
-            .buttonStyle(ShoppingToolButtonStyle())
-        }
-        .buttonStyle(.borderless)
-        .padding(.vertical, 8)
-        .sheet(isPresented: $showingCamera) { ItemCamera { store.setPhoto($0, for: item) } }
-        .sheet(isPresented: $showingPhoto) {
-            NavigationStack {
-                ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
-                                   name: store.product(for: item.productID)?.name ?? "", fullImage: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .toolbar { Button("×¡×’×™×¨×”", systemImage: "xmark") { showingPhoto = false }.labelStyle(.iconOnly) }
-            }
-        }
-        .alert("××™×Ÿ ×’×™×©×” ×œ×ž×¦×œ×ž×”", isPresented: $cameraDenied) {
-            Button("×”×’×“×¨×•×ª") {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            }
-            Button("×‘×™×˜×•×œ", role: .cancel) {}
-        } message: { Text("××¤×©×¨ ×œ××¤×©×¨ ×’×™×©×” ×‘×”×’×“×¨×•×ª ××• ×œ×‘×—×•×¨ ×ª×ž×•× ×” ×ž×”×¡×¤×¨×™×™×”.") }
-    }
-
-
-}
-
-
-// Selection hit testing consumes these frames inside a gesture callback, not
-// while rendering. Publishing every geometry change back into SwiftUI creates
-// a layout/update feedback loop during native List and keyboard animations.
-private final class ShoppingItemFrameRegistry {
-    var frames: [UUID: CGRect] = [:]
-}
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí×Î¹é:-jZ.¶›­–)Þ³V–×÷'B7v–gET¦–×÷'BT”¶—@¦–×÷'B†÷F÷5T¦–×÷'Bdf÷VæFF–öà §7G'V7B6†÷–æuf–Ws¢f–Wr°¢ö'6W'fVDö&¦V7Bf"7F÷&S¢6†÷–æu7F÷&P¢7FFR&—fFRf"6†÷v–æu6†&–ærÒfÇ6P¢7FFR&—fFRf"6†&–ætÆ—7D”C¢UT”Cð¢7FFR&—fFRf"—4FF–ærÒfÇ6P¢7FFR&—fFRf"FF–æuFõ6V7F–öã¢7G&–æsð¢7FFR&—fFRf"æWtæÖRÒ" ¢7FFR&—fFRf"æWuVçF—G’Ò¢7FFR&—fFRf"&W6W'fU&t–çWBÒfÇ6P¢7FFR&—fFRf"æWuVçF—G”÷fW'&–FFVâÒfÇ6P¢7FFR&—fFRf"VF—FVDæÖRÒ" ¢7FFR&—fFRf"VçF—G”W‡æFVBÒfÇ6P¢7FFR&—fFRf"æWuVæ—C¢7G&–æsð¢7FFR&—fFRf"æWtæ÷FRÒ" ¢7FFR&—fFRf"æWuW&vVçBÒfÇ6P¢7FFR&—fFRf"æWu†÷FôFF¢FFð¢7FFR&—fFRf"æWu†÷Fó¢†÷F÷5–6¶W$—FVÓð¢7FFR&—fFRf"6†÷v–ætæWtæ÷FRÒfÇ6P¢7FFR&—fFRf"÷&–v–æÄVF—FVDæÖRÒ" ¢7FFR&—fFRf"VF—F–æt6FVv÷'“¢6†÷–æt—FVÓð¢7FFR&—fFRf"VF—F–ætæÖT”C¢UT”Cð¢7FFR&—fFRf"6†÷v–æt†—7F÷'’ÒfÇ6P¢7FFR&—fFRf"6†÷v–æu&W&F–öâÒfÇ6P¢7FFR&—fFRf"FWF–Ä—FVÓ¢6†÷–æt—FVÓð¢7FFR&—fFRf"Æ6Tf–ÇFW"Ò-yMy½y]yÂ ¢7FFR&—fFRf"Æ7DÖ&´BÒFFRæF—7FçE7@¢7FFR&—fFRf"6†÷v–ætæWtÆ—7BÒfÇ6P¢7FFR&—fFRf"6†÷v–æu&VæÖTÆ—7BÒfÇ6P¢7FFR&—fFRf"6†÷v–ætæWu6V7F–öâÒfÇ6P¢7FFR&—fFRf"6†÷v–ætV&æ6RÒfÇ6P¢7FFR&—fFRf"&V÷&FW&–ærÒfÇ6P¢7FFR&—fFRf"Æ—7DæÖRÒ" ¢7FFR&—fFRf"6V7F–öäæÖRÒ" ¢7FFR&—fFRf"6öÆÆ6VE6V7F–öç3¢6WCÅ7G&–æsâÒµÐ¢7FFR&—fFRf"6VÆV7FVD—FVÔ”G3¢6WCÅUT”CâÒµÐ¢7FFR&—fFRf"—FVÔg&ÖW2Ò6†÷–æt—FVÔg&ÖU&Vv—7G'’‚¢7FFR&—fFRf"VF—DÖöFS¢VF—DÖöFRÒæ–æ7F—fP¢fö7W57FFR&—fFRf"FDfö7W6VC¢&ööÀ¢fö7W57FFR&—fFRf"æÖTfö7W6VC¢UT”Cð¢7F÷&vR‚&w&÷W6†÷–æt'”6FVv÷'’"’&—fFRf"w&÷W'•6V7F–öâÒG'VP¢7F÷&vR‚'6†÷tV×G•6V7F–öç2"’&—fFRf"6†÷tV×G•6V7F–öç2ÒfÇ6P¢7F÷&vR‚'6†÷u&V6VçEW&6†6W2"’&—fFRf"6†÷u&V6VçEW&6†6W2ÒG'VP¢Vçf—&öæÖVçB…Âæ66W76–&–Æ—G•&VGV6TÖ÷F–öâ’&—fFRf"&VGV6TÖ÷F–öà¢Vçf—&öæÖVçB…Âæ†÷&—¦öçFÅ6—¦T6Æ72’&—fFRf"6—¦T6Æ70¢Vçf—&öæÖVçB…Âç66VæU†6R’&—fFRf"66VæU†6P ¢&—fFRf"Æ–¶VÇ“¢µ7VvvW7F–öåÒ²7F÷&Rç7VvvW7F–öç2æf–ÇFW"²CçF–W"ÓÒæÆ–¶VÇ’ÒÐ¢&—fFRf"Ö–&S¢µ7VvvW7F–öåÒ²7F÷&Rç7VvvW7F–öç2æf–ÇFW"²CçF–W"ÓÒæÖ–&RÒÐ¢&—fFRf"Æ—7EF–çC¢6öÆ÷"²F†VÖRçF–çB†f÷#¢7F÷&Ræ7W'&VçDÆ—7BçF–çDæÖR’Ð¢&—fFRf"6†÷w56V7F–öç3¢&ööÂ°¢w&÷W'•6V7F–öâbb‚7F÷&Ræ7W'&VçDÆ—7Bç6V7F–öç2æ—4V×G’ÇÂ7F÷&Ræ—FV×2æ6öçF–ç2°¢7F÷&Rç6V7F–öâ†f÷#¢C’Ò-yy}z‚ ¢Ò¢Ð¢&—fFRf"6VÆV7F–öägVÆÇ•W&vVçC¢&ööÂ°¢6VÆV7FVD—FVÔ”G2æ—4V×G’bb7F÷&Ræ—FV×2æf–ÇFW"²6VÆV7FVD—FVÔ”G2æ6öçF–ç2‚Cæ–B’ÒæÆÅ6F—6g’…Âæ—5W&vVçB¢Ð ¢&—fFRf"f—6–&ÆT—FV×3¢µ6†÷–æt—FVÕÒ°¢7F÷&Ræ—FV×2æf–ÇFW"²Æ6Tf–ÇFW"ÓÒ-yMy½y]yÂ"ÇÂ‡Æ6Tf–ÇFW"ÓÒ-yÍyÍyyíz}y]yÒ"òCç6†÷–æuÆ6RÓÒæ–Â¢Cç6†÷–æuÆ6RÓÒÆ6Tf–ÇFW"’Ð¢Ð ¢f"&öG“¢6öÖRf–Wr°¢w&÷W°¢–b6—¦T6Æ72ÓÒç&VwVÆ"°¢æf–vF–öå7Æ—Ef–Wr°¢Æ—7E6–FV& ¢ÒFWF–Ã¢°¢6†÷–æt6öçFVç@¢Ð¢ææf–vF–öå7Æ—Ef–Wu7G–ÆR‚æ&Ææ6VB¢ÒVÇ6R°¢6†÷–æt6öçFVç@¢Ð¢Ð¢Ð ¢&—fFRf"Æ—7E6–FV&#¢6öÖRf–Wr°¢Æ—7B°¢6V7F–öâ‚-yMzzyyíy]z¢zyÍzyR"’°¢f÷$V6‚‡7F÷&RæFFæÆ—7G2’²Æ—7B–à¢'WGFöâ²7v—F6„Æ—7B‡Fó¢Æ—7Bæ–B’ÒÆ&VÃ¢°¢…7F6²°¢Æ&VÂ†Æ—7BææÖRÂ7—7FVÔ–ÖvS¢Æ—7Bç7–Ö&öÄæÖR¢76W"‚¢–bÆ—7Bæ–BÓÒ7F÷&Rç6VÆV7FVDÆ—7D”B°¢–ÖvR‡7—7FVÔæÖS¢&6†V6¶Ö&²"’æ66W76–&–Æ—G”Æ&VÂ‚-yMzzyyíyByMzy]y½y}yz¢"¢Ð¢Ð¢Ð¢æÆ—7E&÷t&6¶w&÷VæB†Æ—7Bæ–BÓÒ7F÷&Rç6VÆV7FVDÆ—7D”BòÆ—7EF–çBæ÷6—G’ƒã"’¢6öÆ÷"æ6ÆV"¢Ð¢Ð¢'WGFöâ‚-zzyyíyBy}y=zyByÍy}zy]z¢"Â7—7FVÔ–ÖvS¢'ÇW2"’°¢Æ—7DæÖRÒ"#²6†÷v–ætæWtÆ—7BÒG'VP¢Ð¢Ð¢ææf–vF–öåF—FÆR‚-z}zyy]z¢"¢ææf–vF–öå7Æ—Ef–Wt6öÇVÖåv–GF‚†Ö–ã¢#CÂ–FVÃ¢#ƒÂÖƒ¢3C¢çF–çB†Æ—7EF–çB¢Ð ¢&—fFRf"6†÷–æt6öçFVçC¢6öÖRf–Wr°¢æf–vF–öå7F6²°¢67&öÆÅf–Wu&VFW"²67&öÆÂ–à¢Æ—7B‡6VÆV7F–öã¢&V÷&FW&–æròæ–Â¢G6VÆV7FVD—FVÔ”G2’°¢Æ—7D–çG&öGV7F–öà¢æÆ—7E&÷t–ç6WG2„VFvT–ç6WG2‡F÷¢"ÂÆVF–æs¢#Â&÷GFöÓ¢bÂG&–Æ–æs¢#’¢æÆ—7E&÷t&6¶w&÷VæB„6öÆ÷"æ6ÆV"¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢–b7F÷&Ræ—FV×2æ—4V×G’bb—4FF–ær°¢6öçFVçEVæf–Æ&ÆUf–Wr°¢Æ&VÂ‚-yíz}y]yÒyÍy½yÂyíyBzzmzyy¢"Â7—7FVÔ–ÖvS¢&&6¶WB"¢ÒFW67&—F–öã¢°¢FW‡B‚-yíy]zyzMyyÒy½yyòy=yzyyÒzzy-yízyRyyyz¢Ây]z}y]zyyÒyy}y2yíz­y]y¢yy]z­yBzzyyíyBâ"¢Ð¢æÆ—7E&÷t&6¶w&÷VæB„6öÆ÷"æ6ÆV"¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢Ð¢–bÆWBW'&÷"Ò7F÷&Rç7F÷&vTW'&÷"°¢6V7F–öâ°¢FW‡B„Æö6Æ—¦VE7G&–æt¶W’†W'&÷"’’æf÷&Vw&÷VæE7G–ÆR‚ç&VB¢'WGFöâ‚-zyzyy]yòzyíyzyBzy]zz2"’²7F÷&Rç&WG'”Æö6Å6fR‚’Ð¢Ð¢Ð¢–bÆWB&–æF–ærÒ7F÷&Ræ7W'&VçE6†&RÂ&–æF–æræ66W76–&ÆR°¢6V7F–öâ°¢Æ&VÂ†&–æF–æræ66W76–&ÆRò-zyz­y]z2y=zy¢”6Æ÷VB"¢-yMzyz­y]z2yyzyRymyíyyò(	ByMzyzy]yyyÒzzyízyyÒyyíy½zyz‚"À¢7—7FVÔ–ÖvS¢&–æF–æræ66W76–&ÆRò'W'6öâã""¢&–6Æ÷VBç6Æ6‚"¢æföçB‚æ6F–öâ’æf÷&Vw&÷VæE7G–ÆR‚ç6V6öæF'’¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢Ð¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâ¢Ð¢–b6WB‡7F÷&Ræ—FV×2æ6ö×7DÖ…Âç6†÷–æuÆ6R’’æ—4V×G’°¢–6¶W"‚-yíz}y]yÒz}zyyyB"Â6VÆV7F–öã¢GÆ6Tf–ÇFW"’°¢FW‡B‚-yMy½y]yÂ"’çFr‚-yMy½y]yÂ"¢FW‡B‚-yÍyÍyyíz}y]yÒ"’çFr‚-yÍyÍyyíz}y]yÒ"¢f÷$V6‚„'&’…6WB‡7F÷&Ræ—FV×2æ6ö×7DÖ…Âç6†÷–æuÆ6R’’’ç6÷'FVB‚’Â–C¢Âç6VÆb’²FW‡B‚C’çFr‚C’Ð¢Ð¢Ð¢–b6†÷w56V7F–öç2°¢f÷$V6‚‡6V7F–öäæÖW2Â–C¢Âç6VÆb’²6V7F–öâ–à¢6V7F–öâ°¢6V7F–öä†VFW"‡6V7F–öâ¢æÆ—7E&÷t–ç6WG2„VFvT–ç6WG2‡F÷¢ÂÆVF–æs¢bÂ&÷GFöÓ¢ÂG&–Æ–æs¢b’¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢æÆ—7E&÷t&6¶w&÷VæB„6öÆ÷"æ6ÆV"¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢æ&6¶w&÷VæB°¢æF—fTG&r‚ç6V7F–öâ‡6V7F–öâ’Â6V7F–öã¢6V7F–öâ¢Ð¢–b6öÆÆ6VE6V7F–öç2æ6öçF–ç2‡6V7F–öâ’°¢f÷$V6‚†—FV×2†–ã¢6V7F–öâ’’²—FVÒ–à¢—FVÕ&÷r†—FVÒ¢æÖ÷fTF—6&ÆVB‚&V÷&FW&–ær¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢æÆ—7E&÷t–ç6WG2„VFvT–ç6WG2‡F÷¢ÂÆVF–æs¢bÂ&÷GFöÓ¢ÂG&–Æ–æs¢b’¢Ð¢æöäÖ÷fR²6÷W&6RÂFW7F–æF–öâ–à¢7F÷&RæÖ÷fR†g&öÓ¢6÷W&6RÂFó¢FW7F–æF–öâÂ–å6V7F–öã¢6V7F–öâ¢Ð¢Ð¢Ð¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢Ð¢ÒVÇ6R°¢6V7F–öâ°¢f÷$V6‚‡f—6–&ÆT—FV×2’²—FVÒ–à¢—FVÕ&÷r†—FVÒ¢æÖ÷fTF—6&ÆVB‚&V÷&FW&–ær¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢æÆ—7E&÷t–ç6WG2„VFvT–ç6WG2‡F÷¢ÂÆVF–æs¢bÂ&÷GFöÓ¢ÂG&–Æ–æs¢b’¢Ð¢æöäÖ÷fR²6÷W&6RÂFW7F–æF–öâ–à¢7F÷&RæÖ÷fR†g&öÓ¢6÷W&6RÂFó¢FW7F–æF–öâÂ–å6V7F–öã¢æ–Â¢Ð¢Ð¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢Ð ¢–b—4FF–ær°¢6V7F–öâ²–æÆ–æTFE&÷rÐ¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâ¢Ð   ¢–b6†÷u&V6VçEW&6†6W2bb7F÷&Rç&V6VçEW&6†6W2æ—4V×G’°¢6V7F–öâ‚-zz}zyRyÍyy}zy]zyB"’°¢f÷$V6‚‡7F÷&Rç&V6VçEW&6†6W2’²W&6†6R–à¢–bÆWB&öGV7BÒ7F÷&Rç&öGV7B†f÷#¢W&6†6Rç&öGV7D”B’°¢…7F6²°¢–ÖvR‡7—7FVÔæÖS¢&6†V6¶Ö&²æ6—&6ÆRæf–ÆÂ"¢æf÷&Vw&÷VæE7G–ÆR‚çFW'F–'’¢FW‡B‡&öGV7BææÖR’æf÷&Vw&÷VæE7G–ÆR‚ç6V6öæF'’¢76W"‚¢'WGFöâ°¢v—F„æ–ÖF–öâ‡&VGV6TÖ÷F–öâòæ–Â¢æV6T÷WB†GW&F–öã¢ã‚’’°¢7F÷&RçVæFò‡W&6†6R¢Ð¢ÒÆ&VÃ¢°¢–ÖvR‡7—7FVÔæÖS¢&'&÷rçWGW&âæ&6·v&B"¢æg&ÖR†Ö–åv–GFƒ¢CBÂÖ–ä†V–v‡C¢CB¢Ð¢æ'WGFöå7G–ÆR‚æ&÷&FW&ÆW72¢æ66W76–&–Æ—G”Æ&VÂ‚-yyyy]yÂ"¢æ66W76–&–Æ—G”†–çB‚-yyyy]yÂyMz}zyyyBzyÂÂ‡&öGV7BææÖR’"¢Ð¢ç7v—T7F–öç2°¢'WGFöâ‚-yyyy]yÂz}zyyyB"Â7—7FVÔ–ÖvS¢&'&÷rçWGW&âæ&6·v&B"’°¢7F÷&RçVæFò‡W&6†6R¢Ð¢æÆ&VÅ7G–ÆR‚æ–6öäöæÇ’¢çF–çB„6öÆ÷"‡V”6öÆ÷#¢ç7—7FVÔ&ÇVR’¢Ð¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢æÆ—7E&÷t–ç6WG2„VFvT–ç6WG2‡F÷¢ÂÆVF–æs¢bÂ&÷GFöÓ¢ÂG&–Æ–æs¢b’¢Ð¢Ð¢'WGFöâ‚-yÍy½yÂyMz}zyy]z¢"Â7—7FVÔ–ÖvS¢&6Æö6²æ'&÷ræ6—&6ÆWF‚"’²6†÷v–æt†—7F÷'’ÒG'VRÐ¢æÆ&VÅ7G–ÆR‚æ–6öäöæÇ’¢æg&ÖR†Ö–åv–GFƒ¢CBÂÖ–ä†V–v‡C¢CB¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâ¢ç6VÆV7F–öäF—6&ÆVB‡G'VR¢Ð¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâ¢Ð¢Ð¢æÆ—7E7G–ÆR‚çÆ–â¢ç67&öÆÄ6öçFVçD&6¶w&÷VæB‚æ†–FFVâ¢æ&6¶w&÷VæB…F†VÖRæ6çf2¢æg&ÖR†Ö…v–GFƒ¢6—¦T6Æ72ÓÒç&VwVÆ"òcƒ¢æ–æf–æ—G’¢æg&ÖR†Ö…v–GFƒ¢æ–æf–æ—G’¢æÆ—7E&÷u6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢æÆ—7E6V7F–öå6W&F÷"‚æ†–FFVâÂVFvW3¢æÆÂ¢æ÷fW&Æ’°¢Gvôf–ævW%6VÆV7F–öävW7GW&R²g&öÒÂFò–à¢wV&B&V÷&FW&–ærVÇ6R²&WGW&âÐ¢ÆWB7&÷76VBÒ7F÷&Ræ—FV×2æ6ö×7DÖ²—FVÒÓâUT”Cò–à¢wV&BÆWBg&ÖRÒ—FVÔg&ÖW2æg&ÖW5¶—FVÒæ–EÒÀ¢g&ÖRæÖ–å’ÃÒÖ‚†g&öÒç’ÂFòç’’À¢g&ÖRæÖ…’ãÒÖ–â†g&öÒç’ÂFòç’’À¢g&ÖRæÖ–å‚ÃÒFòç‚Âg&ÖRæÖ…‚ãÒFòç‚VÇ6R²&WGW&âæ–ÂÐ¢&WGW&â—FVÒæ–@¢Ð¢wV&B7&÷76VBæ—4V×G’VÇ6R²&WGW&âÐ¢–bVF—DÖöFRæ—4VF—F–ær°¢6Æ÷6TVF—F÷"‚¢VF—DÖöFRÒæ7F—fP¢Ð¢6VÆV7FVD—FVÔ”G2æf÷&ÕVæ–öâ†7&÷76VB¢Ð¢æg&ÖR‡v–GFƒ¢Â†V–v‡C¢¢æÆÆ÷w4†—EFW7F–ær†fÇ6R¢Ð¢æVçf—&öæÖVçB…ÂæVF—DÖöFRÂFVF—DÖöFR¢æÆ—7E&÷u76–ærƒ¢æÆ—7E6V7F–öå76–ærƒ¢æVçf—&öæÖVçB…ÂæFVfVÇDÖ–äÆ—7E&÷t†V–v‡BÂSB¢æVçf—&öæÖVçB…ÂæFVfVÇDÖ–äÆ—7D†VFW$†V–v‡BÂ¢ç67&öÆÄF—6Ö—76W4¶W–&ö&B‚æ–çFW&7F—fVÇ’¢æ–ç7V7F÷"†—5&W6VçFVC¢&–æF–ær€¢vWC¢²FWF–Ä—FVÒÒæ–ÂÒÀ¢6WC¢²–bC²FWF–Ä—FVÒÒæ–ÂÒÐ¢’’°¢–bÆWBFWF–Ä—FVÒ°¢—FVÔFWF–Ç56†VWB‡7F÷&S¢7F÷&RÂ—FVÓ¢FWF–Ä—FVÒ¢æ–B†FWF–Ä—FVÒæ–B¢æ–ç7V7F÷$6öÇVÖåv–GF‚†Ö–ã¢3Â–FVÃ¢3cÂÖƒ¢CC¢Ð¢Ð¢çFööÆ&"²&÷GFöÔ7F–öç2‡67&öÆÂ’Ð ¢Ð¢ææf–vF–öåF—FÆR‡7F÷&Ræ7W'&VçDÆ—7BææÖR¢ææf–vF–öä&%F—FÆTF—7Æ”ÖöFR‚æ–æÆ–æR¢çFööÆ&"°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢çF÷&$ÆVF–ær’²Æ—7E–6¶W"çF–çB†Æ—7EF–çB’Ð¢FööÆ&$—FVÒ‡Æ6VÖVçC¢çF÷&%G&–Æ–ær’²÷F–öç4ÖVçRçF–çB„6öÆ÷"‡V”6öÆ÷#¢æÆ&VÂ’’Ð¢–bVF—DÖöFRæ—4VF—F–ærbb†—4FF–ærÇÂVF—F–ætæÖT”BÒæ–Â’°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢çF÷&%G&–Æ–ær’°¢'WGFöâ‚-zyy]yÒz-zyy½yB"Â7—7FVÔ–ÖvS¢&6†V6¶Ö&²"’²6Æ÷6TVF—F÷"‚’Ð¢æÆ&VÅ7G–ÆR‚æ–6öäöæÇ’¢æ¶W–&ö&E6†÷'F7WB‚ç&WGW&âÂÖöF–f–W'3¢æ6öÖÖæB¢çF–çB†Æ—7EF–çB¢Ð¢Ð¢–bVF—DÖöFRæ—4VF—F–ær°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢çF÷&%G&–Æ–ær’°¢'WGFöâ‚-zyy]yÒ"’°¢6VÆV7FVD—FVÔ”G2ç&VÖ÷fTÆÂ‚¢&V÷&FW&–ærÒfÇ6P¢VF—DÖöFRÒæ–æ7F—fP¢Ð¢Ð¢Ð¢Ð¢æöä6†ævR†öc¢7F÷&Ræ—FV×2’²òÂ—FV×2–à¢–bÆ6Tf–ÇFW"Ò-yMy½y]yÂ"bbÆ6Tf–ÇFW"Ò-yÍyÍyyíz}y]yÒ"bb—FV×2æ6öçF–ç2‡v†W&S¢²Cç6†÷–æuÆ6RÓÒÆ6Tf–ÇFW"Ò’²Æ6Tf–ÇFW"Ò-yMy½y]yÂ"Ð¢Ð¢æöä6†ævR†öc¢æÖTfö7W6VB’²öÆD”BÂæWt”B–à¢–böÆD”BÒæWt”BÂÆWBöÆD”BÂVF—F–ætæÖT”BÓÒöÆD”BÀ¢ÆWB—FVÒÒ7F÷&Ræ—FV×2æf—'7B‡v†W&S¢²Cæ–BÓÒöÆD”BÒ’°¢6fU&VæÖR†—FVÒ¢Ð¢Ð¢æöä6†ævR†öc¢7F÷&Ræ—FV×2æÖ…Âæ–B’’²òÂ–G2–à¢–bÆWBVF—F–ætæÖT”BÂ–G2æ6öçF–ç2†VF—F–ætæÖT”B’°¢WFFTVF—F÷"²6VÆbæVF—F–ætæÖT”BÒæ–Ã²æÖTfö7W6VBÒæ–ÂÐ¢Ð¢Ð¢ç6†VWB†—FVÓ¢FVF—F–æt6FVv÷'’’²6FVv÷'”VF—F÷"‡7F÷&S¢7F÷&RÂ—FVÓ¢C’Ð¢ç6†VWB†—5&W6VçFVC¢G6†÷v–ætV&æ6R’²Æ—7DV&æ6TVF—F÷"‡7F÷&S¢7F÷&R’Ð¢æöä6†ævR†öc¢VF—DÖöFR’²òÂÖöFR–à¢–bÖöFRæ—4VF—F–ær°¢6VÆV7FVD—FVÔ”G2ç&VÖ÷fTÆÂ‚¢&V÷&FW&–ærÒfÇ6P¢Ð¢Ð¢ç6†VWB†—5&W6VçFVC¢G6†÷v–æu&W&F–öâ’²6†÷–æu&W&F–öåf–Wr‡7F÷&S¢7F÷&R’Ð¢ç6†VWB†—5&W6VçFVC¢G6†÷v–æt†—7F÷'’’²W&6†6T†—7F÷'•f–Wr‡7F÷&S¢7F÷&R’Ð¢æÆW'B‚-zzyyíyBy}y=zyByÍy}zy]z¢"Â—5&W6VçFVC¢G6†÷v–ætæWtÆ—7B’°¢FW‡Df–VÆB‚-zyÒyMy}zy]z¢"ÂFW‡C¢FÆ—7DæÖR¢'WGFöâ‚-yzmyzyB"’²6Æ÷6TVF—F÷"‚“²7F÷&RæFDÆ—7B†æÖS¢Æ—7DæÖR’Ð¢'WGFöâ‚-yyyy]yÂ"Â&öÆS¢æ6æ6VÂ’·Ð¢Ð¢æÆW'B‚-zyzy]y’zyÒyMzzyyíyB"Â—5&W6VçFVC¢G6†÷v–æu&VæÖTÆ—7B’°¢FW‡Df–VÆB‚-zyÒyMy}zy]z¢"ÂFW‡C¢FÆ—7DæÖR¢'WGFöâ‚-zyíyzyB"’²7F÷&Rç&VæÖT7W'&VçDÆ—7B‡Fó¢Æ—7DæÖR’Ð¢'WGFöâ‚-yyyy]yÂ"Â&öÆS¢æ6æ6VÂ’·Ð¢Ð¢æÆW'B‚-yíz}yz"y}y=z’"Â—5&W6VçFVC¢G6†÷v–ætæWu6V7F–öâ’°¢FW‡Df–VÆB‚-zyÒyMyíz}yz""ÂFW‡C¢G6V7F–öäæÖR¢'WGFöâ‚-yzmyzyB"’°¢7F÷&RæFE6V7F–öâ‡6V7F–öäæÖR¢w&÷W'•6V7F–öâÒG'VP¢6†÷tV×G•6V7F–öç2ÒG'VP¢Ð¢'WGFöâ‚-yyyy]yÂ"Â&öÆS¢æ6æ6VÂ’·Ð¢Ð¢Ð¢çF–çB„6öÆ÷"‡V”6öÆ÷#¢æÆ&VÂ’¢ç6†VWB†—5&W6VçFVC¢G6†÷v–æu6†&–ær’°¢–bÆWBÆ—7D”BÒ6†&–ætÆ—7D”B²Æ—7E6†&–æu6†VWB‡7F÷&S¢7F÷&RÂÆ—7D”C¢Æ—7D”B’Ð¢Ð¢çF6²°¢6–bF&vWDVçf—&öæÖVçB‡6–×VÆF÷"¢7F÷&Ræ6Æ÷VE7–æ2ç7F'B‚¢6VæF–`¢Ð¢æöä6†ævR†öc¢66VæU†6R’²òÂ†6R–à¢6–bF&vWDVçf—&öæÖVçB‡6–×VÆF÷"¢–b†6RÓÒæ7F—fR²7F÷&Ræ6Æ÷VE7–æ2ç7F'B‚’Ð¢6VæF–`¢Ð¢çF6²†–C¢66VæU†6R’°¢6–bF&vWDVçf—&öæÖVçB‡6–×VÆF÷"¢wV&B66VæU†6RÓÒæ7F—fRVÇ6R²&WGW&âÐ¢v†–ÆRF6²æ—46æ6VÆÆVB°¢Fò²G'’v—BF6²ç6ÆVW†f÷#¢ç6V6öæG2ƒR’’Ò6F6‚²&WGW&âÐ¢–b7F÷&Rç6†&VDÆ—7G2æ—4V×G’²v—B7F÷&Ræ6Æ÷VE7–æ2ç7–æ6‡&öæ—¦R‚’Ð¢Ð¢6VæF–`¢Ð¢Ð ¢FööÆ&$6öçFVçD'V–ÆFW ¢&—fFRgVæ2&÷GFöÔ7F–öç2…ò67&öÆÃ¢67&öÆÅf–Wu&÷‡’’Óâ6öÖRFööÆ&$6öçFVçB°¦–b&V÷&FW&–ær°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢æ&÷GFöÔ&"’°¢FW‡B‚-y-zy]z‚yz¢yy=yy]z¢yMzyy=y]z‚zyÂyMyíy]zmzyyÒ"¢æföçB‚æ6F–öâ’æf÷&Vw&÷VæE7G–ÆR‚ç6V6öæF'’¢Ð¢ÒVÇ6R–bVF—DÖöFRæ—4VF—F–ær°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢æ&÷GFöÔ&"’°¢FW‡B‚%Â‡6VÆV7FVD—FVÔ”G2æ6÷VçB’zyy}zyR"¢æföçB‚ç7V&†VFÆ–æR’æf÷&Vw&÷VæE7G–ÆR‚ç6V6öæF'’¢Ð¢FööÆ&%76W"‚æfÆW†–&ÆRÂÆ6VÖVçC¢æ&÷GFöÔ&"¢FööÆ&$—FVÔw&÷W‡Æ6VÖVçC¢æ&÷GFöÔ&"’°¢'WGFöâ‡6VÆV7F–öägVÆÇ•W&vVçBò-yMzz‚y=y-yÂ"¢-y=y-yÂ"À¢7—7FVÔ–ÖvS¢6VÆV7F–öägVÆÇ•W&vVçBò&fÆrç6Æ6‚"¢&fÆræf–ÆÂ"’°¢7F÷&Rç6WEW&vVçB‚6VÆV7F–öägVÆÇ•W&vVçBÂf÷#¢6VÆV7FVD—FVÔ”G2¢6VÆV7FVD—FVÔ”G2ç&VÖ÷fTÆÂ‚¢VF—DÖöFRÒæ–æ7F—fP¢Ð¢æF—6&ÆVB‡6VÆV7FVD—FVÔ”G2æ—4V×G’¢'WGFöâ‚-yíy}yz}yB"Â7—7FVÔ–ÖvS¢'G&6‚"Â&öÆS¢æFW7G'V7F—fR’°¢v—F„æ–ÖF–öâ‡&VGV6TÖ÷F–öâòæ–Â¢æV6T÷WB†GW&F–öã¢ã‚’’²7F÷&Rç&VÖ÷fR‡6VÆV7FVD—FVÔ”G2’Ð¢6VÆV7FVD—FVÔ”G2ç&VÖ÷fTÆÂ‚¢VF—DÖöFRÒæ–æ7F—fP¢Ð¢æF—6&ÆVB‡6VÆV7FVD—FVÔ”G2æ—4V×G’¢Ð¢ÒVÇ6R–b—4FF–ærbbVF—F–ætæÖT”BÓÒæ–Â°¢FööÆ&$—FVÒ‡Æ6VÖVçC¢æ&÷GFöÔ&"’°¢'WGFöâ‚-z}zyyyBy}y=zyB"Â7—7FVÔ–ÖvS¢&6'Bæ&FvRçÇW2"’²6†÷v–æu&W&F–öâÒG'VRÐ¢çF–çB†Æ—7EF–çB¢Ð¢FööÆ&%76W"‚æfÆW†–&ÆRÂÆ6VÖVçC¢æ&÷GFöÔ&"¢FööÆ&$—FVÒ‡Æ6VÖVçC¢æ&÷GFöÔ&"’°¢'WGFöâ‚-yíy]zmz‚y}y=z’"Â7—7FVÔ–ÖvS¢'ÇW2"’°¢&Vv–äFF–ær‚¢F6²²Ö–ä7F÷"–à¢v—BF6²ç––VÆB‚¢f"G&ç67F–öâÒG&ç67F–öâ†æ–ÖF–öã¢æ–Â¢G&ç67F–öâæF—6&ÆW4æ–ÖF–öç2ÒG'VP¢v—F…G&ç67F–öâ‡G&ç67F–öâ’°¢67&öÆÂç67&öÆÅFò‚&æWrÖ—FVÒ"Âæ6†÷#¢æ&÷GFöÒ¢FDfö7W6VBÒG'VP¢Ð¢Ð¢Ð¢æÆ&VÅ7G–ÆR‚çF—FÆTæD–6öâ¢æföçEvV–v‡B‚ç6VÖ–&öÆB¢æ66W76–&–Æ—G”Æ&VÂ‚-yMy]zzMz¢yíy]zmz‚"¢æ¶W–&ö&E6†÷'F7WB‚&â"ÂÖöF–f–W'3¢æ6öÖÖæB¢çF–çB†Æ—7EF–çB¢Ð¢Ð¢Ð  ¢&—fFRf"†4æWtæÖS¢&ööÂ°¢æWtæÖRçG&–ÖÖ–æt6†&7FW'2†–ã¢çv†—FW76W4æDæWvÆ–æW2’æ—4V×G¢Ð ¢&—fFRf"–æÆ–æTFE&÷s¢6öÖRf–Wr°¢e7F6²†Æ–væÖVçC¢æÆVF–ærÂ76–æs¢’°¢…7F6²‡76–æs¢B’°¢–ÖvR‡7—7FVÔæÖS¢&6—&6ÆR"¢æföçB‚ç7—7FVÒ‡6—¦S¢#RÂvV–v‡C¢ç&VwVÆ"’¢æf÷&Vw&÷VæE7G–ÆR†Æ—7EF–çBæ÷6—G’ƒã‚’¢æg&ÖR‡v–GFƒ¢CBÂ†V–v‡C¢CB¢úç«h‘éì¶»§q«^t€€€€€¹™É…µ”¡µ…á]¥‘Ñ è€¹¥¹™¥¹¥Ñä°…±¥¹µ•¹Ðè€¹±•…‘¥¹œ¤(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹ŒÍ•Ñ¥½¹!•…‘•È¡|Í•Ñ¥½¸èMÑÉ¥¹œ¤€´øÍ½µ”Y¥•Üì(€€€€€€€	ÕÑÑ½¸ì(€€€€€€€€€€€Ý¥Ñ¡¹¥µ…Ñ¥½¸¡É•‘Õ•5½Ñ¥½¸€ü¹¥°€è€¹Í¹…ÁÁä¡‘ÕÉ…Ñ¥½¸è€À¸ÈÈ°•áÑÉ…	½Õ¹”è€À¤¤ì(€€€€€€€€€€€€€€€¥˜€…½±±…ÁÍ•‘M•Ñ¥½¹Ì¹¥¹Í•ÉÐ¡Í•Ñ¥½¸¤¹¥¹Í•ÉÑ•ì½±±…ÁÍ•‘M•Ñ¥½¹Ì¹É•µ½Ù”¡Í•Ñ¥½¸¤ô(€€€€€€€€€€€ô(€€€€€€€ô±…‰•°èì(€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€à¤ì(€€€€€€€€€€€€€€€Q•áÐ¡Í•Ñ¥½¸¤(€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹¡•…‘±¥¹”¤(€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±”¡±¥ÍÑQ¥¹Ð¤(€€€€€€€€€€€€€€€MÁ…•È¡µ¥¹1•¹Ñ è€à¤(€€€€€€€€€€€€€€€%µ…”¡ÍåÍÑ•µ9…µ”è½±±…ÁÍ•‘M•Ñ¥½¹Ì¹½¹Ñ…¥¹Ì¡Í•Ñ¥½¸¤€ü€‰¡•ÙÉ½¸¹‰…­Ý…Éˆ€è€‰¡•ÙÉ½¸¹‘½Ý¸ˆ¤(€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹…ÁÑ¥½¸¹Ý•¥¡Ð ¹Í•µ¥‰½±¤¤(€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹Í•½¹‘…Éä¤(€€€€€€€€€€€ô(€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹±•…‘¥¹œ°€ÔØ¤(€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹ÑÉ…¥±¥¹œ°€à¤(€€€€€€€€€€€€¹™É…µ”¡µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€¹½¹Ñ•¹ÑM¡…Á”¡I•Ñ…¹±” ¤¤(€€€€€€€ô(€€€€€€€€¹‰ÕÑÑ½¹MÑå±” ¹Á±…¥¸¤(€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‰p¡Í•Ñ¥½¸¤°p¡¥Ñ•µÌ¡¥¸èÍ•Ñ¥½¸¤¹½Õ¹Ð¤ƒ^{^W^›^£^g^tˆ¤(€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå!¥¹Ð¡½±±…ÁÍ•‘M•Ñ¥½¹Ì¹½¹Ñ…¥¹Ì¡Í•Ñ¥½¸¤€ü€‹^S^£^_^G^¨ƒ^{^Ÿ^c^ˆˆ€è€‹^›^{^›^W^tƒ^{^Ÿ^c^ˆˆ¤(€€€€€€€€¹Á…‘‘¥¹œ ¹Ñ½À°€Ø¤(€€€ô((€€€Y¥•Ý	Õ¥±‘•È(€€€ÁÉ¥Ù…Ñ”™Õ¹Œ¥Ñ•µI½Ü¡|¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´¤€´øÍ½µ”Y¥•Üì(€€€€€€€¥˜±•ÐÁÉ½‘ÕÐ€ôÍÑ½É”¹ÁÉ½‘ÕÐ¡™½Èè¥Ñ•´¹ÁÉ½‘ÕÑ%¤ì(€€€€€€€€€€€YMÑ…¬¡…±¥¹µ•¹Ðè€¹±•…‘¥¹œ°ÍÁ…¥¹œè€È¤ì(€€€€€€€€€€€!MÑ…¬¡…±¥¹µ•¹Ðè€¹•¹Ñ•È°ÍÁ…¥¹œè€à¤ì(€€€€€€€€€€€€€€€¥˜€…•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œì(€€€€€€€€€€€€€€€	ÕÑÑ½¸ì(€€€€€€€€€€€€€€€€€€€Õ…É…Ñ”¹¹½Ü¹Ñ¥µ•%¹Ñ•ÉÙ…±M¥¹”¡±…ÍÑ5…É­Ð¤€ø€À¸ÌÔ•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€€€€€€€€€€€€€±…ÍÑ5…É­Ð€ô€¹¹½Ü(€€€€€€€€€€€€€€€€€€€U%%µÁ…Ñ••‘‰…­•¹•É…Ñ½È¡ÍÑå±”è€¹±¥¡Ð¤¹¥µÁ…Ñ=ÕÉÉ• ¤(€€€€€€€€€€€€€€€€€€€¥˜É•‘Õ•5½Ñ¥½¸ìÍÑ½É”¹‰Õä¡¥Ñ•´¤ô(€€€€€€€€€€€€€€€€€€€•±Í”ìÝ¥Ñ¡¹¥µ…Ñ¥½¸ ¹•…Í•=ÕÐ¡‘ÕÉ…Ñ¥½¸è€À¸Äà¤¤ìÍÑ½É”¹‰Õä¡¥Ñ•´¤ôô(€€€€€€€€€€€€€€€ô±…‰•°èì(€€€€€€€€€€€€€€€€€€€¥É±” ¤(€€€€€€€€€€€€€€€€€€€€€€€€¹ÍÑÉ½­•	½É‘•È¡±¥ÍÑQ¥¹Ð°±¥¹•]¥‘Ñ è€È¤(€€€€€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡Ý¥‘Ñ è€ÈÔ°¡•¥¡Ðè€ÈÔ¤(€€€€€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡Ý¥‘Ñ è€ÐÐ°¡•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹‰ÕÑÑ½¹MÑå±” ¹‰½É‘•É±•ÍÌ¤(€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^ƒ^Ÿ^ƒ^Pp¡ÁÉ½‘ÕÐ¹¹…µ”¤ˆ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€YMÑ…¬¡…±¥¹µ•¹Ðè€¹±•…‘¥¹œ°ÍÁ…¥¹œè€È¤ì(€€€€€€€€€€€€€€€€€€€¥˜•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥ì(€€€€€€€€€€€€€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€Ð¤ì(€€€€€€€€€€€€€€€€€€€€€€€Q•áÑ¥•± ‹^§^tƒ^S^{^W^›^ ˆ°Ñ•áÐè€‘•‘¥Ñ•‘9…µ”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹Ñ¥¹Ð¡±¥ÍÑQ¥¹Ð¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½ÕÍ• ‘¹…µ•½ÕÍ•°•ÅÕ…±Ìè¥Ñ•´¹¥¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹ÍÕ‰µ¥Ñ1…‰•° ¹‘½¹”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹½¹MÕ‰µ¥Ðì™¥¹¥Í¡I•¹…µ”¡¥Ñ•´¤ô((€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€€€€€ô•±Í”¥˜•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œì(€€€€€€€€€€€€€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€Ø¤ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€Q•áÐ¡ÁÉ½‘ÕÐ¹¹…µ”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹‰½‘ä¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±”¡½±½È¡Õ¥½±½Èè€¹±…‰•°¤¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹µÕ±Ñ¥±¥¹•Q•áÑ±¥¹µ•¹Ð ¹±•…‘¥¹œ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™¥á•‘M¥é”¡¡½É¥é½¹Ñ…°è™…±Í”°Ù•ÉÑ¥…°èÑÉÕ”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€¥˜¥Ñ•´¹¥ÍUÉ•¹Ðì(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€%µ…”¡ÍåÍÑ•µ9…µ”è€‰™±…œ¹™¥±°ˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹½É…¹”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^O^_^W^Œˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€ô•±Í”ì(€€€€€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€¥˜¥Í‘‘¥¹œñð•‘¥Ñ¥¹9…µ•%€„ô¹¥°ì±½Í•‘¥Ñ½È ¤ô(€€€€€€€€€€€€€€€€€€€€€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€•‘¥Ñ•‘9…µ”€ôÁÉ½‘ÕÐ¹¹…µ”(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€½É¥¥¹…±‘¥Ñ•‘9…µ”€ôÁÉ½‘ÕÐ¹¹…µ”(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€•‘¥Ñ¥¹9…µ•%€ô¥Ñ•´¹¥(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€ÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ô™…±Í”(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…µ•½ÕÍ•€ô¥Ñ•´¹¥(€€€€€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€ô±…‰•°èì(€€€€€€€€€€€€€€€€€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€Ø¤ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€Q•áÐ¡ÁÉ½‘ÕÐ¹¹…µ”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹‰½‘ä¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±”¡½±½È¡Õ¥½±½Èè€¹±…‰•°¤¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹µÕ±Ñ¥±¥¹•Q•áÑ±¥¹µ•¹Ð ¹±•…‘¥¹œ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™¥á•‘M¥é”¡¡½É¥é½¹Ñ…°è™…±Í”°Ù•ÉÑ¥…°èÑÉÕ”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¥˜¥Ñ•´¹¥ÍUÉ•¹Ðì(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€%µ…”¡ÍåÍÑ•µ9…µ”è€‰™±…œ¹™¥±°ˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹…ÁÑ¥½¸¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹½É…¹”¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^O^_^W^Œˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡µ…á]¥‘Ñ è€¹¥¹™¥¹¥Ñä°µ¥¹!•¥¡Ðè€ÐÐ°…±¥¹µ•¹Ðè€¹±•…‘¥¹œ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹½¹Ñ•¹ÑM¡…Á”¡I•Ñ…¹±” ¤¤(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€€¹‰ÕÑÑ½¹MÑå±” ¹Á±…¥¸¤(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€¥˜•‘¥Ñ¥¹9…µ•%€„ô¥Ñ•´¹¥°±•Ð¹½Ñ”€ô¥Ñ•´¹¹½Ñ”°€…¹½Ñ”¹¥ÍµÁÑäì(€€€€€€€€€€€€€€€€€€€€€€€Q•áÐ¡¹½Ñ”¤¹™½¹Ð ¹ÍÕ‰¡•…‘±¥¹”¤¹™½É•É½Õ¹‘MÑå±” ¹Í•½¹‘…Éä¤¹±¥¹•1¥µ¥Ð Ä¤(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜¥Ñ•´¹Á¡½Ñ½…Ñ„€„ô¹¥°ñð¥Ñ•´¹Á¡½Ñ½¥±•¹…µ”€„ô¹¥°ì(€€€€€€€€€€€€€€€€€€€%Ñ•µA¡½Ñ½Q¡Õµ‰¹…¥°¡‰åÑ•Ìè¥Ñ•´¹Á¡½Ñ½…Ñ„°™¥±•UI0èÍÑ½É”¹±•…åA¡½Ñ½UI0¡™½Èè¥Ñ•´¤°¹…µ”èÁÉ½‘ÕÐ¹¹…µ”¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜¥Ñ•´¹ÅÕ…¹Ñ¥Ñä€ø€Äñð¥Ñ•´¹Õ¹¥Ð€„ô¹¥°ñð•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹]p¡¥Ñ•´¹ÅÕ…¹Ñ¥Ñä¤p¡¥Ñ•´¹Õ¹¥Ð€üü€ˆˆ¤ˆ¤ì(€€€€€€€€€€€€€€€€€€€€€€€¥˜•‘¥Ñ¥¹9…µ•%€„ô¥Ñ•´¹¥ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€¥˜¥Í‘‘¥¹œñð•‘¥Ñ¥¹9…µ•%€„ô¹¥°ì±½Í•‘¥Ñ½È ¤ô(€€€€€€€€€€€€€€€€€€€€€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€•‘¥Ñ•‘9…µ”€ôÁÉ½‘ÕÐ¹¹…µ”(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€½É¥¥¹…±‘¥Ñ•‘9…µ”€ôÁÉ½‘ÕÐ¹¹…µ”(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€•‘¥Ñ¥¹9…µ•%€ô¥Ñ•´¹¥(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…µ•½ÕÍ•€ô¹¥°(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€ÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ôÑÉÕ”(€€€€€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€ô•±Í”ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½ÈìÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ôÑÉÕ”ô(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹‰½‘ä¹Ý•¥¡Ð ¹µ•‘¥Õ´¤¤(€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹ÁÉ¥µ…Éä¤(€€€€€€€€€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹¡½É¥é½¹Ñ…°°€ÄÀ¤(€€€€€€€€€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹Ù•ÉÑ¥…°°€Ô¤(€€€€€€€€€€€€€€€€€€€€¹‰…­É½Õ¹¡Q¡•µ”¹½¹ÑÉ½°°¥¸è…ÁÍÕ±” ¤¤(€€€€€€€€€€€€€€€€€€€€¹±¥¹•1¥µ¥Ð Ä¤(€€€€€€€€€€€€€€€€€€€€¹µÕ±Ñ¥±¥¹•Q•áÑ±¥¹µ•¹Ð ¹ÑÉ…¥±¥¹œ¤(€€€€€€€€€€€€€€€€€€€€¹‰ÕÑÑ½¹MÑå±” ¹Á±…¥¸¤(€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡µ¥¹]¥‘Ñ è€ÐÐ°µ…á]¥‘Ñ è€ÄÜÀ°µ¥¹!•¥¡Ðè€ÐÐ°…±¥¹µ•¹Ðè€¹•¹Ñ•È¤(€€€€€€€€€€€€€€€€€€€€¹™¥á•‘M¥é”¡¡½É¥é½¹Ñ…°èÑÉÕ”°Ù•ÉÑ¥…°è™…±Í”¤(€€€€€€€€€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹±•…‘¥¹œ°€à¤(€€€€€€€€€€€€€€€€€€€€¹‘¥Í…‰±•¡•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œ¤(€€€€€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^‹^£^g^o^¨ƒ^o^{^W^¨ƒ^W^S^‹^£^W^¨ƒ^‹^G^W^ p¡ÁÉ½‘ÕÐ¹¹…µ”¤ˆ¤(€€€€€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥ÑåY…±Õ” ‹^o^{^W^¨p¡¥Ñ•´¹ÅÕ…¹Ñ¥Ñä¤p¡¥Ñ•´¹Õ¹¥Ð€üü€ˆˆ¤ˆ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^“^£^c^dƒ^{^W^›^ ˆ°ÍåÍÑ•µ%µ…”è€‰¥¹™¼¹¥É±”ˆ¤ì(€€€€€€€€€€€€€€€€€€€€€€€Í…Ù•I•¹…µ”¡¥Ñ•´¤(€€€€€€€€€€€€€€€€€€€€€€€‘•Ñ…¥±%Ñ•´€ô¥Ñ•´(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤¹‰ÕÑÑ½¹MÑå±” ¹‰½É‘•É±•ÍÌ¤(€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹‰½‘ä¤¹™½É•É½Õ¹‘MÑå±”¡½±½È¡Õ¥½±½Èè€¹Í•½¹‘…Éå1…‰•°¤¤(€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡µ¥¹]¥‘Ñ è€ÐÐ°µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô(€€€€€€€€€€€¥˜•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥€˜˜€…•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œì(€€€€€€€€€€€€€€€%Ñ•µ%¹±¥¹••Ñ…¥±Ì¡ÍÑ½É”èÍÑ½É”°¥Ñ•´è¥Ñ•´°Í¡½ÝÍEÕ…¹Ñ¥ÑäèÅÕ…¹Ñ¥ÑåáÁ…¹‘•¤(€€€€€€€€€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹±•…‘¥¹œ°€Ðà¤(€€€€€€€€€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹ÑÉ…¥±¥¹œ°€ÄÈ¤(€€€€€€€€€€€€€€€€€€€€¹ÑÉ…¹Í¥Ñ¥½¸ ¹¥‘•¹Ñ¥Ñä¤(€€€€€€€€€€€ô(€€€€€€€€€€€ô(€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹¡½É¥é½¹Ñ…°°€Ð¤(€€€€€€€€€€€€¹Á…‘‘¥¹œ ¹Ù•ÉÑ¥…°°•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥€ü€à€è€È¤(€€€€€€€€€€€€¹‰…­É½Õ¹¡•‘¥Ñ¥¹9…µ•%€ôô¥Ñ•´¹¥€üQ¡•µ”¹•‘¥Ñ½È€è½±½È¹±•…È°(€€€€€€€€€€€€€€€€€€€€€€€¥¸èI½Õ¹‘•‘I•Ñ…¹±”¡½É¹•ÉI…‘¥ÕÌè€ÈÐ°ÍÑå±”è€¹½¹Ñ¥¹Õ½ÕÌ¤¤(€€€€€€€€€€€€¹±¥ÍÑI½Ý	…­É½Õ¹¡½±½È¹±•…È¤(€€€€€€€€€€€€¹ÍÝ¥Á•Ñ¥½¹Ì¡•‘”è€¹±•…‘¥¹œ°…±±½ÝÍÕ±±MÝ¥Á”èÑÉÕ”¤ì(€€€€€€€€€€€€€€€	ÕÑÑ½¸¡¥Ñ•´¹¥ÍUÉ•¹Ð€ü€‹^S^‡^ ƒ^O^K^pˆ€è€‹^O^_^W^Œˆ°(€€€€€€€€€€€€€€€€€€€€€€ÍåÍÑ•µ%µ…”è¥Ñ•´¹¥ÍUÉ•¹Ð€ü€‰™±…œ¹Í±…Í ˆ€è€‰™±…œˆ¤ì(€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹Ñ½±•UÉ•¹Ð¡¥Ñ•´¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€¹Ñ¥¹Ð¡½±½È¡É•è€À¸ØÈ°É••¸è€À¸ÌÐ°‰±Õ”è€À¸ÀÈ¤¤(€€€€€€€€€€€ô(€€€€€€€€€€€€¹ÍÝ¥Á•Ñ¥½¹Ì¡•‘”è€¹ÑÉ…¥±¥¹œ°…±±½ÝÍÕ±±MÝ¥Á”èÑÉÕ”¤ì(€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^S^‡^ ˆ°ÍåÍÑ•µ%µ…”è€‰ÑÉ…Í ˆ°É½±”è€¹‘•ÍÑÉÕÑ¥Ù”¤ìÍÑ½É”¹É•µ½Ù”¡¥Ñ•´¤ô(€€€€€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€€€€€¹Ñ¥¹Ð ¹É•¤(€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^{^Ÿ^c^ˆˆ°ÍåÍÑ•µ%µ…”è€‰ÍÅÕ…É”¹É¥¸ÉàÈˆ¤ì•‘¥Ñ¥¹…Ñ•½Éä€ô¥Ñ•´ô(€€€€€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€€€€€¹Ñ¥¹Ð¡½±½È¡Õ¥½±½Èè€¹ÍåÍÑ•µ	±Õ”¤¤(€€€€€€€€€€€ô(€€€€€€€€€€€€¹‰…­É½Õ¹ì(€€€€€€€€€€€€€€€¹…Ñ¥Ù•É…œ ¹¥Ñ•´¡¥Ñ•´¹¥¤°Í•Ñ¥½¸èÍ¡½ÝÍM•Ñ¥½¹Ì€üÍÑ½É”¹Í•Ñ¥½¸¡™½Èè¥Ñ•´¤€è¹¥°¤(€€€€€€€€€€€ô(€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥ÑåÑ¥½¸¡¹…µ•è€‹^S^‹^G^£^Pƒ^s^{^‹^s^Pˆ¤ìµ½Ù•%Ñ•´¡¥Ñ•´°‘½Ý¸è™…±Í”¤ô(€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥ÑåÑ¥½¸¡¹…µ•è€‹^S^‹^G^£^Pƒ^s^{^c^Pˆ¤ìµ½Ù•%Ñ•´¡¥Ñ•´°‘½Ý¸èÑÉÕ”¤ô(€€€€€€€€€€€€¹Í•±•Ñ¥½¹¥Í…‰±• …•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œ¤(€€€€€€€€€€€€¹Ñ…œ¡¥Ñ•´¹¥¤(€€€€€€€€€€€€¹½¹•½µ•ÑÉå¡…¹”¡™½ÈèI•Ð¹Í•±˜°½˜èì€À¹™É…µ”¡¥¸è€¹±½‰…°¤ô¤ì|°™É…µ”¥¸(€€€€€€€€€€€€€€€¥Ñ•µÉ…µ•Ì¹™É…µ•Ím¥Ñ•´¹¥‘t€ô™É…µ”(€€€€€€€€€€€ô(€€€€€€€€€€€€¹½¹¥Í…ÁÁ•…Èì¥Ñ•µÉ…µ•Ì¹™É…µ•Ím¥Ñ•´¹¥‘t€ô¹¥°ô(€€€€€€€ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œµ½Ù•%Ñ•´¡|¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´°‘½Ý¸è	½½°¤ì(€€€€€€€±•ÐÍ•Ñ¥½¸€ôÍ¡½ÝÍM•Ñ¥½¹Ì€üÍÑ½É”¹Í•Ñ¥½¸¡™½Èè¥Ñ•´¤€è¹¥°(€€€€€€€±•Ð½É‘•É•€ôÍ•Ñ¥½¸¹µ…Àì¥Ñ•µÌ¡¥¸è€À¤ô€üüÍÑ½É”¹¥Ñ•µÌ(€€€€€€€Õ…É±•Ð¥¹‘•à€ô½É‘•É•¹™¥ÉÍÑ%¹‘•à¡Ý¡•É”èì€À¹¥€ôô¥Ñ•´¹¥ô¤•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€±•Ð¹•¥¡‰½È€ô¥¹‘•à€¬€¡‘½Ý¸€ü€Ä€è€´Ä¤(€€€€€€€Õ…É½É‘•É•¹¥¹‘¥•Ì¹½¹Ñ…¥¹Ì¡¹•¥¡‰½È¤•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€ÍÑ½É”¹Á±…”¡m¥Ñ•´¹¥‘t°¥¹M•Ñ¥½¸èÍ•Ñ¥½¸°É•±…Ñ¥Ù•Q¼è½É‘•É•‘m¹•¥¡‰½Ét¹¥°…™Ñ•Èè‘½Ý¸¤(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ‘É…AÉ•Ù¥•Ý½¹Ñ•¹Ð¡™½È•¹ÑÉäèM¡½ÁÁ¥¹É…¹ÑÉä¤€´øM¡½ÁÁ¥¹É…AÉ•Ù¥•Ý½¹Ñ•¹Ðì(€€€€€€€ÍÝ¥Ñ •¹ÑÉäì(€€€€€€€…Í”€¹Í•Ñ¥½¸¡±•Ð¹…µ”¤è(€€€€€€€€€€€É•ÑÕÉ¸M¡½ÁÁ¥¹É…AÉ•Ù¥•Ý½¹Ñ•¹Ð¡Ñ¥Ñ±”è¹…µ”°¥ÍM•Ñ¥½¸èÑÉÕ”¤(€€€€€€€…Í”€¹¥Ñ•´¡±•Ð¥¤è(€€€€€€€€€€€Õ…É±•Ð¥Ñ•´€ôÍÑ½É”¹¥Ñ•µÌ¹™¥ÉÍÐ¡Ý¡•É”èì€À¹¥€ôô¥ô¤°(€€€€€€€€€€€€€€€€€±•ÐÁÉ½‘ÕÐ€ôÍÑ½É”¹ÁÉ½‘ÕÐ¡™½Èè¥Ñ•´¹ÁÉ½‘ÕÑ%¤•±Í”ì(€€€€€€€€€€€€€€€É•ÑÕÉ¸M¡½ÁÁ¥¹É…AÉ•Ù¥•Ý½¹Ñ•¹Ð¡Ñ¥Ñ±”è€‹^{^W^›^ ˆ¤(€€€€€€€€€€€ô(€€€€€€€€€€€É•ÑÕÉ¸M¡½ÁÁ¥¹É…AÉ•Ù¥•Ý½¹Ñ•¹Ð¡Ñ¥Ñ±”èÁÉ½‘ÕÐ¹¹…µ”°(€€€€€€€€€€€€€€€ÅÕ…¹Ñ¥Ñäè€‹]p¡¥Ñ•´¹ÅÕ…¹Ñ¥Ñä¤p¡¥Ñ•´¹Õ¹¥Ð€üü€ˆˆ¤ˆ°¹½Ñ”è¥Ñ•´¹¹½Ñ”°ÕÉ•¹Ðè¥Ñ•´¹¥ÍUÉ•¹Ð¤(€€€€€€€ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹ŒÕÁ‘…Ñ•‘¥Ñ½È¡|ÕÁ‘…Ñ”è€ ¤€´øY½¥¤ì(€€€€€€€€¼¼U%-¥ÐÌ1¥ÍÐÍ•±˜µÍ¥é¥¹œ…¹­•å‰½…É…±É•…‘äÕÁ‘…Ñ”•½µ•ÑÉä¸(€€€€€€€€¼¼½¹ÕÉÉ•¹ÐMÝ¥™ÑU$ÑÉ…¹Í¥Ñ¥½¸…ÕÍ•ÌÑ¡”Í…µ”¡•¥¡ÐÑ¼…¹¥µ…Ñ”ÑÝ¥”¸(€€€€€€€Ù…ÈÑÉ…¹Í…Ñ¥½¸€ôQÉ…¹Í…Ñ¥½¸¡…¹¥µ…Ñ¥½¸è¹¥°¤(€€€€€€€ÑÉ…¹Í…Ñ¥½¸¹‘¥Í…‰±•Í¹¥µ…Ñ¥½¹Ì€ôÑÉÕ”(€€€€€€€Ý¥Ñ¡QÉ…¹Í…Ñ¥½¸¡ÑÉ…¹Í…Ñ¥½¸°ÕÁ‘…Ñ”¤(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ¹…Ñ¥Ù•É…œ¡|•¹ÑÉäèM¡½ÁÁ¥¹É…¹ÑÉä°Í•Ñ¥½¸èMÑÉ¥¹œü¤€´øÍ½µ”Y¥•Üì(€€€€€€€9…Ñ¥Ù•M¡½ÁÁ¥¹É…œ¡•¹ÑÉäè•¹ÑÉä°±¥ÍÑ%èÍÑ½É”¹Í•±•Ñ•‘1¥ÍÑ%°(€€€€€€€€€€€€€€€€€€€€€€€€€€•¹…‰±•è€…•‘¥Ñ5½‘”¹¥Í‘¥Ñ¥¹œ€˜˜•‘¥Ñ¥¹9…µ•%€ôô¹¥°€˜˜€…¥Í‘‘¥¹œ°(€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ¥¹ÐèU%½±½È¡±¥ÍÑQ¥¹Ð¤°ÁÉ•Ù¥•Ý½¹Ñ•¹Ðè‘É…AÉ•Ù¥•Ý½¹Ñ•¹Ð¡™½Èè•¹ÑÉä¤¤ì•¹ÑÉ¥•Ì°…™Ñ•È¥¸(€€€€€€€€€€€Ý¥Ñ¡¹¥µ…Ñ¥½¸¡É•‘Õ•5½Ñ¥½¸€ü¹¥°€è€¹•…Í•=ÕÐ¡‘ÕÉ…Ñ¥½¸è€À¸Äà¤¤ì(€€€€€€€€€€€€€€€¥˜…Í”€¹Í•Ñ¥½¸¡±•ÐÍ½ÕÉ”¤ü€ô•¹ÑÉ¥•Ì¹™¥ÉÍÐ°(€€€€€€€€€€€€€€€€€€…Í”€¹Í•Ñ¥½¸¡±•ÐÑ…É•Ð¤€ô•¹ÑÉäì(€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹Á±…•M•Ñ¥½¸¡Í½ÕÉ”°É•±…Ñ¥Ù•Q¼èÑ…É•Ð°…™Ñ•Èè…™Ñ•È¤(€€€€€€€€€€€€€€€ô•±Í”ì(€€€€€€€€€€€€€€€€€€€±•Ð‘É…•‘%Ì€ôM•Ð¡•¹ÑÉ¥•Ì¹½µÁ…Ñ5…ÀìÙ…±Õ”€´øUU%ü¥¸(€€€€€€€€€€€€€€€€€€€€€€€¥˜…Í”€¹¥Ñ•´¡±•Ð¥¤€ôÙ…±Õ”ìÉ•ÑÕÉ¸¥ô(€€€€€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸¹¥°(€€€€€€€€€€€€€€€€€€€ô¤(€€€€€€€€€€€€€€€€€€€±•ÐÙ¥Í¥‰±•=É‘•È€ôÍ¡½ÝÍM•Ñ¥½¹Ì€üÍ•Ñ¥½¹9…µ•Ì¹™±…Ñ5…Àì¥Ñ•µÌ¡¥¸è€À¤ô€èÍÑ½É”¹¥Ñ•µÌ(€€€€€€€€€€€€€€€€€€€±•Ð¥‘Ì€ôÙ¥Í¥‰±•=É‘•È¹™¥±Ñ•Èì‘É…•‘%Ì¹½¹Ñ…¥¹Ì À¹¥¤ô¹µ…À¡p¹¥¤(€€€€€€€€€€€€€€€€€€€±•ÐÑ…É•ÐèUU%ü(€€€€€€€€€€€€€€€€€€€¥˜…Í”€¹¥Ñ•´¡±•Ð¥¤€ô•¹ÑÉäìÑ…É•Ð€ô¥ô•±Í”ìÑ…É•Ð€ô¹¥°ô(€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹Á±…”¡¥‘Ì°¥¹M•Ñ¥½¸èÍ•Ñ¥½¸°É•±…Ñ¥Ù•Q¼èÑ…É•Ð°…™Ñ•Èè…™Ñ•È¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô(€€€€€€€ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹ŒÍÕ•ÍÑ¥½¹M•Ñ¥½¸¡|Ñ¥Ñ±”èMÑÉ¥¹œ°¥Ñ•µÌèmMÕ•ÍÑ¥½¹t¤€´øÍ½µ”Y¥•Üì(€€€€€€€M•Ñ¥½¸¡Ñ¥Ñ±”¤ì(€€€€€€€€€€€½É… ¡¥Ñ•µÌ¤ìÍÕ•ÍÑ¥½¸¥¸(€€€€€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€ÄÈ¤ì(€€€€€€€€€€€€€€€€€€€%µ…”¡ÍåÍÑ•µ9…µ”è€‰¥É±”¹‘½ÑÑ•ˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹Ñ•ÉÑ¥…Éä¤(€€€€€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡Ý¥‘Ñ è€ÌÀ¤(€€€€€€€€€€€€€€€€€€€YMÑ…¬¡…±¥¹µ•¹Ðè€¹±•…‘¥¹œ¤ì(€€€€€€€€€€€€€€€€€€€€€€€Q•áÐ¡ÍÕ•ÍÑ¥½¸¹ÁÉ½‘ÕÐ¹¹…µ”¤(€€€€€€€€€€€€€€€€€€€€€€€¥˜ÍÕ•ÍÑ¥½¸¹ÅÕ…¹Ñ¥Ñä€ø€ÄñðÍÕ•ÍÑ¥½¸¹ÁÉ½‘ÕÐ¹ÁÉ•™•ÉÉ•‘U¹¥Ð€„ô¹¥°ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€Q•áÐ ‹^G^O^£^hƒ^o^s^pƒ]p¡ÍÕ•ÍÑ¥½¸¹ÅÕ…¹Ñ¥Ñä¤p¡ÍÕ•ÍÑ¥½¸¹ÁÉ½‘ÕÐ¹ÁÉ•™•ÉÉ•‘U¹¥Ð€üü€ˆˆ¤ˆ¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹™½¹Ð ¹…ÁÑ¥½¸¤¹™½É•É½Õ¹‘MÑå±” ¹Í•½¹‘…Éä¤(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€MÁ…•È ¤(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ì(€€€€€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹…‘¡ÍÕ•ÍÑ¥½¸¤(€€€€€€€€€€€€€€€€€€€ô±…‰•°èì%µ…”¡ÍåÍÑ•µ9…µ”è€‰Á±ÕÌ¹¥É±”¹™¥±°ˆ¤¹™½¹Ð ¹Ñ¥Ñ±”Ì¤ô(€€€€€€€€€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^S^W^‡^“^¨p¡ÍÕ•ÍÑ¥½¸¹ÁÉ½‘ÕÐ¹¹…µ”¤ƒ^s^£^§^g^{^Pˆ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹ÍÝ¥Á•Ñ¥½¹Ì¡•‘”è€¹ÑÉ…¥±¥¹œ¤ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^s^@ƒ^‹^o^§^g^Tˆ°ÍåÍÑ•µ%µ…”è€‰±½¬ˆ¤ìÍÑ½É”¹‘•™•ÉMÕ•ÍÑ¥½¸¡ÍÕ•ÍÑ¥½¸¤ô(€€€€€€€€€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€€€€€€€€€¹Ñ¥¹Ð¡½±½È¡Õ¥½±½Èè€¹ÍåÍÑ•µ%¹‘¥¼¤¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹±¥ÍÑI½ÝM•Á…É…Ñ½È ¹¡¥‘‘•¸¤(€€€€€€€€€€€€€€€€¹Í•±•Ñ¥½¹¥Í…‰±•¡ÑÉÕ”¤(€€€€€€€€€€€€€€€€¹±¥ÍÑI½Ý%¹Í•ÑÌ¡‘•%¹Í•ÑÌ¡Ñ½Àè€À°±•…‘¥¹œè€ÄØ°‰½ÑÑ½´è€À°ÑÉ…¥±¥¹œè€ÄØ¤¤(€€€€€€€€€€€ô(€€€€€€€ô(€€€€€€€€¹±¥ÍÑM•Ñ¥½¹M•Á…É…Ñ½È ¹¡¥‘‘•¸¤(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ‰•¥¹‘‘¥¹œ ¤ì(€€€€€€€±½Í•‘¥Ñ½È ¤(€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì¥Í‘‘¥¹œ€ôÑÉÕ”ì…‘‘¥¹Q½M•Ñ¥½¸€ô¹¥°ìÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ô™…±Í”ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ…‘‘%¹±¥¹”¡½¹Ñ¥¹Õ•‘‘¥¹œè	½½°€ôÑÉÕ”¤ì(€€€€€€€±•ÐÑÉ¥µµ•€ô¹•Ý9…µ”¹ÑÉ¥µµ¥¹¡…É…Ñ•ÉÌ¡¥¸è€¹Ý¡¥Ñ•ÍÁ…•Í¹‘9•Ý±¥¹•Ì¤(€€€€€€€Õ…É€…ÑÉ¥µµ•¹¥ÍµÁÑä•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì(€€€€€€€€€€€±•ÐÁ…ÉÍ•€ôÁÉ•Í•ÉÙ•I…Ý%¹ÁÕÐ€üM¡½ÁÁ¥¹%¹ÁÕÑA…ÉÍ•È¹I•ÍÕ±Ð¡¹…µ”èÑÉ¥µµ•°ÅÕ…¹Ñ¥Ñäè¹•ÝEÕ…¹Ñ¥Ñä°Õ¹¥Ðè¹¥°¤€èM¡½ÁÁ¥¹%¹ÁÕÑA…ÉÍ•È¹Á…ÉÍ”¡ÑÉ¥µµ•¤(€€€€€€€€€€€ÍÑ½É”¹…‘¡¹…µ”èÁ…ÉÍ•¹¹…µ”°ÅÕ…¹Ñ¥Ñäè¹•ÝEÕ…¹Ñ¥Ñå=Ù•ÉÉ¥‘‘•¸ñðÁ…ÉÍ•¹Õ¹¥Ð€ôô¹¥°€ü¹•ÝEÕ…¹Ñ¥Ñä€èÁ…ÉÍ•¹ÅÕ…¹Ñ¥Ñä°(€€€€€€€€€€€€€€€€€€€€€‘•Á…ÉÑµ•¹Ðè…‘‘¥¹Q½M•Ñ¥½¸°ÕÉ•¹Ðè¹•ÝUÉ•¹Ð¤(€€€€€€€€€€€¥˜±•Ð¥Ñ•´€ôÍÑ½É”¹¥Ñ•µÌ¹™¥ÉÍÐ¡Ý¡•É”èìÍÑ½É”¹ÁÉ½‘ÕÐ¡™½Èè€À¹ÁÉ½‘ÕÑ%¤ü¹¹…µ”€ôôÁ…ÉÍ•¹¹…µ”ô¤ì(€€€€€€€€€€€€€€€¥˜±•ÐÕ¹¥Ð€ô¹•ÝU¹¥Ð€üüÁ…ÉÍ•¹Õ¹¥ÐìÍÑ½É”¹ÕÁ‘…Ñ•U¹¥Ð¡½˜è¥Ñ•´°Ñ¼èÕ¹¥Ð¤ô(€€€€€€€€€€€€€€€¥˜€…¹•Ý9½Ñ”¹¥ÍµÁÑäìÍÑ½É”¹ÕÁ‘…Ñ•9½Ñ”¡½˜è¥Ñ•´°Ñ¼è¹•Ý9½Ñ”¤ô(€€€€€€€€€€€€€€€¥˜±•Ð¹•ÝA¡½Ñ½…Ñ„ìÍÑ½É”¹Í•ÑA¡½Ñ¼¡¹•ÝA¡½Ñ½…Ñ„°™½Èè¥Ñ•´¤ô(€€€€€€€€€€€ô(€€€€€€€€€€€¹•ÝEÕ…¹Ñ¥Ñä€ô€Ä(€€€€€€€€€€€ÁÉ•Í•ÉÙ•I…Ý%¹ÁÕÐ€ô™…±Í”(€€€€€€€€€€€¹•ÝEÕ…¹Ñ¥Ñå=Ù•ÉÉ¥‘‘•¸€ô™…±Í”(€€€€€€€€€€€¹•Ý9…µ”€ô€ˆˆ(€€€€€€€€€€€¹•ÝU¹¥Ð€ô¹¥°(€€€€€€€€€€€¹•Ý9½Ñ”€ô€ˆˆ(€€€€€€€€€€€¹•ÝUÉ•¹Ð€ô™…±Í”(€€€€€€€€€€€¹•ÝA¡½Ñ½…Ñ„€ô¹¥°(€€€€€€€€€€€¹•ÝA¡½Ñ¼€ô¹¥°(€€€€€€€€€€€Í¡½Ý¥¹9•Ý9½Ñ”€ô™…±Í”(€€€€€€€€€€€ÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ô™…±Í”(€€€€€€€€€€€…‘‘½ÕÍ•€ô½¹Ñ¥¹Õ•‘‘¥¹œ(€€€€€€€ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹ŒÍ…Ù•I•¹…µ”¡|¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´¤ì(€€€€€€€Õ…É•‘¥Ñ•‘9…µ”€„ô½É¥¥¹…±‘¥Ñ•‘9…µ”•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€ÍÑ½É”¹É•¹…µ”¡¥Ñ•´°Ñ¼è•‘¥Ñ•‘9…µ”¤(€€€€€€€½É¥¥¹…±‘¥Ñ•‘9…µ”€ô•‘¥Ñ•‘9…µ”(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ™¥¹¥Í¡I•¹…µ”¡|¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´¤ì(€€€€€€€Í…Ù•I•¹…µ”¡¥Ñ•´¤(€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì•‘¥Ñ¥¹9…µ•%€ô¹¥°ì¹…µ•½ÕÍ•€ô¹¥°ìÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ô™…±Í”ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹Œ±½Í•‘¥Ñ½È ¤ì(€€€€€€€¥˜¥Í‘‘¥¹œì…‘‘%¹±¥¹”¡½¹Ñ¥¹Õ•‘‘¥¹œè™…±Í”¤ô(€€€€€€€¥˜±•Ð¥€ô•‘¥Ñ¥¹9…µ•%°±•Ð¥Ñ•´€ôÍÑ½É”¹¥Ñ•µÌ¹™¥ÉÍÐ¡Ý¡•É”èì€À¹¥€ôô¥ô¤ìÍ…Ù•I•¹…µ”¡¥Ñ•´¤ô(€€€€€€€ÕÁ‘…Ñ•‘¥Ñ½Èì(€€€€€€€€€€€¥Í‘‘¥¹œ€ô™…±Í”(€€€€€€€€€€€¹•Ý9…µ”€ô€ˆˆ(€€€€€€€€€€€¹•ÝEÕ…¹Ñ¥Ñä€ô€Ä(€€€€€€€€€€€¹•ÝEÕ…¹Ñ¥Ñå=Ù•ÉÉ¥‘‘•¸€ô™…±Í”(€€€€€€€€€€€ÁÉ•Í•ÉÙ•I…Ý%¹ÁÕÐ€ô™…±Í”(€€€€€€€€€€€¹•ÝU¹¥Ð€ô¹¥°(€€€€€€€€€€€¹•Ý9½Ñ”€ô€ˆˆ(€€€€€€€€€€€¹•ÝUÉ•¹Ð€ô™…±Í”(€€€€€€€€€€€¹•ÝA¡½Ñ½…Ñ„€ô¹¥°(€€€€€€€€€€€¹•ÝA¡½Ñ¼€ô¹¥°(€€€€€€€€€€€Í¡½Ý¥¹9•Ý9½Ñ”€ô™…±Í”(€€€€€€€€€€€…‘‘½ÕÍ•€ô™…±Í”(€€€€€€€€€€€•‘¥Ñ¥¹9…µ•%€ô¹¥°(€€€€€€€€€€€¹…µ•½ÕÍ•€ô¹¥°(€€€€€€€€€€€ÅÕ…¹Ñ¥ÑåáÁ…¹‘•€ô™…±Í”(€€€€€€€ô(€€€ô((€€€ÁÉ¥Ù…Ñ”™Õ¹ŒÍÝ¥Ñ¡1¥ÍÐ¡Ñ¼¥èUU%¤ì(€€€€€€€±½Í•‘¥Ñ½È ¤(€€€€€€€ÍÑ½É”¹Í•±•Ñ1¥ÍÐ¡¥¤(€€€€€€€½±±…ÁÍ•‘M•Ñ¥½¹Ì¹É•µ½Ù•±° ¤(€€€€€€€Á±…•¥±Ñ•È€ô€‹^S^o^W^pˆ(€€€€€€€…‘‘¥¹Q½M•Ñ¥½¸€ô¹¥°(€€€€€€€Í•±•Ñ•‘%Ñ•µ%Ì¹É•µ½Ù•±° ¤(€€€€€€€¥Ñ•µÉ…µ•Ì¹™É…µ•Ì¹É•µ½Ù•±° ¤(€€€€€€€É•½É‘•É¥¹œ€ô™…±Í”(€€€€€€€•‘¥Ñ5½‘”€ô€¹¥¹…Ñ¥Ù”(€€€ô()ô()ÍÑÉÕÐ%Ñ•µ%¹±¥¹••Ñ…¥±ÌèY¥•Üì(€€€=‰Í•ÉÙ•‘=‰©•ÐÙ…ÈÍÑ½É”èM¡½ÁÁ¥¹MÑ½É”(€€€±•Ð¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´(€€€±•ÐÍ¡½ÝÍEÕ…¹Ñ¥Ñäè	½½°(€€€MÑ…Ñ”ÁÉ¥Ù…Ñ”Ù…ÈÍ•±•Ñ•‘A¡½Ñ¼èA¡½Ñ½ÍA¥­•É%Ñ•´ü(€€€MÑ…Ñ”ÁÉ¥Ù…Ñ”Ù…ÈÍ¡½Ý¥¹…µ•É„€ô™…±Í”(€€€MÑ…Ñ”ÁÉ¥Ù…Ñ”Ù…È…µ•É…•¹¥•€ô™…±Í”(€€€MÑ…Ñ”ÁÉ¥Ù…Ñ”Ù…ÈÍ¡½Ý¥¹A¡½Ñ¼€ô™…±Í”(€€€MÑ…Ñ”ÁÉ¥Ù…Ñ”Ù…È¹½Ñ”èMÑÉ¥¹œ((€€€¥¹¥Ð¡ÍÑ½É”èM¡½ÁÁ¥¹MÑ½É”°¥Ñ•´èM¡½ÁÁ¥¹%Ñ•´°Í¡½ÝÍEÕ…¹Ñ¥Ñäè	½½°€ôÑÉÕ”¤ì(€€€€€€€Í•±˜¹ÍÑ½É”€ôÍÑ½É”(€€€€€€€Í•±˜¹¥Ñ•´€ô¥Ñ•´(€€€€€€€Í•±˜¹Í¡½ÝÍEÕ…¹Ñ¥Ñä€ôÍ¡½ÝÍEÕ…¹Ñ¥Ñä(€€€€€€€}¹½Ñ”€ôMÑ…Ñ”¡¥¹¥Ñ¥…±Y…±Õ”è¥Ñ•´¹¹½Ñ”€üü€ˆˆ¤(€€€ô((€€€Ù…È‰½‘äèÍ½µ”Y¥•Üì(€€€€€€€YMÑ…¬¡…±¥¹µ•¹Ðè€¹±•…‘¥¹œ°ÍÁ…¥¹œè€ÄÈ¤ì(€€€€€€€€€€€¥˜Í¡½ÝÍEÕ…¹Ñ¥Ñäì(€€€€€€€€€€€€€€€%¹±¥¹•EÕ…¹Ñ¥Ñå½¹ÑÉ½±Ì¡ÅÕ…¹Ñ¥Ñäè	¥¹‘¥¹œ (€€€€€€€€€€€€€€€€€€€•Ðèì¥Ñ•´¹ÅÕ…¹Ñ¥Ñäô°Í•ÐèìÍÑ½É”¹ÕÁ‘…Ñ•EÕ…¹Ñ¥Ñä¡½˜è¥Ñ•´°Ñ¼è€À¤ô(€€€€€€€€€€€€€€€€¤°Õ¹¥Ðè	¥¹‘¥¹œ (€€€€€€€€€€€€€€€€€€€•Ðèì¥Ñ•´¹Õ¹¥Ðô°Í•ÐèìÍÑ½É”¹ÕÁ‘…Ñ•U¹¥Ð¡½˜è¥Ñ•´°Ñ¼è€À¤ô(€€€€€€€€€€€€€€€€¤¤(€€€€€€€€€€€ô(€€€€€€€€€€€Q•áÑ¥•± ‹^S^‹^£^Pƒ^s^{^W^›^£Š˜ˆ°Ñ•áÐè€‘¹½Ñ”°…á¥Ìè€¹Ù•ÉÑ¥…°¤(€€€€€€€€€€€€€€€€¹™½¹Ð ¹ÍÕ‰¡•…‘±¥¹”¤(€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±” ¹Í•½¹‘…Éä¤(€€€€€€€€€€€€€€€€¹±¥¹•1¥µ¥Ð Ä¸¸¸Ì¤(€€€€€€€€€€€€€€€€¹½¹¡…¹”¡½˜è¹½Ñ”¤ì|°Ù…±Õ”¥¸ÍÑ½É”¹ÕÁ‘…Ñ•9½Ñ”¡½˜è¥Ñ•´°Ñ¼èÙ…±Õ”¤ô(€€€€€€€€€€€€€€€€¹…•ÍÍ¥‰¥±¥Ñå%‘•¹Ñ¥™¥•È ‰¥Ñ•µ9½Ñ•¥•±ˆ¤(€€€€€€€€€€€€€€€€¹½¹¡…¹”¡½˜è¥Ñ•´¹¹½Ñ”¤ì|°Ù…±Õ”¥¸(€€€€€€€€€€€€€€€€€€€¥˜¹½Ñ”€„ô€¡Ù…±Õ”€üü€ˆˆ¤ì¹½Ñ”€ôÙ…±Õ”€üü€ˆˆô(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€!MÑ…¬¡ÍÁ…¥¹œè€à¤ì(€€€€€€€€€€€€€€€	ÕÑÑ½¸¡¥Ñ•´¹¥ÍUÉ•¹Ð€ü€‹^S^‡^ ƒ^O^K^pˆ€è€‹^O^_^W^Œˆ°ÍåÍÑ•µ%µ…”è¥Ñ•´¹¥ÍUÉ•¹Ð€ü€‰™±…œ¹™¥±°ˆ€è€‰™±…œˆ¤ì(€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹Ñ½±•UÉ•¹Ð¡¥Ñ•´¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±”¡¥Ñ•´¹¥ÍUÉ•¹Ð€ü½±½È¹½É…¹”€è½±½È¡Õ¥½±½Èè€¹±…‰•°¤¤(€€€€€€€€€€€€€€€€¹™É…µ”¡µ¥¹]¥‘Ñ è€ÐÐ°µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€¥˜¥Ñ•´¹Á¡½Ñ½…Ñ„€„ô¹¥°ñð¥Ñ•´¹Á¡½Ñ½¥±•¹…µ”€„ô¹¥°ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ìÍ¡½Ý¥¹A¡½Ñ¼€ôÑÉÕ”ô±…‰•°èì(€€€€€€€€€€€€€€€€€€€€€€€%Ñ•µA¡½Ñ½Q¡Õµ‰¹…¥°¡‰åÑ•Ìè¥Ñ•´¹Á¡½Ñ½…Ñ„°™¥±•UI0èÍÑ½É”¹±•…åA¡½Ñ½UI0¡™½Èè¥Ñ•´¤°(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…µ”èÍÑ½É”¹ÁÉ½‘ÕÐ¡™½Èè¥Ñ•´¹ÁÉ½‘ÕÑ%¤ü¹¹…µ”€üü€ˆˆ°Í¥‘”è€ÔÈ¤(€€€€€€€€€€€€€€€€€€€ô¹…•ÍÍ¥‰¥±¥Ñå1…‰•° ‹^S^K^O^s^¨ƒ^«^{^W^ƒ^¨ƒ^S^{^W^›^ ˆ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜U%%µ…•A¥­•É½¹ÑÉ½±±•È¹¥ÍM½ÕÉ•QåÁ•Ù…¥±…‰±” ¹…µ•É„¤ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^›^g^s^W^tˆ°ÍåÍÑ•µ%µ…”è€‰…µ•É„ˆ¤ì(€€€€€€€€€€€€€€€€€€€€€€€Q…Í¬ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€±•Ð…±±½Ý•€ô…Ý…¥ÐY…ÁÑÕÉ••Ù¥”¹É•ÅÕ•ÍÑ•ÍÌ¡™½Èè€¹Ù¥‘•¼¤(€€€€€€€€€€€€€€€€€€€€€€€€€€€¥˜…±±½Ý•ìÍ¡½Ý¥¹…µ•É„€ôÑÉÕ”ô•±Í”ì…µ•É…•¹¥•€ôÑÉÕ”ô(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€ô¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤¹™É…µ”¡µ¥¹]¥‘Ñ è€ÐÐ°µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€A¡½Ñ½ÍA¥­•È¡Í•±•Ñ¥½¸è€‘Í•±•Ñ•‘A¡½Ñ¼°µ…Ñ¡¥¹œè€¹¥µ…•Ì¤ì(€€€€€€€€€€€€€€€€€€€1…‰•°¡¥Ñ•´¹Á¡½Ñ½¥±•¹…µ”€ôô¹¥°€˜˜¥Ñ•´¹Á¡½Ñ½…Ñ„€ôô¹¥°€ü€‹^›^g^£^W^Œƒ^«^{^W^ƒ^Pˆ€è€‹^S^_^s^“^¨ƒ^«^{^W^ƒ^Pˆ°ÍåÍÑ•µ%µ…”è€‰Á¡½Ñ¼¹‰…‘”¹Á±ÕÌˆ¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€€¹™É…µ”¡µ¥¹]¥‘Ñ è€ÐÐ°µ¥¹!•¥¡Ðè€ÐÐ¤(€€€€€€€€€€€€€€€€¹½¹¡…¹”¡½˜èÍ•±•Ñ•‘A¡½Ñ¼¤ì|°Í•±•Ñ¥½¸¥¸(€€€€€€€€€€€€€€€€€€€Õ…É±•ÐÍ•±•Ñ¥½¸•±Í”ìÉ•ÑÕÉ¸ô(€€€€€€€€€€€€€€€€€€€Q…Í¬ì(€€€€€€€€€€€€€€€€€€€€€€€¥˜±•Ð‘…Ñ„€ôÑÉäü…Ý…¥ÐÍ•±•Ñ¥½¸¹±½…‘QÉ…¹Í™•É…‰±”¡ÑåÁ”è…Ñ„¹Í•±˜¤°Í•±•Ñ•‘A¡½Ñ¼€ôôÍ•±•Ñ¥½¸ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹Í•ÑA¡½Ñ¼¡‘…Ñ„°™½Èè¥Ñ•´¤(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜¥Ñ•´¹Á¡½Ñ½¥±•¹…µ”€„ô¹¥°ñð¥Ñ•´¹Á¡½Ñ½…Ñ„€„ô¹¥°ì(€€€€€€€€€€€€€€€€€€€	ÕÑÑ½¸ ‹^S^‡^£^¨ƒ^«^{^W^ƒ^Pˆ°ÍåÍÑ•µ%µ…”è€‰áµ…É¬¹¥É±”ˆ¤ì(€€€€€€€€€€€€€€€€€€€€€€€ÍÑ½É”¹É•µ½Ù•A¡½Ñ¼¡™É½´è¥Ñ•´¤(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô(€€€€€€€€€€€€¹™½¹Ð ¹‰½‘ä¤(€€€€€€€€€€€€¹Ñ¥¹Ð¡½±½È¡Õ¥½±½Èè€¹±…‰•°¤¤(€€€€€€€€€€€€¹™½É•É½Õ¹‘MÑå±”¡½±½È¡Õ¥½±½Èè€¹±…‰•°¤¤(€€€€€€€€€€€€¹‰ÕÑÑ½¹MÑå±”¡M¡½ÁÁ¥¹Q½½±	ÕÑÑ½¹MÑå±” ¤¤(€€€€€€€ô(€€€€€€€€¹‰ÕÑÑ½¹MÑå±” ¹‰½É‘•É±•ÍÌ¤(€€€€€€€€¹Á…‘‘¥¹œ ¹Ù•ÉÑ¥…°°€à¤(€€€€€€€€¹Í¡••Ð¡¥ÍAÉ•Í•¹Ñ•è€‘Í¡½Ý¥¹…µ•É„¤ì%Ñ•µ…µ•É„ìÍÑ½É”¹Í•ÑA¡½Ñ¼ À°™½Èè¥Ñ•´¤ôô(€€€€€€€€¹Í¡••Ð¡¥ÍAÉ•Í•¹Ñ•è€‘Í¡½Ý¥¹A¡½Ñ¼¤ì(€€€€€€€€€€€9…Ù¥…Ñ¥½¹MÑ…¬ì(€€€€€€€€€€€€€€€%Ñ•µA¡½Ñ½Q¡Õµ‰¹…¥°¡‰åÑ•Ìè¥Ñ•´¹Á¡½Ñ½…Ñ„°™¥±•UI0èÍÑ½É”¹±•…åA¡½Ñ½UI0¡™½Èè¥Ñ•´¤°(€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€¹…µ”èÍÑ½É”¹ÁÉ½‘ÕÐ¡™½Èè¥Ñ•´¹ÁÉ½‘ÕÑ%¤ü¹¹…µ”€üü€ˆˆ°™Õ±±%µ…”èÑÉÕ”¤(€€€€€€€€€€€€€€€€€€€€¹™É…µ”¡µ…á]¥‘Ñ è€¹¥¹™¥¹¥Ñä°µ…á!•¥¡Ðè€¹¥¹™¥¹¥Ñä¤(€€€€€€€€€€€€€€€€€€€€¹Ñ½½±‰…Èì	ÕÑÑ½¸ ‹^‡^K^g^£^Pˆ°ÍåÍÑ•µ%µ…”è€‰áµ…É¬ˆ¤ìÍ¡½Ý¥¹A¡½Ñ¼€ô™…±Í”ô¹±…‰•±MÑå±” ¹¥½¹=¹±ä¤ô(€€€€€€€€€€€ô(€€€€€€€ô(€€€€€€€€¹…±•ÉÐ ‹^C^g^|ƒ^K^g^§^Pƒ^s^{^›^s^{^Pˆ°¥ÍAÉ•Í•¹Ñ•è€‘…µ•É…•¹¥•¤ì(€€€€€€€€€€€	ÕÑÑ½¸ ‹^S^K^O^£^W^¨ˆ¤ì(€€€€€€€€€€€€€€€¥˜±•ÐÕÉ°€ôUI0¡ÍÑÉ¥¹œèU%ÁÁ±¥…Ñ¥½¸¹½Á•¹M•ÑÑ¥¹ÍUI1MÑÉ¥¹œ¤ìU%ÁÁ±¥…Ñ¥½¸¹Í¡…É•¹½Á•¸¡ÕÉ°¤ô(€€€€€€€€€€€ô(€€€€€€€€€€€	ÕÑÑ½¸ ‹^G^g^c^W^pˆ°É½±”è€¹…¹•°¤íô(€€€€€€€ôµ•ÍÍ…”èìQ•áÐ ‹^C^“^§^ ƒ^s^C^“^§^ ƒ^K^g^§^Pƒ^G^S^K^O^£^W^¨ƒ^C^Tƒ^s^G^_^W^ ƒ^«^{^W^ƒ^Pƒ^{^S^‡^“^£^g^g^P¸ˆ¤ô(€€€ô(()ô(((¼¼M•±•Ñ¥½¸¡¥ÐÑ•ÍÑ¥¹œ½¹ÍÕµ•ÌÑ¡•Í”™É…µ•Ì¥¹Í¥‘”„•ÍÑÕÉ”…±±‰…¬°¹½Ð(¼¼Ý¡¥±”É•¹‘•É¥¹œ¸AÕ‰±¥Í¡¥¹œ•Ù•Éä•½µ•ÑÉä¡…¹”‰…¬¥¹Ñ¼MÝ¥™ÑU$É•…Ñ•Ì(¼¼„±…å½ÕÐ½ÕÁ‘…Ñ”™••‘‰…¬±½½À‘ÕÉ¥¹œ¹…Ñ¥Ù”1¥ÍÐ…¹­•å‰½…É…¹¥µ…Ñ¥½¹Ì¸)ÁÉ¥Ù…Ñ”™¥¹…°±…ÍÌM¡½ÁÁ¥¹%Ñ•µÉ…µ•I•¥ÍÑÉäì(€€€Ù…È™É…µ•ÌèmUU%èI•Ñt€ôlét)ô(

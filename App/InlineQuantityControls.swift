@@ -34,21 +34,27 @@ struct InlineQuantityControls: View {
     private var stepper: some View {
         HStack(spacing: 4) {
             Button { quantity = max(1, quantity - 1) } label: {
-                Image(systemName: "minus.circle").font(.title3)
+                Image(systemName: "minus").font(.body.weight(.medium))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(quantity <= 1)
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(isNew ? "הפחתת כמות למוצר חדש" : "הפחתת כמות")
             Text("\(quantity)")
-                .monospacedDigit().font(.body)
+                .monospacedDigit().font(.body.weight(.semibold))
+                .frame(minWidth: 28)
                 .accessibilityIdentifier(isNew ? "newItemQuantity" : "inlineQuantity")
             Button { quantity = min(9999, quantity + 1) } label: {
-                Image(systemName: "plus.circle").font(.title3)
+                Image(systemName: "plus").font(.body.weight(.medium))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(quantity >= 9999)
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(isNew ? "הגדלת כמות למוצר חדש" : "הגדלת כמות")
         }
+        .background(Theme.control, in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
     }
 
@@ -65,7 +71,7 @@ struct InlineQuantityControls: View {
             }
         } label: {
             Label(unit ?? "יחידת מידה", systemImage: "chevron.down")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.body).foregroundStyle(.primary)
                 .frame(minHeight: 44)
         }
         .accessibilityLabel("בחירת יחידת מידה")
@@ -87,7 +93,7 @@ struct ShoppingToolButtonStyle: ButtonStyle {
         configuration.label
             .font(.body)
             .frame(minWidth: 44, minHeight: 44)
-            .background(Color(uiColor: .tertiarySystemFill), in: Circle())
+            .background(Theme.control, in: Circle())
             .opacity(configuration.isPressed ? 0.5 : 1)
     }
 }

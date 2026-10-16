@@ -66,3 +66,19 @@ The actual prototype images from the previous conversation are not stored in thi
 - Use one continuous 28pt rounded surface only for the active editor, with interior padding. Both add and edit tools use the same neutral circular button style and visible pressed state. Keep native Liquid Glass in navigation/toolbars, not product content.
 - Preserve list identity on its symbol and intentional actions. Ordinary text and optional tools use semantic neutral colors. The iPad detail column is bounded to 680pt.
 - References: Apple HIG Layout, Materials, Accessibility; Apple Support Reminders screenshots; user's Hebrew Reminders editing reference. Device feedback remains the visual acceptance step; Release compilation is not visual verification.
+
+
+## Warm botanical iteration — 16 October 2026
+
+The user authorizes a direct UI/UX redesign after rejecting the Stitch output. Use the botanical palette as atmosphere, native Apple components as the interaction foundation, and the PRD as the product contract. System fonts, native materials and semantic layout take precedence over the supplied web/Material tokens.
+
+- Warm adaptive canvas, forest-green default accent and a raised neutral editor; preserve custom list colors.
+- A large colored list heading lives in scrolling content with a stable inline navigation bar. No scroll-offset-driven state or custom collapsing-header animation.
+- Section headings align with product names; remove decorative stripes and repeated counts. Completion circles remain fully tinted and visible.
+- Quantity and unit use body-sized text with 44pt targets. The shared quantity editor uses a restrained capsule with explicit plus/minus targets.
+- Add and saved-item editors share a continuous 24pt rounded surface and aligned text columns. Keyboard dismissal is interactive; editor disclosure avoids a second layout animation.
+- Native bottom toolbar exposes shopping preparation and labeled item creation. Empty lists explain their purpose without fabricated suggestions.
+- Preparation uses native inset groups on the same warm canvas. Dark appearance uses separately chosen dark surfaces, not translucent light colors.
+
+Review source: https://github.com/emilkowalski/skills/blob/main/skills/apple-design/SKILL.md (principles adapted to native SwiftUI; web implementation recipes are not copied).
+Release compilation and automated interactions do not establish visual or physical-device scroll quality. Review the installed build before treating this iteration as visually accepted.
