@@ -31,6 +31,16 @@ struct ProbablyGroceriesApp: App {
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
                 .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
+                .onOpenURL { url in
+                    guard url.scheme == "probablygroceries" else { return }
+                    let parts = url.pathComponents.filter { $0 != "/" }
+                    if url.host == "list", let id = parts.first.flatMap(UUID.init(uuidString:)) {
+                        store.selectList(id)
+                    }
+                    if url.host == "add" {
+                        NotificationCenter.default.post(name: .groceryWidgetAdd, object: nil)
+                    }
+                }
                 .alert("לא ניתן להצטרף כרגע", isPresented: Binding(
                     get: { invitationError != nil },
                     set: { if !$0 { invitationError = nil } })) {
@@ -55,3 +65,7 @@ struct ProbablyGroceriesApp: App {
     }
 }
 
+
+extension Notification.Name {
+    static let groceryWidgetAdd = Notification.Name("groceryWidgetAdd")
+}
