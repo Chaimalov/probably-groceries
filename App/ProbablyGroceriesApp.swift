@@ -43,6 +43,7 @@ struct ProbablyGroceriesApp: App {
                         store.selectList(id)
                     }
                     if url.host == "add" {
+                        if let id = parts.first.flatMap(UUID.init(uuidString:)) { store.selectList(id) }
                         NotificationCenter.default.post(name: .groceryWidgetAdd, object: nil)
                     }
                 }
