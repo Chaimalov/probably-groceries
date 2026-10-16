@@ -16,6 +16,7 @@ struct GroceryWidgetSnapshot: Codable {
     let tintName: String
     let total: Int
     let rows: [Row]
+    var symbolName: String? = nil
 }
 
 enum GroceryWidgetBridge {

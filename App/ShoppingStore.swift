@@ -692,7 +692,7 @@ final class ShoppingStore: ObservableObject {
                 }
             return GroceryWidgetSnapshot(
                 listID: list.id, title: list.name, tintName: list.tintName,
-                total: rows.count, rows: rows)
+                total: rows.count, rows: rows, symbolName: list.symbolName)
         }
         GroceryWidgetBridge.publishAll(snapshots)
         if let selected = snapshots.first(where: { $0.listID == selectedListID }) {
