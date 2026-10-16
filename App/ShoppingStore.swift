@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import UIKit
+import WidgetKit
 
 @MainActor
 final class ShoppingStore: ObservableObject {
@@ -92,6 +93,7 @@ final class ShoppingStore: ObservableObject {
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
         syncJournal.seed(loadedData)
         selectedListID = listID
+        if !loadFailed { publishWidgetSnapshot() }
         migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
@@ -110,6 +112,7 @@ final class ShoppingStore: ObservableObject {
         guard data.lists.contains(where: { $0.id == id }) else { return }
         selectedListID = id
         UserDefaults.standard.set(id.uuidString, forKey: "selectedShoppingListID")
+        publishWidgetSnapshot()
     }
 
     func addList(name: String) {
@@ -644,9 +647,39 @@ final class ShoppingStore: ObservableObject {
             try JSONEncoder().encode(data).write(to: fileURL, options: .atomic)
             try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
             storageError = nil
+            publishWidgetSnapshot()
         } catch {
             storageError = "השינויים עדיין לא נשמרו במכשיר. נסה שוב."
         }
+    }
+
+    private func publishWidgetSnapshot() {
+        guard !loadFailed else { return }
+        let snapshots = data.lists.map { list in
+            let rows = data.items.filter { $0.listID == list.id }
+                .sorted {
+                    switch ($0.manualOrder, $1.manualOrder) {
+                    case let (a?, b?) where a != b: return a < b
+                    case (_?, nil): return true
+                    case (nil, _?): return false
+                    default: return $0.addedAt < $1.addedAt
+                    }
+                }
+                .map { item in
+                    GroceryWidgetSnapshot.Row(
+                        id: item.id,
+                        name: data.products.first(where: { $0.id == item.productID })?.name ?? "מוצר",
+                        quantity: item.quantity)
+                }
+            return GroceryWidgetSnapshot(
+                listID: list.id, title: list.name, tintName: list.tintName,
+                total: rows.count, rows: Array(rows.prefix(4)))
+        }
+        GroceryWidgetBridge.publishAll(snapshots)
+        if let selected = snapshots.first(where: { $0.listID == selectedListID }) {
+            GroceryWidgetBridge.publish(selected)
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "GroceryWidgets")
     }
 
     func retryLocalSave() { saveLocal() }
