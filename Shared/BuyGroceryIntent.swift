@@ -49,3 +49,34 @@ enum WidgetPurchaseError: LocalizedError {
         }
     }
 }
+
+struct AdjustGroceryQuantityIntent: AppIntent {
+    static var title: LocalizedStringResource = "שינוי כמות מוצר"
+    static var supportedModes: IntentModes { .background }
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    static var isDiscoverable: Bool { false }
+    @Parameter(title: "מוצר") var itemID: String
+    @Parameter(title: "רשימה") var listID: String
+    @Parameter(title: "שינוי") var delta: Int
+    init() {}
+    init(itemID: String, listID: String, delta: Int) {
+        self.itemID = itemID; self.listID = listID; self.delta = delta
+    }
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if !WIDGET_EXTENSION
+        guard let id = UUID(uuidString: itemID), let list = UUID(uuidString: listID),
+              delta == -1 || delta == 1 else { throw WidgetPurchaseError.invalidItem }
+        let store = ShoppingStore.shared
+        guard store.storageError == nil else { throw WidgetPurchaseError.saveFailed }
+        if let item = store.data.items.first(where: { $0.id == id && $0.listID == list }) {
+            store.updateQuantity(of: item, to: min(9999, max(1, item.quantity + delta)))
+        }
+        if store.storageError != nil { throw WidgetPurchaseError.saveFailed }
+        await store.cloudSync.synchronize()
+        #else
+        throw WidgetPurchaseError.hostRequired
+        #endif
+        return .result()
+    }
+}
