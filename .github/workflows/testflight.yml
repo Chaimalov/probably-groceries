@@ -88,6 +88,10 @@ jobs:
         unzip -q "$ipa" -d "$RUNNER_TEMP/SignedApp"
         app="$RUNNER_TEMP/SignedApp/Payload/ProbablyGroceries.app"
         codesign --verify --strict "$app"
+        widget="$app/PlugIns/GroceryWidgets.appex"
+        test -d "$widget" || { echo 'Widget extension missing from IPA' >&2; exit 1; }
+        codesign --verify --strict "$widget"
+        codesign -d --entitlements :- "$widget" > "$RUNNER_TEMP/widget-entitlements.plist"
         codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/signed-entitlements.plist"
         python3 - <<'PY'
         import os
@@ -103,6 +107,12 @@ jobs:
         print('Signed iCloud services:', services)
         assert 'iCloud.com.chaimalov.probablygroceries' in containers, 'Missing signed iCloud container'
         assert 'CloudKit' in services, 'Missing signed CloudKit service'
+        groups = entitlements.get('com.apple.security.application-groups', [])
+        assert 'group.com.chaimalov.probablygroceries' in groups, 'Missing app group entitlement'
+        widget_path = Path(os.environ['RUNNER_TEMP']) / 'widget-entitlements.plist'
+        widget_entitlements = plistlib.loads(widget_path.read_bytes())
+        widget_groups = widget_entitlements.get('com.apple.security.application-groups', [])
+        assert 'group.com.chaimalov.probablygroceries' in widget_groups, 'Missing widget app group'
         PY
         xcodebuild -exportArchive \
           -archivePath "$RUNNER_TEMP/ProbablyGroceries.xcarchive" \
