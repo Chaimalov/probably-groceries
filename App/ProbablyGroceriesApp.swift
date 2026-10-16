@@ -5,6 +5,7 @@ struct ProbablyGroceriesApp: App {
     @UIApplicationDelegateAdaptor(SharingAppDelegate.self) private var appDelegate
     @StateObject private var store = ShoppingStore()
     @StateObject private var invitations = ShareInvitationInbox.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var accepting = false
     @State private var invitationError: String?
 
@@ -31,6 +32,10 @@ struct ProbablyGroceriesApp: App {
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
                 .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)
                 .onReceive(invitations.$generation) { _ in acceptPending() }
+                .onAppear { processWidgetPurchase() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { processWidgetPurchase() }
+                }
                 .onOpenURL { url in
                     guard url.scheme == "probablygroceries" else { return }
                     let parts = url.pathComponents.filter { $0 != "/" }
@@ -48,6 +53,17 @@ struct ProbablyGroceriesApp: App {
                     Button("מאוחר יותר", role: .cancel) {}
                 } message: { Text(invitationError ?? "") }
         }
+    }
+
+    private func processWidgetPurchase() {
+        let defaults = UserDefaults(suiteName: GroceryWidgetBridge.suite)
+        guard let value = defaults?.string(forKey: "pendingWidgetPurchase"),
+              let id = UUID(uuidString: value) else { return }
+        defaults?.removeObject(forKey: "pendingWidgetPurchase")
+        // Only act on a still-active row; a second tap is harmless.
+        guard let item = store.data.items.first(where: { $0.id == id }) else { return }
+        store.selectList(item.listID)
+        store.buy(item)
     }
 
     private func acceptPending() {
