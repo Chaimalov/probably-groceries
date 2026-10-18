@@ -60,7 +60,7 @@ def get(path, query=None):
 
 
 def main():
-    version = os.environ["GITHUB_RUN_NUMBER"]
+    version = os.environ.get("TESTFLIGHT_BUILD_NUMBER") or os.environ["GITHUB_RUN_NUMBER"]
     deadline = time.monotonic() + 900
     app_id = None
     last_state = None
@@ -111,3 +111,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

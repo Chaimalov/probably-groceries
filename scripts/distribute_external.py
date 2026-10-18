@@ -8,16 +8,36 @@ import os
 import urllib.error
 import urllib.request
 
-from wait_for_testflight import API, BUNDLE_ID, get, token
+from wait_for_testflight import API, BUNDLE_ID, get as apple_get, token
+
+
+def api_error(error, method, path):
+    try:
+        errors = json.load(error).get('errors', [])
+        codes = ', '.join(str(e.get('code', 'UNKNOWN')) for e in errors)
+    except (ValueError, AttributeError):
+        codes = 'UNKNOWN'
+    return RuntimeError(f'Apple {method} {path}: HTTP {error.code}, codes={codes}. '
+                        'Check external beta review, agreements, and key permissions.')
+
+
+def get(path, query=None):
+    try:
+        return apple_get(path, query)
+    except urllib.error.HTTPError as error:
+        raise api_error(error, 'GET', path) from None
 
 
 def write(method, path, data):
     request = urllib.request.Request(
         API + path, data=json.dumps({"data": data}).encode(), method=method,
         headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=45) as response:
-        body = response.read()
-        return json.loads(body) if body else None
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            body = response.read()
+            return json.loads(body) if body else None
+    except urllib.error.HTTPError as error:
+        raise api_error(error, method, path) from None
 
 
 def relation(resource_type, resource_id):
@@ -104,7 +124,10 @@ def distribute(version):
 
 if __name__ == '__main__':
     try:
-        distribute(os.environ['GITHUB_RUN_NUMBER'])
+        version = os.environ.get('TESTFLIGHT_BUILD_NUMBER') or os.environ['GITHUB_RUN_NUMBER']
+        if not version.isdecimal():
+            raise SystemExit('TestFlight build number must contain only digits')
+        distribute(version)
     except urllib.error.HTTPError as error:
         # Never log raw responses, account data, headers, or signing tokens.
         raise SystemExit(f'External TestFlight distribution failed: HTTP {error.code}. '

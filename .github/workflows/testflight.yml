@@ -1,6 +1,11 @@
 name: Upload to TestFlight
 'on':
-  workflow_dispatch: null
+  workflow_dispatch:
+    inputs:
+      existing_build:
+        description: 'Distribute an existing build without rebuilding (leave empty for a new build)'
+        required: false
+        type: string
   workflow_run:
     workflows:
     - iOS build
@@ -14,7 +19,7 @@ concurrency:
 jobs:
   upload:
     if: |-
-      github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' &&
+      (github.event_name == 'workflow_dispatch' && inputs.existing_build == '') || (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main')
     runs-on: xcode-27
@@ -151,9 +156,13 @@ jobs:
     timeout-minutes: 25
   processing:
     needs: upload
+    if: >-
+      always() && (needs.upload.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && inputs.existing_build != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      TESTFLIGHT_BUILD_NUMBER: ${{ inputs.existing_build || github.run_number }}
       APPLE_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
       APPLE_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
