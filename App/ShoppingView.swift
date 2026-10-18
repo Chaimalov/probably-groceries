@@ -54,9 +54,7 @@ struct ShoppingView: View {
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
     private var listTint: Color { Theme.tint(for: store.currentList.tintName) }
     private var showsSections: Bool {
-        groupBySection && (!store.currentList.sections.isEmpty || store.items.contains {
-            store.section(for: $0) != "אחר"
-        })
+        groupBySection && allSectionNames.contains { $0 != "אחר" }
     }
     private var selectionFullyUrgent: Bool {
         !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
@@ -284,7 +282,7 @@ struct ShoppingView: View {
                     set: { if !$0 { detailItem = nil } }
                 )) {
                     if let detailItem {
-                        ItemDetailsSheet(store: store, item: detailItem)
+                        ItemDetailsSheet(store: store, item: detailItem, onClose: { self.detailItem = nil })
                             .id(detailItem.id)
                             .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
                     }

@@ -212,6 +212,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let note = app.descendants(matching: .any)["itemNoteField"]
         note.tap()
         note.typeText(" Updated")
+        let editedNote = note.value as? String
+        XCTAssertTrue(editedNote?.contains("Original note") == true)
+        XCTAssertTrue(editedNote?.contains("Updated") == true)
         XCTAssertTrue(note.exists, "Moving focus to the note must keep this editor open")
         app.buttons["סיום עריכה"].tap()
         let updated = name + " Updated"
@@ -232,7 +235,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons[updated].waitForExistence(timeout: 10))
         app.buttons[updated].tap()
-        XCTAssertEqual(app.descendants(matching: .any)["itemNoteField"].value as? String, "Original note Updated")
+        XCTAssertEqual(app.descendants(matching: .any)["itemNoteField"].value as? String, editedNote)
         app.buttons["סיום עריכה"].tap()
 
         // Return in a saved row starts a focused draft directly below it.
