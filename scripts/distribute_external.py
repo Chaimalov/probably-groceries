@@ -44,6 +44,12 @@ def relation(resource_type, resource_id):
     return {"data": {"type": resource_type, "id": resource_id}}
 
 
+def build_groups(build_id):
+    # Build beta groups are exposed via include, not a related-resource GET.
+    result = get(f'/v1/builds/{build_id}', {'include': 'betaGroups', 'limit[betaGroups]': '50'})
+    return {x['id'] for x in result.get('included', []) if x['type'] == 'betaGroups'}
+
+
 def distribute(version):
     apps = get('/v1/apps', {'filter[bundleId]': BUNDLE_ID})['data']
     if len(apps) != 1:
@@ -92,8 +98,7 @@ def distribute(version):
             'type': 'betaAppReviewSubmissions',
             'relationships': {'build': relation('builds', build_id)}})
 
-    assigned = get(f'/v1/builds/{build_id}/betaGroups', {'limit': '200'})
-    if group_id not in {g['id'] for g in assigned['data']}:
+    if group_id not in build_groups(build_id):
         # Additive relationship: older builds/testers remain untouched.
         write('POST', f'/v1/betaGroups/{group_id}/relationships/builds',
               [{'type': 'builds', 'id': build_id}])
@@ -104,8 +109,7 @@ def distribute(version):
             'relationships': {'build': relation('builds', build_id)}})
 
     # Verify the association from the build, including on reruns.
-    assigned = get(f'/v1/builds/{build_id}/betaGroups', {'limit': '200'})
-    if group_id not in {g['id'] for g in assigned['data']}:
+    if group_id not in build_groups(build_id):
         raise RuntimeError('Family build association was not confirmed')
     attributes = get(f'/v1/builds/{build_id}/buildBetaDetail')['data']['attributes']
     if not attributes['autoNotifyEnabled']:
