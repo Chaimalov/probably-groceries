@@ -249,6 +249,7 @@ final class ShoppingStore: ObservableObject {
     }
 
     func remove(_ item: ShoppingItem) {
+        retainSection(of: item)
         recordRemoval(item)
         data.items.removeAll { $0.id == item.id }
         if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
@@ -339,6 +340,16 @@ final class ShoppingStore: ObservableObject {
               }) else { return }
         data.products[index].name = name
         persist()
+    }
+
+    // Older items may introduce an aisle without a saved list section.
+    // Keep that aisle after its final item is purchased or removed.
+    private func retainSection(of item: ShoppingItem) {
+        let name = section(for: item)
+        guard name != "אחר",
+              let index = data.lists.firstIndex(where: { $0.id == item.listID }),
+              !data.lists[index].sections.contains(name) else { return }
+        data.lists[index].sections.append(name)
     }
 
     func addSection(_ rawName: String) {
@@ -480,6 +491,7 @@ final class ShoppingStore: ObservableObject {
 
     func remove(_ ids: Set<UUID>) {
         for item in data.items where ids.contains(item.id) {
+            retainSection(of: item)
             recordRemoval(item)
             if let name = item.photoFilename {
                 try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name))
@@ -519,6 +531,7 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
+        retainSection(of: current)
         let route = orderedItems(in: current.listID)
         let originalOrder = route.firstIndex(where: { $0.id == current.id })
         // Freeze this item's list, even if a widget targets a different list.

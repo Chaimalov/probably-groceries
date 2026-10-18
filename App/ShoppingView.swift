@@ -689,7 +689,12 @@ if reordering {
     private var allSectionNames: [String] {
         let existing = store.currentList.sections
         let used = store.items.map { store.section(for: $0) }.filter { $0 != "אחר" }
-        let names = existing + used.filter { !existing.contains($0) }
+        let past = store.purchases.map { purchase in
+            purchase.sectionName ?? store.product(for: purchase.productID)?.department
+                ?? store.product(for: purchase.productID)?.category ?? "אחר"
+        }.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "אחר" }
+        let names = existing + used + past
         var seen = Set<String>()
         let unique = names.filter { seen.insert($0).inserted }
         return unique.contains("אחר") ? unique : unique + ["אחר"]
