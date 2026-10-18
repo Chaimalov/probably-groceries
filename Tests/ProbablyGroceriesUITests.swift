@@ -234,6 +234,21 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons[updated].tap()
         XCTAssertEqual(app.descendants(matching: .any)["itemNoteField"].value as? String, "Original note Updated")
         app.buttons["סיום עריכה"].tap()
+
+        // Return in a saved row starts a focused draft directly below it.
+        app.buttons[updated].tap()
+        let inserted = "Between \(UUID().uuidString.prefix(6))"
+        app.textFields["שם המוצר"].typeText("\n")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(inserted + "\n")
+        XCTAssertTrue(app.buttons[inserted].waitForExistence(timeout: 5), "Return must focus the new row without a tap")
+        XCTAssertTrue(field.exists, "Return must continue adding after the inserted row")
+        app.buttons["סיום עריכה"].tap()
+        XCTAssertLessThan(app.buttons[updated].frame.minY, app.buttons[inserted].frame.minY)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons[inserted].waitForExistence(timeout: 10), "Inserted rows persist")
+        XCTAssertLessThan(app.buttons[updated].frame.minY, app.buttons[inserted].frame.minY)
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", updated)).firstMatch.tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 5))
         app.buttons.matching(identifier: "ביטול").firstMatch.tap()
@@ -275,6 +290,10 @@ final class ProbablyGroceriesUITests: XCTestCase {
         sectionAlert.textFields["שם המקטע"].typeText(section)
         sectionAlert.buttons["יצירה"].tap()
         XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["הוספת מוצר"].exists, "Empty sections appear in normal shopping mode")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 10), "Empty sections remain visible after relaunch")
 
         app.buttons["הוספת מוצר"].tap()
         let item = "Eggs \(UUID().uuidString.prefix(6))"
@@ -298,6 +317,22 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertFalse(buy.exists)
         header.tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        app.buttons[item].tap()
+        app.textFields["שם המוצר"].typeText("\n")
+        let nextItem = "Next \(UUID().uuidString.prefix(6))"
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(nextItem + "\n")
+        app.buttons["סיום עריכה"].tap()
+        let nextBuy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "נקנה", nextItem)).firstMatch
+        XCTAssertTrue(nextBuy.waitForExistence(timeout: 5))
+        XCTAssertLessThan(buy.frame.minY, nextBuy.frame.minY)
+        header.tap()
+        XCTAssertFalse(nextBuy.exists, "Return must add to the same section")
+        header.tap()
+        XCTAssertTrue(nextBuy.waitForExistence(timeout: 5))
+        nextBuy.tap()
+        buy.tap()
+        XCTAssertTrue(header.exists, "Purchasing the last product must leave its section visible")
 
         app.buttons["אפשרויות נוספות"].tap()
         app.buttons["סידור מוצרים"].tap()
@@ -330,4 +365,5 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(basket.isSelected)
     }
 }
+
 

@@ -191,3 +191,21 @@ struct PredictionEvaluation: Identifiable {
         return Suggestion(product: product, quantity: quantity, tier: tier, progress: progress)
     }
 }
+
+
+/// Display aliases only: persisted units and custom unit names keep their identity.
+enum ShoppingUnit {
+    static func shortLabel(_ unit: String) -> String {
+        let aliases = [
+            "יחידה": "יח׳", "יחידות": "יח׳", "יח": "יח׳",
+            "חבילה": "חב׳", "חבילות": "חב׳", "חב": "חב׳",
+            "ליטר": "ל׳", "ליטרים": "ל׳",
+            "בקבוק": "בק׳", "בקבוקים": "בק׳",
+            "קופסה": "קופ׳", "קופסאות": "קופ׳",
+            "שקית": "שק׳", "שקיות": "שק׳",
+            "גליל": "גל׳", "גלילים": "גל׳",
+            "גרם": "ג׳", "קילוגרם": "ק״ג", "מיליליטר": "מ״ל"
+        ]
+        return aliases[unit] ?? unit
+    }
+}

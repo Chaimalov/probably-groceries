@@ -194,10 +194,11 @@ final class ShoppingStore: ObservableObject {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    @discardableResult
     func add(name: String, quantity: Int, category: String? = nil,
-             department: String? = nil, urgent: Bool = false) {
+             department: String? = nil, urgent: Bool = false) -> ShoppingItem? {
         let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !displayName.isEmpty else { return }
+        guard !displayName.isEmpty else { return nil }
         let normalized = Self.normalize(displayName)
         let productID: UUID
         if let existing = data.products.first(where: {
@@ -233,6 +234,7 @@ final class ShoppingStore: ObservableObject {
         }
         data.deferrals.removeAll { $0.productID == productID && $0.listID == selectedListID }
         persist()
+        return items.first { $0.productID == productID }
     }
 
     func add(_ suggestion: Suggestion) {
@@ -720,4 +722,5 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
     }
 }
+
 
