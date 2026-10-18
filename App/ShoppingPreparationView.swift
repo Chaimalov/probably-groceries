@@ -39,7 +39,7 @@ struct ShoppingPreparationView: View {
                             HStack {
                                 Text(store.product(for: item.productID)?.name ?? "מוצר")
                                 Spacer()
-                                Text("×\(item.quantity) \(item.unit ?? "")").foregroundStyle(.secondary)
+                                Text("×\(item.quantity) \(item.unit.map(ShoppingUnit.shortLabel) ?? "")").foregroundStyle(.secondary)
                                 Image(systemName: "info.circle")
                             }
                         }
@@ -54,7 +54,7 @@ struct ShoppingPreparationView: View {
                                 HStack(spacing: 4) {
                                     TextField("שם המוצר", text: $entry.name)
                                     if entry.included {
-                                        Text("×\(entry.quantity) \(entry.unit ?? "")")
+                                        Text("×\(entry.quantity) \(entry.unit.map(ShoppingUnit.shortLabel) ?? "")")
                                             .font(.subheadline).foregroundStyle(.secondary)
                                         Button("פרטי מוצר", systemImage: "info.circle") { draftDetails = entry }
                                             .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -137,6 +137,7 @@ struct ShoppingPreparationView: View {
 struct ItemDetailsSheet: View {
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
+    var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var place = ""
     @State private var name = ""
@@ -164,12 +165,24 @@ struct ItemDetailsSheet: View {
                     }
                 } else { Text("המוצר כבר אינו ברשימה") }
             }
-            .navigationTitle(store.product(for: item.productID)?.name ?? "פרטי מוצר")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("סגירה", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
+            // Inspector columns do not reliably host nested navigation toolbars.
+            // Keep the close action in the column's own visible content.
+            .safeAreaInset(edge: .top) {
+                HStack {
+                    Text("פרטי מוצר").font(.headline)
+                    Spacer()
+                    Button("סגירה", systemImage: "xmark") {
+                        saveName()
+                        if let onClose { onClose() } else { dismiss() }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(ShoppingToolButtonStyle())
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(Theme.canvas)
             }
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 place = item.shoppingPlace ?? ""
                 name = store.product(for: item.productID)?.name ?? ""
@@ -265,3 +278,4 @@ private struct DraftEntryDetails: View {
         entry.photoData = encoded
     }
 }
+

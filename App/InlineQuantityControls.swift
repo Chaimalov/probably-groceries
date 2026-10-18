@@ -70,7 +70,7 @@ struct InlineQuantityControls: View {
                 customUnitFocused = true
             }
         } label: {
-            Label(unit ?? "יחידת מידה", systemImage: "chevron.down")
+            Label(unit.map(ShoppingUnit.shortLabel) ?? "יחידת מידה", systemImage: "chevron.down")
                 .font(.body).foregroundStyle(.primary)
                 .frame(minHeight: 44)
         }
@@ -97,3 +97,4 @@ struct ShoppingToolButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.5 : 1)
     }
 }
+

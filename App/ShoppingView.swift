@@ -9,6 +9,8 @@ struct ShoppingView: View {
     @State private var sharingListID: UUID?
     @State private var isAdding = false
     @State private var addingToSection: String?
+    @State private var addingAfterID: UUID?
+    @State private var composerSection: String?
     @State private var newName = ""
     @State private var newQuantity = 1
     @State private var preserveRawInput = false
@@ -52,9 +54,7 @@ struct ShoppingView: View {
     private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
     private var listTint: Color { Theme.tint(for: store.currentList.tintName) }
     private var showsSections: Bool {
-        groupBySection && (!store.currentList.sections.isEmpty || store.items.contains {
-            store.section(for: $0) != "אחר"
-        })
+        groupBySection && allSectionNames.contains { $0 != "אחר" }
     }
     private var selectionFullyUrgent: Bool {
         !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
@@ -164,9 +164,15 @@ struct ShoppingView: View {
                                             .moveDisabled(!reordering)
                                             .listRowSeparator(.hidden, edges: .all)
                                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                        if isAdding && composerSection == section && addingAfterID == item.id {
+                                            inlineAddRow
+                                        }
                                     }
                                     .onMove { source, destination in
                                         store.move(from: source, to: destination, inSection: section)
+                                    }
+                                    if isAdding && composerSection == section && !items(in: section).contains(where: { $0.id == addingAfterID }) {
+                                        inlineAddRow
                                     }
                                 }
                             }
@@ -180,6 +186,7 @@ struct ShoppingView: View {
                                     .moveDisabled(!reordering)
                                     .listRowSeparator(.hidden, edges: .all)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                if isAdding && addingAfterID == item.id { inlineAddRow }
                             }
                             .onMove { source, destination in
                                 store.move(from: source, to: destination, inSection: nil)
@@ -188,7 +195,7 @@ struct ShoppingView: View {
                         .listSectionSeparator(.hidden, edges: .all)
                     }
 
-                    if isAdding {
+                    if isAdding && (showsSections ? composerSection == nil : !visibleItems.contains(where: { $0.id == addingAfterID })) {
                         Section { inlineAddRow }
                             .listSectionSeparator(.hidden)
                     }
@@ -275,12 +282,19 @@ struct ShoppingView: View {
                     set: { if !$0 { detailItem = nil } }
                 )) {
                     if let detailItem {
-                        ItemDetailsSheet(store: store, item: detailItem)
+                        ItemDetailsSheet(store: store, item: detailItem, onClose: { self.detailItem = nil })
                             .id(detailItem.id)
                             .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
                     }
                 }
                 .toolbar { bottomActions(scroll) }
+                .task(id: addingAfterID) {
+                    guard isAdding, addingAfterID != nil else { return }
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    scroll.scrollTo("new-item", anchor: .center)
+                    addFocused = true
+                }
                 .task(id: store.widgetNavigation?.id) {
                     guard let request = store.widgetNavigation else { return }
                     // Resolve after list-switch handlers have finished, including cold launches.
@@ -373,12 +387,10 @@ struct ShoppingView: View {
             .alert("מקטע חדש", isPresented: $showingNewSection) {
                 TextField("שם המקטע", text: $sectionName)
                 Button("יצירה") {
+                    closeEditor()
                     store.addSection(sectionName)
                     groupBySection = true
-                    closeEditor()
                     selectedItemIDs.removeAll()
-                    reordering = true
-                    editMode = .active
                 }
                 Button("ביטול", role: .cancel) {}
             }
@@ -491,7 +503,7 @@ if reordering {
                     }
                     .accessibilityIdentifier("inlineAddField")
                 if hasNewName {
-                    Button("×\(newQuantity) \(newUnit ?? "")") { updateEditor { quantityExpanded.toggle() } }
+                    Button("×\(newQuantity) \(newUnit.map(ShoppingUnit.shortLabel) ?? "")") { updateEditor { quantityExpanded.toggle() } }
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 10)
@@ -551,7 +563,7 @@ if reordering {
                     let parsed = ShoppingInputParser.parse(newName)
                     if parsed.unit != nil && !preserveRawInput {
                         HStack {
-                            Text("\(parsed.name) · ×\(newQuantity) \(newUnit ?? parsed.unit ?? "")")
+                            Text("\(parsed.name) · ×\(newQuantity) \((newUnit ?? parsed.unit).map(ShoppingUnit.shortLabel) ?? "")")
                                 .font(.caption).foregroundStyle(.secondary)
                             Button("שמירת הטקסט המקורי", systemImage: "arrow.uturn.backward") {
                                 preserveRawInput = true
@@ -670,23 +682,20 @@ if reordering {
         }
     }
 
-    private var sectionNames: [String] {
-        // An empty household list should not become a screen of empty categories.
-        // Explicit organization still exposes them as drag targets.
-        allSectionNames.filter {
-            reordering || !items(in: $0).isEmpty
-        }
-    }
+    private var sectionNames: [String] { allSectionNames }
 
     private var allSectionNames: [String] {
         let existing = store.currentList.sections
         let used = store.items.map { store.section(for: $0) }.filter { $0 != "אחר" }
-        let names = existing + used.filter { !existing.contains($0) }
+        let past = store.purchases.map { purchase in
+            purchase.sectionName ?? store.product(for: purchase.productID)?.department
+                ?? store.product(for: purchase.productID)?.category ?? "אחר"
+        }.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "אחר" }
+        let names = existing + used + past
         var seen = Set<String>()
         let unique = names.filter { seen.insert($0).inserted }
-        let needsOther = store.items.contains(where: { store.section(for: $0) == "אחר" }) ||
-            (isAdding && addingToSection == "אחר")
-        return needsOther && !unique.contains("אחר") ? unique + ["אחר"] : unique
+        return unique.contains("אחר") ? unique : unique + ["אחר"]
     }
 
     private func items(in section: String) -> [ShoppingItem] {
@@ -695,9 +704,22 @@ if reordering {
 
     private func quantityLabel(_ quantity: Int, unit: String?) -> String {
         guard let unit, !unit.isEmpty else { return "×\(quantity)" }
-        let singular = ["יחידות": "יחידה", "חבילות": "חבילה", "ליטרים": "ליטר",
-                        "בקבוקים": "בקבוק", "קופסאות": "קופסה", "שקיות": "שקית", "גלילים": "גליל"]
-        return "\(quantity) \(quantity == 1 ? (singular[unit] ?? unit) : unit)"
+        return "\(quantity) \(ShoppingUnit.shortLabel(unit))"
+    }
+
+    private func aisleStyle(_ name: String) -> (symbol: String, color: Color) {
+        let styles: [(words: [String], symbol: String, color: Color)] = [
+            (["ירק", "פירות", "produce", "vegetable", "fruit"], "carrot", .green),
+            (["חלב", "גבינ", "ביצ", "dairy", "egg"], "mug", .teal),
+            (["לחם", "מאפ", "אפייה", "bakery", "baking"], "birthday.cake", .orange),
+            (["קפוא", "קפואים", "frozen"], "snowflake", .blue),
+            (["בשר", "דגים", "meat", "fish"], "fish", .indigo),
+            (["ניקוי", "clean"], "bubbles.and.sparkles", .cyan),
+            (["משקא", "שתייה", "drink"], "waterbottle", .blue),
+            (["שימור", "מזווה", "pantry", "canned"], "cabinet", .brown)
+        ]
+        let match = styles.first { style in style.words.contains { name.localizedCaseInsensitiveContains($0) } }
+        return (match?.symbol ?? "basket", match?.color ?? listTint)
     }
 
     private func sectionHeader(_ section: String) -> some View {
@@ -707,6 +729,12 @@ if reordering {
             }
         } label: {
             HStack(spacing: 8) {
+                Image(systemName: aisleStyle(section).symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(aisleStyle(section).color)
+                    .frame(width: 32, height: 32)
+                    .background(aisleStyle(section).color.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityHidden(true)
                 Text(section)
                     .font(.headline)
                     .foregroundStyle(.primary)
@@ -759,8 +787,8 @@ if reordering {
                         TextField("שם המוצר", text: $editedName)
                             .tint(listTint)
                             .focused($nameFocused, equals: item.id)
-                            .submitLabel(.done)
-                            .onSubmit { finishRename(item) }
+                            .submitLabel(.next)
+                            .onSubmit { continueBelow(item) }
 
                         }
                         .frame(minHeight: 44)
@@ -910,7 +938,7 @@ if reordering {
                 return ShoppingDragPreviewContent(title: "מוצר")
             }
             return ShoppingDragPreviewContent(title: product.name,
-                quantity: "×\(item.quantity) \(item.unit ?? "")", note: item.note, urgent: item.isUrgent)
+                quantity: quantityLabel(item.quantity, unit: item.unit), note: item.note, urgent: item.isUrgent)
         }
     }
 
@@ -955,7 +983,7 @@ if reordering {
                     VStack(alignment: .leading) {
                         Text(suggestion.product.name)
                         if suggestion.quantity > 1 || suggestion.product.preferredUnit != nil {
-                            Text("בדרך כלל ×\(suggestion.quantity) \(suggestion.product.preferredUnit ?? "")")
+                            Text("בדרך כלל \(quantityLabel(suggestion.quantity, unit: suggestion.product.preferredUnit))")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -980,7 +1008,7 @@ if reordering {
 
     private func beginAdding() {
         closeEditor()
-        updateEditor { isAdding = true; addingToSection = nil; quantityExpanded = false }
+        updateEditor { isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false }
     }
 
     private func addInline(continueAdding: Bool = true) {
@@ -988,9 +1016,16 @@ if reordering {
         guard !trimmed.isEmpty else { return }
         updateEditor {
             let parsed = preserveRawInput ? ShoppingInputParser.Result(name: trimmed, quantity: newQuantity, unit: nil) : ShoppingInputParser.parse(trimmed)
-            store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity,
+            let added = store.add(name: parsed.name, quantity: newQuantityOverridden || parsed.unit == nil ? newQuantity : parsed.quantity,
                       department: addingToSection, urgent: newUrgent)
-            if let item = store.items.first(where: { store.product(for: $0.productID)?.name == parsed.name }) {
+            if let item = added {
+                if let addingAfterID, addingAfterID != item.id {
+                    store.place([item.id], inSection: addingToSection, relativeTo: addingAfterID, after: true)
+                }
+                addingToSection = store.section(for: item)
+                composerSection = addingToSection
+                collapsedSections.remove(store.section(for: item))
+                addingAfterID = item.id
                 if let unit = newUnit ?? parsed.unit { store.updateUnit(of: item, to: unit) }
                 if !newNote.isEmpty { store.updateNote(of: item, to: newNote) }
                 if let newPhotoData { store.setPhoto(newPhotoData, for: item) }
@@ -1016,9 +1051,19 @@ if reordering {
         originalEditedName = editedName
     }
 
-    private func finishRename(_ item: ShoppingItem) {
+    private func continueBelow(_ item: ShoppingItem) {
         saveRename(item)
-        updateEditor { editingNameID = nil; nameFocused = nil; quantityExpanded = false }
+        updateEditor {
+            editingNameID = nil
+            nameFocused = nil
+            quantityExpanded = false
+            addingToSection = store.section(for: item)
+            composerSection = addingToSection
+            addingAfterID = item.id
+            collapsedSections.remove(store.section(for: item))
+            isAdding = true
+            addFocused = true
+        }
     }
 
     private func closeEditor() {
@@ -1026,6 +1071,9 @@ if reordering {
         if let id = editingNameID, let item = store.items.first(where: { $0.id == id }) { saveRename(item) }
         updateEditor {
             isAdding = false
+            addingAfterID = nil
+            addingToSection = nil
+            composerSection = nil
             newName = ""
             newQuantity = 1
             newQuantityOverridden = false
@@ -1167,3 +1215,4 @@ struct ItemInlineDetails: View {
 private final class ShoppingItemFrameRegistry {
     var frames: [UUID: CGRect] = [:]
 }
+

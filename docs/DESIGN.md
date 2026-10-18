@@ -55,7 +55,7 @@ The actual prototype images from the previous conversation are not stored in thi
 - The product name opens the same active-row editing surface used by the new-item flow. Moving keyboard focus from the name to the note must save the name without closing the row. Selecting a different row or list commits the current edit first.
 - Quantity controls are disclosed by a small quantity button. Ordinary rows omit quantity one without a unit, and place meaningful quantity beside the name. Info is shown only on the active row. Quantity, unit and custom-unit editing share one component across new and saved items.
 - New rows support a note, photo, urgency and section before committing. The composer remains at a stable list position while choosing a section; only committed items enter their destination section.
-- Section headers use secondary typography. Empty sections are hidden initially; an overflow toggle reveals them for organizing and drop targets. Creating a section or entering reorder mode also reveals empty sections.
+- Section headers stay visible when empty, including after purchasing the last item or filtering by shopping place. Creating a section keeps normal shopping mode. Small semantic SF Symbols with soft color backgrounds identify store aisles; custom sections use a basket in the list color.
 - Regular-width windows use a native split view with a list sidebar and a centered shopping list capped at 760 points. The native inspector presents extended item details beside the list where space permits and adapts to a sheet in compact windows. Compact windows keep the phone layout. Command-N starts adding, Command-Return finishes an edit.
 
 
@@ -82,3 +82,10 @@ The user authorizes a direct UI/UX redesign after rejecting the Stitch output. U
 
 Review source: https://github.com/emilkowalski/skills/blob/main/skills/apple-design/SKILL.md (principles adapted to native SwiftUI; web implementation recipes are not copied).
 Release compilation and automated interactions do not establish visual or physical-device scroll quality. Review the installed build before treating this iteration as visually accepted.
+
+
+## Household feedback — 18 October 2026
+
+- Return while renaming saves the product and focuses an empty draft immediately below it in the same section. Repeated Return preserves insertion order and section. A draft stays temporary until it has a name; Done removes an empty draft.
+- The section picker does not move the composer while choosing. After submission, the next draft follows the committed item. Keyboard focus is restored after the native List relocates it.
+- Quantity summaries abbreviate known units (יח׳, חב׳, ל׳, בק׳, קופ׳, שק׳, גל׳, ג׳). The picker and VoiceOver retain full unit names. Stored values and custom units are unchanged.

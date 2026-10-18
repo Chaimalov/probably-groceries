@@ -75,9 +75,10 @@ jobs:
           preparation) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testPreparationCloseResumeExcludeAndConfirmOnce") ;;
           drag) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch") ;;
           layout)
-            selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineEditorFocusAndAdaptiveLayout")
             if [ "$UI_DEVICE" = iPhone ]; then
-              selection+=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineAddEnterPurchaseUndoAndPersistence")
+              selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testSectionCreationAndStoreSwitching")
+            else
+              selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineEditorFocusAndAdaptiveLayout")
             fi
             ;;
           all) ;;
@@ -119,3 +120,4 @@ jobs:
         path: ${{ runner.temp }}/TestResults.xcresult
         if-no-files-found: ignore
         retention-days: 3
+

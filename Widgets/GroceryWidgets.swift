@@ -163,7 +163,7 @@ struct GroceryWidgetView: View {
                 HStack(spacing: 4) {
                     Text(row.name).font(.body).lineLimit(1)
                     if row.quantity > 1 || row.unit != nil {
-                        Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
+                        Text([String(row.quantity), row.unit.map(ShoppingUnit.shortLabel)].compactMap { $0 }.joined(separator: " "))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
@@ -251,7 +251,7 @@ struct GroceryWidgetView: View {
                     Text(row.name).font(.body).lineLimit(1)
                     Spacer(minLength: 2)
                     if family != .systemExtraLarge && (row.quantity > 1 || row.unit != nil) {
-                        Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
+                        Text([String(row.quantity), row.unit.map(ShoppingUnit.shortLabel)].compactMap { $0 }.joined(separator: " "))
                             .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -263,7 +263,7 @@ struct GroceryWidgetView: View {
             if family == .systemExtraLarge {
                 quantityButton(row, listID: listID, delta: -1)
                     .disabled(row.quantity <= 1)
-                Text([String(row.quantity), row.unit].compactMap { $0 }.joined(separator: " "))
+                Text([String(row.quantity), row.unit.map(ShoppingUnit.shortLabel)].compactMap { $0 }.joined(separator: " "))
                     .font(.subheadline).monospacedDigit().lineLimit(1)
                     .frame(minWidth: 20)
                 quantityButton(row, listID: listID, delta: 1)
@@ -330,3 +330,4 @@ struct GroceryWidgets: Widget {
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
     }
 }
+

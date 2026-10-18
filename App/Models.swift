@@ -191,3 +191,4 @@ struct PredictionEvaluation: Identifiable {
         return Suggestion(product: product, quantity: quantity, tier: tier, progress: progress)
     }
 }
+
