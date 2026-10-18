@@ -39,7 +39,7 @@ struct ShoppingPreparationView: View {
                             HStack {
                                 Text(store.product(for: item.productID)?.name ?? "מוצר")
                                 Spacer()
-                                Text("×\(item.quantity) \(item.unit ?? "")").foregroundStyle(.secondary)
+                                Text("×\(item.quantity) \(item.unit.map(ShoppingUnit.shortLabel) ?? "")").foregroundStyle(.secondary)
                                 Image(systemName: "info.circle")
                             }
                         }
@@ -54,7 +54,7 @@ struct ShoppingPreparationView: View {
                                 HStack(spacing: 4) {
                                     TextField("שם המוצר", text: $entry.name)
                                     if entry.included {
-                                        Text("×\(entry.quantity) \(entry.unit ?? "")")
+                                        Text("×\(entry.quantity) \(entry.unit.map(ShoppingUnit.shortLabel) ?? "")")
                                             .font(.subheadline).foregroundStyle(.secondary)
                                         Button("פרטי מוצר", systemImage: "info.circle") { draftDetails = entry }
                                             .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -265,3 +265,4 @@ private struct DraftEntryDetails: View {
         entry.photoData = encoded
     }
 }
+
