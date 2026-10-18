@@ -172,5 +172,7 @@ jobs:
         printf '%s' "$APPLE_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
         unset APPLE_KEY_P8
         python3 scripts/wait_for_testflight.py
+        python3 scripts/distribute_external.py
 permissions:
   contents: read
+
