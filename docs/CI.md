@@ -10,10 +10,13 @@ Ordinary CI creates no screenshot or result-bundle uploads. Manual UI runs expor
 
 Measure runtime from completed jobs before promising a fixed minute saving. Simulator boot and debugger launch were the dominant delays in the October 14 runs; the domain assertions themselves took about 0.1 seconds. No tests have been deleted or assertions weakened.
 
-For a deliberate phone/tablet UI review, choose `layout` in the manual workflow or include `[ui:layout]` in a PR title before opening it. This opts into two simulator jobs: the shopping and editor-focus flows on iPhone, and the editor-focus/inspector flow on iPad. Ordinary PRs and pushes still skip simulator UI tests. Screenshot artifacts are named per device.
+For a deliberate phone/tablet UI review, choose `layout` in the manual workflow or include `[ui:layout]` in a PR title before opening it. This opts into two simulator jobs: the section/Return-entry flow on iPhone, and the editor-focus/inspector flow on iPad. Ordinary PRs and pushes still skip simulator UI tests. Screenshot artifacts are named per device.
 
 Simulator UI jobs use the explicit `ProbablyGroceriesUI` scheme: only the UI test target, with debugger attachment disabled, retaining XCTest assertions and screenshots. The ordinary `ProbablyGroceries` scheme retains local debugging and both test targets. UI test output is streamed to make startup delays distinguishable from test failures.
 
 UI jobs pass `-collect-test-diagnostics never`: failures still retain XCTest results and screenshots, but skip the simulator-wide sysdiagnose that can keep Xcode running long after the test verdict. In the October 15 iPad run, the assertion finished at 06:09:21 while diagnostics continued until the 06:15:55 timeout.
 
 UI jobs compile with `build-for-testing` before booting iOS, then await simulator boot and use `test-without-building` with the same derived-data directory. This keeps the cold simulator’s services from competing with Swift compilation on the runner.
+
+
+The layout suite targets one relevant flow per device. The full add/purchase/history/undo flow remains available as `shopping` or `all`, rather than extending each layout run past its simulator time budget.
