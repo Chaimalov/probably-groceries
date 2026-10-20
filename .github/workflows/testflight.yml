@@ -82,6 +82,8 @@ jobs:
           --entitlements Widgets/GroceryWidgets.entitlements \
           "$RUNNER_TEMP/ProbablyGroceries.xcarchive/Products/Applications/ProbablyGroceries.app/PlugIns/GroceryWidgets.appex"
         codesign --force --sign - \
+          "$RUNNER_TEMP/ProbablyGroceries.xcarchive/Products/Applications/ProbablyGroceries.app/Watch/GroceriesWatch.app"
+        codesign --force --sign - \
           --entitlements App/ProbablyGroceries.entitlements \
           "$RUNNER_TEMP/ProbablyGroceries.xcarchive/Products/Applications/ProbablyGroceries.app"
     - name: Upload to App Store Connect
@@ -119,6 +121,10 @@ jobs:
         widget="$app/PlugIns/GroceryWidgets.appex"
         test -d "$widget" || { echo 'Widget extension missing from IPA' >&2; exit 1; }
         codesign --verify --strict "$widget"
+        watch="$app/Watch/GroceriesWatch.app"
+        test -d "$watch" || { echo 'Watch companion missing from IPA' >&2; exit 1; }
+        codesign --verify --strict "$watch"
+        /usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$watch/Info.plist" | grep -qx 'com.chaimalov.probablygroceries' 
         codesign -d --entitlements :- "$widget" > "$RUNNER_TEMP/widget-entitlements.plist"
         codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/signed-entitlements.plist"
         python3 - <<'PY'
@@ -184,4 +190,5 @@ jobs:
         python3 scripts/distribute_external.py
 permissions:
   contents: read
+
 

@@ -44,6 +44,14 @@ jobs:
           -scheme ProbablyGroceries -configuration Debug \
           -destination 'generic/platform=iOS Simulator' \
           CODE_SIGNING_ALLOWED=NO build
+    - name: Compile watch app without simulator boot
+      if: github.event_name != 'push'
+      timeout-minutes: 5
+      run: |
+        xcodebuild -quiet -project ProbablyGroceries.xcodeproj \
+          -scheme GroceriesWatch -configuration Debug \
+          -destination 'generic/platform=watchOS Simulator' \
+          CODE_SIGNING_ALLOWED=NO build
   ui-tests:
     if: (github.event_name == 'workflow_dispatch' && inputs.ui_tests != 'none') || (github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[ui:layout]'))
     needs: checks
@@ -120,4 +128,5 @@ jobs:
         path: ${{ runner.temp }}/TestResults.xcresult
         if-no-files-found: ignore
         retention-days: 3
+
 

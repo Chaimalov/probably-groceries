@@ -143,7 +143,9 @@ struct ShoppingData: Codable {
     // Device-local receipts, persisted atomically with confirmed additions.
     var confirmedDrafts: [UUID] = []
 
-    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts }
+    var watchReceipts: [UUID] = []
+
+    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts, watchReceipts }
     init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")],
          products: [Product] = [], items: [ShoppingItem] = [],
          purchases: [Purchase] = [], deferrals: [Deferral] = []) {
@@ -159,6 +161,7 @@ struct ShoppingData: Codable {
         purchases = try c.decodeIfPresent([Purchase].self, forKey: .purchases) ?? []
         deferrals = try c.decodeIfPresent([Deferral].self, forKey: .deferrals) ?? []
         confirmedDrafts = try c.decodeIfPresent([UUID].self, forKey: .confirmedDrafts) ?? []
+        watchReceipts = try c.decodeIfPresent([UUID].self, forKey: .watchReceipts) ?? []
     }
 }
 
@@ -191,4 +194,5 @@ struct PredictionEvaluation: Identifiable {
         return Suggestion(product: product, quantity: quantity, tier: tier, progress: progress)
     }
 }
+
 
