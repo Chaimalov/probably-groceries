@@ -70,16 +70,6 @@ private struct WatchShoppingView: View {
                             }
                         }
                     }
-                    if let row = lastPurchase, lastListID == list.id {
-                        Button {
-                            mark(false, row: row, listID: list.id)
-                            lastPurchase = nil
-                        } label: {
-                            Label("ביטול: \(row.name)", systemImage: "arrow.uturn.backward")
-                                .font(.footnote)
-                        }
-                        .disabled(tapLocked)
-                    }
                     if showPurchased {
                         Section("בעגלה") {
                             ForEach(list.rows.filter(\.purchased)) { row in
@@ -109,6 +99,16 @@ private struct WatchShoppingView: View {
             .navigationTitle(current?.name ?? String(localized: "קניות"))
             .tint(tint)
             .toolbar {
+                ToolbarItem(placement: .bottomBar) {
+                    if let row = lastPurchase, let listID = lastListID, listID == current?.id {
+                        Button {
+                            mark(false, row: row, listID: listID)
+                            lastPurchase = nil
+                        } label: { Image(systemName: "arrow.uturn.backward") }
+                        .disabled(tapLocked)
+                        .accessibilityLabel(Text("ביטול: \(row.name)"))
+                    }
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { choosingList = true } label: { Image(systemName: "list.bullet") }
                         .accessibilityLabel(Text("בחירת רשימה"))

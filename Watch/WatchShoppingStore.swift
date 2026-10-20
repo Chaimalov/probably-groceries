@@ -60,7 +60,10 @@ final class WatchShoppingStore: NSObject, ObservableObject, WCSessionDelegate {
             message[WatchShoppingWire.commands] = data
             // Every replacement contains the entire unacknowledged ordered queue.
             let queued = session.outstandingUserInfoTransfers
-            if !queued.contains(where: { ($0.userInfo[WatchShoppingWire.commands] as? Data) == data }) {
+            if !queued.contains(where: {
+                guard let bytes = $0.userInfo[WatchShoppingWire.commands] as? Data else { return false }
+                return (try? JSONDecoder().decode([WatchPurchaseCommand].self, from: bytes)) == cache.pending
+            }) {
                 queued.forEach { $0.cancel() }
                 session.transferUserInfo([WatchShoppingWire.commands: data])
             }
