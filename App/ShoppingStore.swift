@@ -529,7 +529,7 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    func buy(_ item: ShoppingItem) {
+    func buy(_ item: ShoppingItem, at date: Date = .now) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
         let route = orderedItems(in: current.listID)
@@ -543,7 +543,7 @@ final class ShoppingStore: ObservableObject {
         data.items.removeAll { $0.id == current.id }
         // Concurrent check-offs of the same active row converge to one event.
         data.purchases.append(Purchase(id: current.id, productID: current.productID,
-                                       quantity: current.quantity, purchasedAt: .now,
+                                       quantity: current.quantity, purchasedAt: date,
                                        sourceItemID: current.id, listID: current.listID,
                                        wasUrgent: current.isUrgent))
         let actor = UserDefaults.standard.string(forKey: "shoppingActorID") ?? UUID().uuidString
@@ -673,6 +673,7 @@ final class ShoppingStore: ObservableObject {
             try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
             storageError = nil
             publishWidgetSnapshot()
+            PhoneWatchBridge.shared.publish(watchSnapshot())
         } catch {
             storageError = "השינויים עדיין לא נשמרו במכשיר. נסה שוב."
         }
@@ -716,6 +717,50 @@ final class ShoppingStore: ObservableObject {
         WidgetCenter.shared.reloadTimelines(ofKind: "GroceryWidgets")
     }
 
+    func watchSnapshot() -> WatchShoppingSnapshot {
+        WatchShoppingSnapshot(date: .now, selectedListID: selectedListID,
+            lists: data.lists.map { list in
+                let active = orderedItems(in: list.id)
+                let recent = data.purchases.filter { $0.listID == list.id }
+                    .sorted { $0.purchasedAt > $1.purchasedAt }.prefix(20)
+                var rows = active.map { item in
+                    WatchShoppingSnapshot.Row(id: item.id,
+                        name: product(for: item.productID)?.name ?? "מוצר",
+                        quantity: item.quantity, unit: item.unit,
+                        section: section(for: item), note: item.note, purchased: false)
+                }
+                rows += recent.filter { purchase in !active.contains { $0.id == purchase.sourceItemID } }.map { purchase in
+                    WatchShoppingSnapshot.Row(id: purchase.sourceItemID,
+                        name: product(for: purchase.productID)?.name ?? "מוצר",
+                        quantity: purchase.quantity, unit: purchase.unit,
+                        section: purchase.sectionName ?? "אחר", note: purchase.note, purchased: true)
+                }
+                var sections = list.sections
+                for row in rows where !sections.contains(row.section) { sections.append(row.section) }
+                return WatchShoppingSnapshot.List(id: list.id, name: list.name,
+                    tint: list.tintName, sections: sections, rows: rows)
+            }, receipts: data.watchReceipts)
+    }
+
+    func applyWatchCommands(_ commands: [WatchPurchaseCommand]) {
+        guard !loadFailed else { return }
+        for command in commands where !data.watchReceipts.contains(command.id) {
+            // The receipt and domain mutation are saved in the same shopping.json write.
+            data.watchReceipts.append(command.id)
+            if command.purchased,
+               let item = data.items.first(where: { $0.id == command.itemID && $0.listID == command.listID }) {
+                buy(item, at: min(command.date, .now))
+            } else if !command.purchased,
+                      let purchase = data.purchases.first(where: {
+                          $0.sourceItemID == command.itemID && $0.listID == command.listID
+                      }) {
+                undo(purchase)
+            } else { persist() }
+        }
+        // Retry failed local writes before acknowledging delivery.
+        saveLocal()
+    }
+
     func retryLocalSave() { saveLocal() }
 
     func saveSyncMetadata() { saveLocal() }
@@ -735,5 +780,6 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
     }
 }
+
 
 

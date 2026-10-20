@@ -24,6 +24,13 @@ struct ProbablyGroceriesApp: App {
         return Bundle.main.preferredLocalizations.first != "en"
     }
 
+    init() {
+        PhoneWatchBridge.shared.start()
+        if ShoppingStore.shared.storageError == nil {
+            PhoneWatchBridge.shared.publish(ShoppingStore.shared.watchSnapshot())
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ShoppingView(store: store)
@@ -70,3 +77,4 @@ struct ProbablyGroceriesApp: App {
         }
     }
 }
+
