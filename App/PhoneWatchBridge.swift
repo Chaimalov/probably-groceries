@@ -22,13 +22,13 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
 
     private func receive(_ message: [String: Any]) -> [String: Any] {
         let store = ShoppingStore.shared
-        if let data = message[WatchShoppingWire.commands] as? Data,
-           let commands = try? JSONDecoder().decode([WatchPurchaseCommand].self, from: data) {
-            store.applyWatchCommands(commands)
-        }
+        let commands = (message[WatchShoppingWire.commands] as? Data)
+            .flatMap { try? JSONDecoder().decode([WatchPurchaseCommand].self, from: $0) } ?? []
+        if !commands.isEmpty { store.applyWatchCommands(commands) }
+        let snapshot = store.watchSnapshot(acknowledging: commands)
         guard store.storageError == nil,
-              let data = try? JSONEncoder().encode(store.watchSnapshot()) else { return [:] }
-        publish(store.watchSnapshot())
+              let data = try? JSONEncoder().encode(snapshot) else { return [:] }
+        publish(snapshot)
         return [WatchShoppingWire.snapshot: data]
     }
 

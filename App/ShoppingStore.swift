@@ -120,6 +120,7 @@ final class ShoppingStore: ObservableObject {
         selectedListID = id
         UserDefaults.standard.set(id.uuidString, forKey: "selectedShoppingListID")
         publishWidgetSnapshot()
+        PhoneWatchBridge.shared.publish(watchSnapshot())
     }
 
     func addList(name: String) {
@@ -529,7 +530,9 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    func buy(_ item: ShoppingItem, at date: Date = .now) {
+    func buy(_ item: ShoppingItem) { buy(item, at: .now) }
+
+    private func buy(_ item: ShoppingItem, at date: Date) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
         let route = orderedItems(in: current.listID)
@@ -717,7 +720,7 @@ final class ShoppingStore: ObservableObject {
         WidgetCenter.shared.reloadTimelines(ofKind: "GroceryWidgets")
     }
 
-    func watchSnapshot() -> WatchShoppingSnapshot {
+    func watchSnapshot(acknowledging commands: [WatchPurchaseCommand] = []) -> WatchShoppingSnapshot {
         WatchShoppingSnapshot(date: .now, selectedListID: selectedListID,
             lists: data.lists.map { list in
                 let active = orderedItems(in: list.id)
@@ -739,7 +742,8 @@ final class ShoppingStore: ObservableObject {
                 for row in rows where !sections.contains(row.section) { sections.append(row.section) }
                 return WatchShoppingSnapshot.List(id: list.id, name: list.name,
                     tint: list.tintName, sections: sections, rows: rows)
-            }, receipts: data.watchReceipts)
+            }, receipts: Array(Set(data.watchReceipts.suffix(256)).union(
+                commands.filter { data.watchReceipts.contains($0.id) }.map(\.id))))
     }
 
     func applyWatchCommands(_ commands: [WatchPurchaseCommand]) {

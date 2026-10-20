@@ -21,6 +21,7 @@ private struct WatchShoppingView: View {
     @ObservedObject var store: WatchShoppingStore
     @AppStorage("watchSelectedList") private var selectedID = ""
     @State private var choosingList = false
+    @State private var showingOptions = false
     @State private var showPurchased = false
     @State private var tapLocked = false
     @State private var lastPurchase: WatchShoppingSnapshot.Row?
@@ -113,14 +114,15 @@ private struct WatchShoppingView: View {
                         .accessibilityLabel(Text("בחירת רשימה"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { showPurchased.toggle() } label: {
-                            Label(LocalizedStringKey(showPurchased ? "הסתרת מוצרים בעגלה" : "הצגת מוצרים בעגלה"), systemImage: "cart")
-                        }
-                        Button { store.refresh() } label: { Label("רענון", systemImage: "arrow.clockwise") }
-                    } label: { Image(systemName: "ellipsis") }
+                    Button { showingOptions = true } label: { Image(systemName: "ellipsis") }
                     .accessibilityLabel(Text("אפשרויות"))
                 }
+            }
+            .confirmationDialog("אפשרויות", isPresented: $showingOptions) {
+                Button(LocalizedStringKey(showPurchased ? "הסתרת מוצרים בעגלה" : "הצגת מוצרים בעגלה")) {
+                    showPurchased.toggle()
+                }
+                Button("רענון") { store.refresh() }
             }
             .sheet(isPresented: $choosingList) {
                 NavigationStack {
