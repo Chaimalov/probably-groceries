@@ -10,6 +10,7 @@ targets:
     sources:
       - App
       - Shared
+      - Resources/Groceries.icon
     dependencies:
       - target: GroceryWidgets
         embed: true
@@ -63,6 +64,7 @@ targets:
       - Watch
       - Shared/WatchShopping.swift
       - Shared/GroceryWidgetSnapshot.swift
+      - Resources/Groceries.icon
     info:
       path: Watch/Info.plist
       properties:
@@ -80,7 +82,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.chaimalov.probablygroceries.watchkitapp
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: "4"
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Groceries
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
