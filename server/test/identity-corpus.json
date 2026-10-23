@@ -1,0 +1,14 @@
+[
+  { "source": "בייצים", "target": "ביצים", "same": true },
+  { "source": "תפוח אדמה - לבן", "target": "תפוח אדמה לבן", "same": true },
+  { "source": "כוסות חד פעמיות חמות", "target": "כוסות חד פעמיות לשתיה חמה", "same": true },
+  { "source": "חלב", "target": "חלב סויה", "same": false },
+  { "source": "חלב 3%", "target": "חלב 1%", "same": false },
+  { "source": "חיתולים מידה 5", "target": "חיתולים מידה 6", "same": false },
+  { "source": "חיתולים לתינוקת", "target": "חיתולים לתינוקת מידה 5", "same": false },
+  { "source": "גבינה צהובה פרוסות", "target": "גבינה צהובה מגורדת", "same": false },
+  { "source": "בצל לבן", "target": "בצל סגול", "same": false },
+  { "source": "אורז", "target": "אורז בוואקום", "same": false },
+  { "source": "מלבין כביסה", "target": "מלבין כביסה ספריי", "same": false },
+  { "source": "פומלה", "target": "פומלית", "same": false }
+]

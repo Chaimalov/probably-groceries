@@ -4,9 +4,11 @@ enum PredictionEngine {
     static func evaluate(_ data: ShoppingData, now: Date = .now,
                          listID: UUID = ShoppingList.defaultID) -> [PredictionEvaluation] {
         let activeIDs = Set(data.items.filter { $0.listID == listID }.map(\.productID))
+        let groups = ProductLearning.groups(in: data, listID: listID)
         return data.products.map { product in
+            let identities = groups[product.id] ?? [product.id]
             let purchases = data.purchases.filter {
-                $0.listID == listID && $0.productID == product.id && $0.purchasedAt <= now
+                $0.listID == listID && identities.contains($0.productID) && $0.purchasedAt <= now
             }
                 .sorted { $0.purchasedAt < $1.purchasedAt }
             let recentQuantities = purchases.suffix(5).map(\.quantity).filter { $0 > 0 }.sorted()
@@ -32,13 +34,17 @@ enum PredictionEngine {
 
             let reason: String
             let tier: Suggestion.Tier?
-            if activeIDs.contains(product.id) {
+            if !activeIDs.isDisjoint(with: identities) {
                 reason = "כבר ברשימה"
                 tier = nil
             } else if let deferred = data.deferrals.first(where: {
-                $0.listID == listID && $0.productID == product.id && $0.until > now
+                $0.listID == listID && identities.contains($0.productID) && $0.until > now
             }) {
                 reason = "נדחה עד \(deferred.until.formatted(date: .abbreviated, time: .omitted))"
+                tier = nil
+            } else if identities.count > 1,
+                      ProductLearning.representative(of: identities, in: data, listID: listID, now: now) != product.id {
+                reason = "נלמד יחד עם שם נוסף של אותו מוצר"
                 tier = nil
             } else if trips.count < 3 {
                 reason = "נדרשות שלוש קניות נפרדות"

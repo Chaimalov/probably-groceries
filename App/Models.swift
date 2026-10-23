@@ -7,6 +7,7 @@ struct Product: Codable, Identifiable, Hashable {
     var category: String? = nil
     var department: String? = nil
     var preferredUnit: String? = nil
+    var learningLinks: [ProductLearningLink]? = nil
 }
 
 struct ShoppingList: Codable, Identifiable, Hashable {

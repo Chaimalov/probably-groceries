@@ -665,6 +665,34 @@ final class ShoppingStore: ObservableObject {
         lastJournaledData = data
         saveLocal()
         cloudSync.schedule()
+        ProductDecisionService.shared.schedule(store: self)
+    }
+
+    func recordLearningLink(from source: Product, to target: Product, listID: UUID,
+                            decision: ProductDecisionService.Decision) {
+        guard data.lists.contains(where: { $0.id == listID }), source.id != target.id,
+              let index = data.products.firstIndex(where: { $0.id == source.id }),
+              let currentTarget = product(for: target.id),
+              data.products[index].name == source.name, currentTarget.name == target.name,
+              data.products[index].preferredUnit == source.preferredUnit,
+              currentTarget.preferredUnit == target.preferredUnit,
+              source.preferredUnit == target.preferredUnit else { return }
+        var links = data.products[index].learningLinks ?? []
+        if links.contains(where: { $0.listID == listID && $0.targetID == target.id &&
+            $0.sourceName == source.name && $0.targetName == target.name &&
+            $0.sourceUnit == source.preferredUnit && $0.targetUnit == target.preferredUnit }) { return }
+        links.removeAll { $0.listID == listID && $0.targetID == target.id }
+        links.append(ProductLearningLink(listID: listID, targetID: target.id, sourceName: source.name,
+            targetName: target.name, sourceUnit: source.preferredUnit, targetUnit: target.preferredUnit,
+            model: decision.model, policyVersion: decision.policyVersion,
+            probability: decision.probability, confidence: decision.confidence, createdAt: .now))
+        data.products[index].learningLinks = links
+        persist()
+    }
+
+    func resetProductLearning() {
+        for index in data.products.indices { data.products[index].learningLinks = nil }
+        persist()
     }
 
     private func saveLocal() {
@@ -784,6 +812,7 @@ final class ShoppingStore: ObservableObject {
             selectedListID = data.lists.first?.id ?? ShoppingList.defaultID
         }
         saveLocal()
+        ProductDecisionService.shared.schedule(store: self)
     }
 }
 

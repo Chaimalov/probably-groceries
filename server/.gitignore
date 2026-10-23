@@ -1,0 +1,5 @@
+.wrangler/
+node_modules/
+.dev.vars*
+wrangler.deploy.json
+evaluation-results.json
