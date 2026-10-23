@@ -141,6 +141,8 @@ targets:
       - App/PredictionDiagnostics.swift
       - Tests/SyncJournalTests.swift
       - App/Models.swift
+      - App/ProductLearning.swift
+      - Tests/ProductLearningTests.swift
       - App/PredictionEngine.swift
       - App/ShoppingRouteOrder.swift
       - App/SyncJournal.swift

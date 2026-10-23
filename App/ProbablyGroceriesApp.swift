@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct ProbablyGroceriesApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @UIApplicationDelegateAdaptor(SharingAppDelegate.self) private var appDelegate
     @StateObject private var store = ShoppingStore.shared
     @StateObject private var invitations = ShareInvitationInbox.shared
@@ -34,6 +35,10 @@ struct ProbablyGroceriesApp: App {
     var body: some Scene {
         WindowGroup {
             ShoppingView(store: store)
+                .task { ProductDecisionService.shared.schedule(store: store) }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { ProductDecisionService.shared.schedule(store: store) }
+                }
                 .preferredColorScheme(testAppearance)
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
                 .environment(\.layoutDirection, usesHebrew ? .rightToLeft : .leftToRight)

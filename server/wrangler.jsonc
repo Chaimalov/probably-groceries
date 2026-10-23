@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "groceries-decisions",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "vars": { "MODEL": "mercury-decide", "DAILY_DEVICE_LIMIT": "40", "DAILY_GLOBAL_LIMIT": "200", "AUTO_LINK_ENABLED": "false" },
+  "d1_databases": [{ "binding": "DB", "database_name": "groceries-decisions", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }],
+  "triggers": { "crons": ["0 3 * * *"] }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "groceries-decisions",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs", "check": "npm exec --yes --package typescript@5.9.3 -- tsc --noEmit --target ES2022 --module ESNext --lib ES2022,DOM src/worker.ts", "dev": "npx wrangler@4.152.0 dev", "deploy": "npx wrangler@4.152.0 deploy" },
+  "engines": { "node": ">=24" }
+}

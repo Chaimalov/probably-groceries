@@ -148,3 +148,26 @@
 "שיתוף נתוני אבחון להצעות" = "Share suggestion diagnostics";
 "ברשימה הנוכחית" = "In the current list";
 "הקובץ כולל שמות מוצרים, כמויות, תאריכי קנייה וחישובי הצעות מכל הרשימות. ללא תמונות, הערות או פרטי חשבון." = "Includes product names, quantities, purchase dates and suggestion calculations from all lists. Excludes photos, notes and account details.";
+
+
+"זיהוי מוצרים" = "Product recognition";
+"לא מחובר" = "Not connected";
+"מחובר" = "Connected";
+"מזהה שמות מוצרים ברקע" = "Recognizing product names in the background";
+"מחובר · בדיקת דיוק" = "Connected · evaluating accuracy";
+"נדרש חיבור מחדש" = "Reconnect to continue";
+"ננסה שוב בהמשך" = "Will try again later";
+"כתובת השרת" = "Server address";
+"קוד חיבור" = "Pairing code";
+"חיבור חד־פעמי" = "One-time connection";
+"חיבור וזיהוי מוצרים" = "Connect and recognize products";
+"מזהה מכשיר" = "Device ID";
+"ניתוק השירות" = "Disconnect service";
+"איפוס קישורים שנלמדו" = "Reset learned links";
+"לאפס את הקישורים שנלמדו?" = "Reset learned links?";
+"איפוס" = "Reset";
+"האיפוס משאיר את שמות המוצרים ואת כל היסטוריית הקניות כפי שהם." = "Reset keeps product names and the entire purchase history unchanged.";
+"כדי לזהות שמות שונים של אותו מוצר, נשלחים לשירות שמות מוצרים ויחידות מידה בלבד. הקניות ממשיכות לעבוד גם בלי חיבור." = "Only product names and units are sent to recognize different names for the same product. Shopping keeps working offline.";
+
+"כנראה צריך שוב" = "Probably needed again";
+"אולי צריך שוב" = "Maybe needed again";
