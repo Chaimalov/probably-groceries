@@ -17,6 +17,8 @@ struct WatchShoppingSnapshot: Codable {
         let section: String
         let note: String?
         var purchased: Bool
+        // Optional so cached snapshots from older phone builds still decode.
+        var isUrgent: Bool? = nil
     }
     struct List: Codable, Identifiable {
         let id: UUID
@@ -47,3 +49,4 @@ enum WatchShoppingWire {
     static let commands = "shoppingCommandsV1"
     static let refresh = "refreshShoppingV1"
 }
+

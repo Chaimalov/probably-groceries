@@ -2,6 +2,32 @@ import Foundation
 import XCTest
 
 final class WatchShoppingTests: XCTestCase {
+    func testUrgencySurvivesTransferAndOfflinePurchase() throws {
+        let list = UUID()
+        let row = WatchShoppingSnapshot.Row(id: UUID(), name: "חלב", quantity: 3, unit: "ליטר",
+            section: "מקרר", note: nil, purchased: false, isUrgent: true)
+        let snapshot = WatchShoppingSnapshot(date: .now, selectedListID: list,
+            lists: [.init(id: list, name: "קניות", tint: "green", sections: ["מקרר"], rows: [row])], receipts: [])
+        let restored = try JSONDecoder().decode(WatchShoppingSnapshot.self, from: JSONEncoder().encode(snapshot))
+        let buy = WatchPurchaseCommand(id: UUID(), itemID: row.id, listID: list, purchased: true, date: .now)
+        let purchased = restored.overlaying([buy]).lists[0].rows[0]
+        XCTAssertEqual(purchased.isUrgent, true)
+        XCTAssertTrue(purchased.purchased)
+        XCTAssertEqual(purchased.quantity, 3)
+        XCTAssertEqual(purchased.unit, "ליטר")
+    }
+
+    func testLegacyWatchRowWithoutUrgencyStillDecodes() throws {
+        let row = WatchShoppingSnapshot.Row(id: UUID(), name: "לחם", quantity: 2, unit: nil,
+            section: "מאפייה", note: nil, purchased: false)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any])
+        json.removeValue(forKey: "isUrgent")
+        let restored = try JSONDecoder().decode(WatchShoppingSnapshot.Row.self,
+            from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(restored.isUrgent)
+        XCTAssertEqual(restored.quantity, 2)
+    }
+
     func testOfflineBuyThenUndoSurvivesStaleSnapshotAndPartialAcknowledgement() throws {
         let item = UUID(), list = UUID()
         let buy = WatchPurchaseCommand(id: UUID(), itemID: item, listID: list, purchased: true, date: .now)
@@ -37,3 +63,4 @@ final class WatchShoppingTests: XCTestCase {
         XCTAssertEqual(restored.watchReceipts, data.watchReceipts)
     }
 }
+

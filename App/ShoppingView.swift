@@ -210,6 +210,10 @@ struct ShoppingView: View {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.tertiary)
                                         Text(product.name).foregroundStyle(.secondary)
+                                        Text(quantityLabel(purchase.quantity, unit: purchase.unit))
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize()
+                                            .accessibilityLabel("כמות \(purchase.quantity) \(purchase.unit ?? "")")
                                         Spacer()
                                         Button {
                                             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
@@ -246,9 +250,9 @@ struct ShoppingView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .background(Theme.canvas)
                 .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
                 .frame(maxWidth: .infinity)
+                .background { Theme.canvas.ignoresSafeArea() }
                 .listRowSeparator(.hidden, edges: .all)
                 .listSectionSeparator(.hidden, edges: .all)
                 .overlay {
@@ -1215,4 +1219,5 @@ struct ItemInlineDetails: View {
 private final class ShoppingItemFrameRegistry {
     var frames: [UUID: CGRect] = [:]
 }
+
 

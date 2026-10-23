@@ -730,13 +730,15 @@ final class ShoppingStore: ObservableObject {
                     WatchShoppingSnapshot.Row(id: item.id,
                         name: product(for: item.productID)?.name ?? "מוצר",
                         quantity: item.quantity, unit: item.unit,
-                        section: section(for: item), note: item.note, purchased: false)
+                        section: section(for: item), note: item.note, purchased: false,
+                        isUrgent: item.isUrgent)
                 }
                 rows += recent.filter { purchase in !active.contains { $0.id == purchase.sourceItemID } }.map { purchase in
                     WatchShoppingSnapshot.Row(id: purchase.sourceItemID,
                         name: product(for: purchase.productID)?.name ?? "מוצר",
                         quantity: purchase.quantity, unit: purchase.unit,
-                        section: purchase.sectionName ?? "אחר", note: purchase.note, purchased: true)
+                        section: purchase.sectionName ?? "אחר", note: purchase.note, purchased: true,
+                        isUrgent: purchase.wasUrgent)
                 }
                 var sections = list.sections
                 for row in rows where !sections.contains(row.section) { sections.append(row.section) }
@@ -784,6 +786,7 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
     }
 }
+
 
 
 

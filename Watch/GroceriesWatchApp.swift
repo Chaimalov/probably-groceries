@@ -74,7 +74,10 @@ private struct WatchShoppingView: View {
                         Section("בעגלה") {
                             ForEach(list.rows.filter(\.purchased)) { row in
                                 Button { mark(false, row: row, listID: list.id) } label: {
-                                    Label(row.name, systemImage: "checkmark.circle.fill")
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                        rowContent(row)
+                                    }
                                 }
                                 .disabled(tapLocked)
                                 .accessibilityHint(Text("החזרה לרשימת הקניות"))
@@ -149,15 +152,7 @@ private struct WatchShoppingView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "circle").font(.title3).foregroundStyle(tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(row.name).font(.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
-                    Text("\(row.quantity) \(row.unit.map(ShoppingUnit.shortLabel) ?? "")")
-                        .font(.callout).foregroundStyle(.secondary)
-                    if let note = row.note, !note.isEmpty {
-                        Text(note).font(.footnote).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                rowContent(row)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: 44).contentShape(Rectangle())
@@ -165,6 +160,26 @@ private struct WatchShoppingView: View {
         .disabled(tapLocked)
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text("סימון כמוצר שנוסף לעגלה"))
+    }
+
+    private func rowContent(_ row: WatchShoppingSnapshot.Row) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(row.name).font(.body.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                if row.isUrgent == true {
+                    Image(systemName: "flag.fill")
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel(Text("דחוף"))
+                }
+            }
+            Text("\(row.quantity) \(row.unit.map(ShoppingUnit.shortLabel) ?? "")")
+                .font(.callout).foregroundStyle(.secondary)
+            if let note = row.note, !note.isEmpty {
+                Text(note).font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func mark(_ purchased: Bool, row: WatchShoppingSnapshot.Row, listID: UUID) {
@@ -179,3 +194,4 @@ private struct WatchShoppingView: View {
         }
     }
 }
+
