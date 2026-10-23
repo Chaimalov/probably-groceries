@@ -1,6 +1,6 @@
 import Foundation
 
-struct ProductLearningLink: Codable, Equatable {
+struct ProductLearningLink: Codable, Hashable {
     var listID: UUID
     var targetID: UUID
     var sourceName: String
