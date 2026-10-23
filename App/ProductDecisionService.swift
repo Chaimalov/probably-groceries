@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import CryptoKit
 import Security
+import Network
 
 @MainActor
 final class ProductDecisionService: ObservableObject {
@@ -11,6 +12,10 @@ final class ProductDecisionService: ObservableObject {
     private var task: Task<Void, Never>?
     private var generation = UUID()
     private var retryAfter = Date.distantPast
+    private var needsAnotherPass = false
+    private weak var storeToResume: ShoppingStore?
+    private let network = NWPathMonitor()
+    private var networkAvailable = false
     private let defaults = UserDefaults.standard
     private let keychainService = "com.chaimalov.probablygroceries.decisions"
     private let session: URLSession = {
@@ -44,6 +49,14 @@ final class ProductDecisionService: ObservableObject {
             cache = (try? JSONDecoder().decode([String: Cached].self, from: bytes)) ?? [:]
         }
         cache = cache.filter { $0.value.expiresAt > .now }
+        network.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                self.networkAvailable = path.status == .satisfied
+                if self.networkAvailable, let store = self.storeToResume { self.schedule(store: store) }
+            }
+        }
+        network.start(queue: DispatchQueue(label: "groceries.product-decisions.network"))
     }
 
     var endpoint: String { credentials()?.endpoint.absoluteString ?? "" }
@@ -76,6 +89,7 @@ final class ProductDecisionService: ObservableObject {
             ? SecItemAdd(query.merging(attributes) { _, new in new } as CFDictionary, nil) : result
         guard saved == errSecSuccess else { throw ServiceError.message("לא הצלחנו לשמור את החיבור במכשיר.") }
         generation = UUID()
+        needsAnotherPass = false
         task?.cancel(); task = nil
         connected = true; status = "מחובר"; retryAfter = .distantPast
         schedule(store: store)
@@ -83,20 +97,31 @@ final class ProductDecisionService: ObservableObject {
 
     func disconnect() {
         generation = UUID(); task?.cancel(); task = nil
+        needsAnotherPass = false
         SecItemDelete(keychainQuery() as CFDictionary)
         connected = false; status = "לא מחובר"
         cache.removeAll(); defaults.removeObject(forKey: "productDecisionCache")
     }
 
     func schedule(store: ShoppingStore) {
-        guard task == nil, connected, retryAfter <= .now,
+        storeToResume = store
+        guard connected, networkAvailable, retryAfter <= .now,
               !ProcessInfo.processInfo.arguments.contains("-ui-testing") else { return }
+        if task != nil { needsAnotherPass = true; return }
         let current = generation
         task = Task { [weak self, weak store] in
-            defer { if self?.generation == current { self?.task = nil } }
+            defer {
+                if let service = self, service.generation == current {
+                    service.task = nil
+                    if service.needsAnotherPass, let owner = store {
+                        service.needsAnotherPass = false
+                        service.schedule(store: owner)
+                    }
+                }
+            }
             do { try await Task.sleep(for: .seconds(1)) } catch { return }
-            guard let self, let store, let credentials = self.credentials(), self.generation == current else { return }
-            await self.process(store: store, credentials: credentials, generation: current)
+            guard let service = self, let owner = store, let credentials = service.credentials(), service.generation == current else { return }
+            await service.process(store: owner, credentials: credentials, generation: current)
         }
     }
 
@@ -144,7 +169,13 @@ final class ProductDecisionService: ObservableObject {
                 } catch {
                     guard generation == current, !Task.isCancelled else { return }
                     if case ServiceError.unauthorized = error { status = "נדרש חיבור מחדש"; connected = false }
-                    else { status = "ננסה שוב בהמשך"; retryAfter = .now.addingTimeInterval(3600) }
+                    else {
+                        status = "ננסה שוב בהמשך"
+                        if let networkError = error as? URLError,
+                           [.notConnectedToInternet, .networkConnectionLost].contains(networkError.code) {
+                            retryAfter = .distantPast
+                        } else { retryAfter = .now.addingTimeInterval(3600) }
+                    }
                     return
                 }
             }
