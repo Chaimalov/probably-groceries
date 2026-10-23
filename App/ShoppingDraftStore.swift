@@ -2,6 +2,20 @@ import Foundation
 
 extension ShoppingStore {
     private func draftKey(_ listID: UUID) -> String { "shoppingDraft.\(listID.uuidString)" }
+    // Inspect existing drafts without creating, refreshing or confirming one.
+    func predictionDiagnostics() -> PredictionDiagnostics {
+        let drafts = data.lists.compactMap { list -> ShoppingDraft? in
+            guard let bytes = UserDefaults.standard.data(forKey: draftKey(list.id)),
+                  let draft = try? JSONDecoder().decode(ShoppingDraft.self, from: bytes),
+                  draft.listID == list.id else { return nil }
+            return draft
+        }
+        return PredictionDiagnostics(data: data, selectedListID: selectedListID, drafts: drafts,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            buildNumber: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+            storageError: storageError)
+    }
+
     func shoppingDraft() -> ShoppingDraft {
         if let bytes = UserDefaults.standard.data(forKey: draftKey(selectedListID)),
            let draft = try? JSONDecoder().decode(ShoppingDraft.self, from: bytes), draft.listID == selectedListID,

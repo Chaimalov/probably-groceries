@@ -137,6 +137,8 @@ targets:
       - App/ShoppingDraft.swift
       - App/ShoppingSession.swift
       - Tests/PredictionEngineTests.swift
+      - Tests/PredictionDiagnosticsTests.swift
+      - App/PredictionDiagnostics.swift
       - Tests/SyncJournalTests.swift
       - App/Models.swift
       - App/PredictionEngine.swift
@@ -190,4 +192,5 @@ schemes:
       debugEnabled: false
       targets:
         - ProbablyGroceriesUITests
+
 
