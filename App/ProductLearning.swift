@@ -20,16 +20,20 @@ enum ProductLearning {
             + data.purchases.filter { $0.listID == listID }.map(\.productID))
         let left = normalized(source.name)
         let words = Set(left.split(separator: " "))
-        return data.products.filter { $0.id != source.id && scoped.contains($0.id) }
-            .map { candidate -> (Product, Double) in
-                let right = normalized(candidate.name)
-                let distance = Double(editDistance(left, right)) / Double(max(1, max(left.count, right.count)))
-                let overlaps = !words.isDisjoint(with: Set(right.split(separator: " ")))
-                return (candidate, overlaps ? min(distance, 0.5) : distance)
-            }
-            .filter { $0.1 <= 0.55 }
-            .sorted { $0.1 == $1.1 ? $0.0.id.uuidString < $1.0.id.uuidString : $0.1 < $1.1 }
-            .prefix(8).map(\.0)
+        var scored: [(product: Product, distance: Double)] = []
+        for candidate in data.products where candidate.id != source.id && scoped.contains(candidate.id) {
+            let right = normalized(candidate.name)
+            let length = max(1, max(left.count, right.count))
+            let distance = Double(editDistance(left, right)) / Double(length)
+            let overlaps = !words.isDisjoint(with: Set(right.split(separator: " ")))
+            let score = overlaps ? min(distance, 0.5) : distance
+            if score <= 0.55 { scored.append((candidate, score)) }
+        }
+        scored.sort { left, right in
+            if left.distance == right.distance { return left.product.id.uuidString < right.product.id.uuidString }
+            return left.distance < right.distance
+        }
+        return scored.prefix(8).map { $0.product }
     }
 
     private static func normalized(_ value: String) -> String {
