@@ -142,3 +142,9 @@
 "טוען תמונה" = "Loading photo";
 
 "התמונה אינה זמינה" = "Photo unavailable";
+
+"אבחון הצעות חכמות" = "Smart suggestion diagnostics";
+"נתוני אבחון להצעות" = "Suggestion diagnostics";
+"שיתוף נתוני אבחון להצעות" = "Share suggestion diagnostics";
+"ברשימה הנוכחית" = "In the current list";
+"הקובץ כולל שמות מוצרים, כמויות, תאריכי קנייה וחישובי הצעות מכל הרשימות. ללא תמונות, הערות או פרטי חשבון." = "Includes product names, quantities, purchase dates and suggestion calculations from all lists. Excludes photos, notes and account details.";

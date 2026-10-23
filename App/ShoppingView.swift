@@ -28,6 +28,7 @@ struct ShoppingView: View {
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
     @State private var showingPreparation = false
+    @State private var showingPredictionDiagnostics = false
     @State private var detailItem: ShoppingItem?
     @State private var placeFilter = "הכול"
     @State private var lastMarkAt = Date.distantPast
@@ -378,6 +379,7 @@ struct ShoppingView: View {
             }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
+            .sheet(isPresented: $showingPredictionDiagnostics) { PredictionDebugView(store: store) }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
                 Button("יצירה") { closeEditor(); store.addList(name: listName) }
@@ -647,6 +649,10 @@ if reordering {
             }
             Toggle("הצגת נקנו לאחרונה", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
+            Button("אבחון הצעות חכמות", systemImage: "chart.bar.doc.horizontal") {
+                closeEditor()
+                showingPredictionDiagnostics = true
+            }
             Button("בחירת פריטים", systemImage: "checkmark.circle") {
                 closeEditor()
                 reordering = false
