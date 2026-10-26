@@ -411,7 +411,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["ביטול"].tap()
         XCTAssertTrue(app.navigationBars["הגדרות"].exists)
         app.buttons["מחיקת הרשימה"].tap()
-        app.buttons.matching(identifier: "מחיקת הרשימה").lastMatch.tap()
+        app.buttons.matching(identifier: "מחיקת הרשימה").allElementsBoundByIndex.last!.tap()
         XCTAssertFalse(app.navigationBars[shop].exists)
         app.terminate()
         app.launch()

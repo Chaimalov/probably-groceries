@@ -31,6 +31,7 @@ struct ShoppingView: View {
     @State private var showingSettings = false
     @State private var shareAfterSettings = false
     @State private var confirmingDeleteList = false
+    @State private var deletingListID: UUID?
     @State private var detailItem: ShoppingItem?
     @State private var placeFilter = "הכול"
     @State private var lastMarkAt = Date.distantPast
@@ -402,11 +403,14 @@ struct ShoppingView: View {
                 selectedItemIDs.removeAll()
             }
             .confirmationDialog("למחוק את הרשימה ״\(store.currentList.name)״?", isPresented: $confirmingDeleteList, titleVisibility: .visible) {
-                Button("מחיקת הרשימה", role: .destructive) { store.deleteCurrentList() }
+                Button("מחיקת הרשימה", role: .destructive) {
+                    guard deletingListID == store.selectedListID else { return }
+                    store.deleteCurrentList()
+                }
             } message: {
-                Text(store.currentShare == nil
+                Text(LocalizedStringKey(store.currentShare == nil
                      ? "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו מכל המכשירים שלך."
-                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה.")
+                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
             }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
@@ -735,6 +739,7 @@ if reordering {
             if store.canDeleteCurrentList {
                 Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) {
                     closeEditor()
+                    deletingListID = store.selectedListID
                     confirmingDeleteList = true
                 }
             }

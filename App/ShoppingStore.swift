@@ -565,15 +565,39 @@ final class ShoppingStore: ObservableObject {
     }
 
     func undo(_ purchase: Purchase, undoManager: UndoManager?) {
-        guard data.purchases.contains(where: { $0.id == purchase.id }),
-              data.lists.contains(where: { $0.id == purchase.listID }) else { return }
-        undo(purchase)
-        if let restored = data.items.first(where: { $0.id == purchase.sourceItemID }) {
+        guard let current = data.purchases.first(where: { $0.id == purchase.id }),
+              data.lists.contains(where: { $0.id == current.listID }) else { return }
+        let previousItem = data.items.first {
+            $0.productID == current.productID && $0.listID == current.listID
+        }
+        undo(current)
+        if let restored = data.items.first(where: {
+            $0.productID == current.productID && $0.listID == current.listID
+        }) {
             undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
-                target.buy(restored, undoManager: undoManager)
+                target.redoPurchase(current, replacing: restored, previousItem: previousItem,
+                                    undoManager: undoManager)
             }
             undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
         }
+    }
+
+    private func redoPurchase(_ purchase: Purchase, replacing restored: ShoppingItem,
+                              previousItem: ShoppingItem?, undoManager: UndoManager?) {
+        // Preserve the original event time and any row that existed before undo.
+        // A newer local/remote edit invalidates redo rather than being overwritten.
+        guard data.lists.contains(where: { $0.id == purchase.listID }),
+              data.items.first(where: { $0.id == restored.id }) == restored,
+              !data.purchases.contains(where: { $0.id == purchase.id }) else { return }
+        data.items.removeAll { $0.id == restored.id }
+        if let previousItem { data.items.append(previousItem) }
+        data.purchases.append(purchase)
+        updateUsualQuantity(for: purchase.productID)
+        persist()
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            target.undo(purchase, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
     }
 
     private func buy(_ item: ShoppingItem, at date: Date) {

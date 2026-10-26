@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var showingDecisions = false
     @State private var showingDiagnostics = false
     @State private var confirmingDelete = false
+    @State private var deletingListID: UUID?
     @State private var listName = ""
 
     var body: some View {
@@ -54,7 +55,7 @@ struct SettingsView: View {
                 }
                 Section {
                     if store.canDeleteCurrentList {
-                        Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                        Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) { deletingListID = store.selectedListID; confirmingDelete = true }
                     } else {
                         Text("כדי לצאת מרשימה שמשותפת איתך, פתחו את ניהול השיתוף.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -73,13 +74,14 @@ struct SettingsView: View {
             }
             .confirmationDialog("למחוק את הרשימה ״\(store.currentList.name)״?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("מחיקת הרשימה", role: .destructive) {
+                    guard deletingListID == store.selectedListID else { return }
                     store.deleteCurrentList()
                     dismiss()
                 }
             } message: {
-                Text(store.currentShare == nil
+                Text(LocalizedStringKey(store.currentShare == nil
                      ? "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו מכל המכשירים שלך."
-                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה.")
+                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
             }
         }
     }
