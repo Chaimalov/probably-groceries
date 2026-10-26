@@ -139,6 +139,25 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    var canDeleteCurrentList: Bool {
+        !loadFailed && (currentShare == nil || currentShare?.isOwner == true)
+    }
+
+    func deleteCurrentList() {
+        guard canDeleteCurrentList else { return }
+        let id = selectedListID
+        // Keep shared routing metadata so tombstones reach all participants.
+        data.items.removeAll { $0.listID == id }
+        data.purchases.removeAll { $0.listID == id }
+        data.deferrals.removeAll { $0.listID == id }
+        data.lists.removeAll { $0.id == id }
+        if data.lists.isEmpty {
+            data.lists.append(ShoppingList(id: UUID(), name: "קניות"))
+        }
+        persist()
+        if let next = data.lists.first { selectList(next.id) }
+    }
+
     func setAppearance(tintName: String, symbolName: String) {
         guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }),
               Theme.listColors.contains(where: { $0.name == tintName }),
@@ -532,6 +551,31 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) { buy(item, at: .now) }
 
+    // Only explicit actions in this window enter its system undo stack.
+    // Widget/watch commands continue using the non-registering domain methods.
+    func buy(_ item: ShoppingItem, undoManager: UndoManager?) {
+        guard data.items.contains(where: { $0.id == item.id }),
+              data.lists.contains(where: { $0.id == item.listID }) else { return }
+        buy(item)
+        guard let purchase = data.purchases.first(where: { $0.id == item.id }) else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            target.undo(purchase, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
+    }
+
+    func undo(_ purchase: Purchase, undoManager: UndoManager?) {
+        guard data.purchases.contains(where: { $0.id == purchase.id }),
+              data.lists.contains(where: { $0.id == purchase.listID }) else { return }
+        undo(purchase)
+        if let restored = data.items.first(where: { $0.id == purchase.sourceItemID }) {
+            undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+                target.buy(restored, undoManager: undoManager)
+            }
+            undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
+        }
+    }
+
     private func buy(_ item: ShoppingItem, at date: Date) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
@@ -815,6 +859,7 @@ final class ShoppingStore: ObservableObject {
         ProductDecisionService.shared.schedule(store: self)
     }
 }
+
 
 
 
