@@ -171,3 +171,23 @@
 
 "כנראה צריך שוב" = "Probably needed again";
 "אולי צריך שוב" = "Maybe needed again";
+
+"הרשימה הזו" = "This list";
+"בזמן הקנייה" = "While shopping";
+"הצעות בזמן ההקלדה" = "Suggestions while typing";
+"עובד ברקע" = "Works in the background";
+"הסנכרון פועל אוטומטית כשיש חיבור. אפשר להמשיך לקנות גם בלעדיו." = "Sync runs automatically when connected. You can keep shopping offline.";
+"עזרה" = "Help";
+"סימנת מוצר בטעות? אפשר לבטל דרך החץ בתפריט, בשקשוק האייפון או בקיצור ⌘Z. בזמן הקלדה הביטול חל על הטקסט." = "Checked off an item by mistake? Undo from the menu, shake your iPhone, or press ⌘Z. While typing, undo applies to the text.";
+"ניסיון סנכרון נוסף" = "Retry sync";
+"מחיקת הרשימה" = "Delete list";
+"כדי לצאת מרשימה שמשותפת איתך, פתחו את ניהול השיתוף." = "To leave a list shared with you, open sharing management.";
+"הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו מכל המכשירים שלך." = "The list, its items, and its purchase history will be deleted from all your devices.";
+"הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה." = "The list, its items, and its purchase history will also be deleted for everyone sharing it.";
+"ביטול סימון כנקנה" = "Undo purchase";
+"ביצוע חוזר" = "Redo";
+"סימון כנקנה" = "Purchase";
+"כבר ברשימה · הוספת כמות" = "Already on list · add quantity";
+
+
+"למחוק את הרשימה ״%@״?" = "Delete the list “%@”?";

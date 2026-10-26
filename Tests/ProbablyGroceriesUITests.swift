@@ -173,16 +173,26 @@ final class ProbablyGroceriesUITests: XCTestCase {
         buy.tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 10))
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["הצגת נקנו לאחרונה"].tap()
+        app.buttons["הגדרות"].tap()
+        app.switches["הצגת נקנו לאחרונה"].tap()
+        app.buttons["סיום"].tap()
         XCTAssertFalse(app.buttons["ביטול"].exists)
         app.terminate()
         app.launch()
         XCTAssertFalse(app.buttons["ביטול"].exists, "Visibility preference should survive relaunch")
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["הצגת נקנו לאחרונה"].tap()
+        app.buttons["הגדרות"].tap()
+        app.switches["הצגת נקנו לאחרונה"].tap()
+        app.buttons["סיום"].tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 10), "Hiding purchases must not delete their events")
         app.buttons["ביטול"].tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
+        buy.tap()
+        app.buttons["אפשרויות נוספות"].tap()
+        let systemUndo = app.buttons["ביטול סימון כנקנה"]
+        XCTAssertTrue(systemUndo.isEnabled)
+        systemUndo.tap()
+        XCTAssertTrue(buy.waitForExistence(timeout: 10), "System undo restores the purchased row")
     }
 
     func testInlineEditorFocusAndAdaptiveLayout() {
@@ -353,7 +363,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         alert.buttons["יצירה"].tap()
         XCTAssertTrue(app.navigationBars[shop].waitForExistence(timeout: 10))
 
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["הגדרות"].tap()
         app.buttons["צבע וסמל הרשימה"].tap()
         let blue = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blue")).firstMatch
         let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "basket")).firstMatch
@@ -362,11 +373,53 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["שמירה"].tap()
         app.terminate()
         app.launch()
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["הגדרות"].tap()
         app.buttons["צבע וסמל הרשימה"].tap()
         XCTAssertTrue(blue.isSelected)
         XCTAssertTrue(basket.isSelected)
     }
+    func testSettingsAutocompleteAndListDeletion() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments.append("-ui-testing")
+        app.launch()
+        let shop = "Temporary \(UUID().uuidString.prefix(6))"
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["רשימה חדשה לחנות"].tap()
+        let alert = app.alerts["רשימה חדשה לחנות"]
+        alert.textFields["שם החנות"].typeText(shop)
+        alert.buttons["יצירה"].tap()
+        let item = "Cocoa \(UUID().uuidString.prefix(6))"
+        app.buttons["הוספת מוצר"].tap()
+        let field = app.textFields["inlineAddField"]
+        field.typeText(item + "\n")
+        app.buttons["סיום עריכה"].tap()
+        app.buttons["נקנה " + item].tap()
+        app.buttons["הוספת מוצר"].tap()
+        field.typeText("Cocoa")
+        let completion = app.buttons["הוספת " + item]
+        XCTAssertTrue(completion.waitForExistence(timeout: 5))
+        completion.tap()
+        XCTAssertTrue(app.buttons["נקנה " + item].waitForExistence(timeout: 5))
+        app.buttons["סיום עריכה"].tap()
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["הגדרות"].tap()
+        XCTAssertTrue(app.switches["הצעות בזמן ההקלדה"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        app.buttons["מחיקת הרשימה"].tap()
+        app.buttons["ביטול"].tap()
+        XCTAssertTrue(app.navigationBars["הגדרות"].exists)
+        app.buttons["מחיקת הרשימה"].tap()
+        app.buttons.matching(identifier: "מחיקת הרשימה").allElementsBoundByIndex.last!.tap()
+        XCTAssertFalse(app.navigationBars[shop].exists)
+        app.terminate()
+        app.launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        XCTAssertFalse(app.buttons[shop].exists, "A deleted list must not return after relaunch")
+    }
+
 }
+
 
 

@@ -139,6 +139,25 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    var canDeleteCurrentList: Bool {
+        !loadFailed && (currentShare == nil || currentShare?.isOwner == true)
+    }
+
+    func deleteCurrentList() {
+        guard canDeleteCurrentList else { return }
+        let id = selectedListID
+        // Keep shared routing metadata so tombstones reach all participants.
+        data.items.removeAll { $0.listID == id }
+        data.purchases.removeAll { $0.listID == id }
+        data.deferrals.removeAll { $0.listID == id }
+        data.lists.removeAll { $0.id == id }
+        if data.lists.isEmpty {
+            data.lists.append(ShoppingList(id: UUID(), name: "קניות"))
+        }
+        persist()
+        if let next = data.lists.first { selectList(next.id) }
+    }
+
     func setAppearance(tintName: String, symbolName: String) {
         guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }),
               Theme.listColors.contains(where: { $0.name == tintName }),
@@ -532,6 +551,55 @@ final class ShoppingStore: ObservableObject {
 
     func buy(_ item: ShoppingItem) { buy(item, at: .now) }
 
+    // Only explicit actions in this window enter its system undo stack.
+    // Widget/watch commands continue using the non-registering domain methods.
+    func buy(_ item: ShoppingItem, undoManager: UndoManager?) {
+        guard data.items.contains(where: { $0.id == item.id }),
+              data.lists.contains(where: { $0.id == item.listID }) else { return }
+        buy(item)
+        guard let purchase = data.purchases.first(where: { $0.id == item.id }) else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            target.undo(purchase, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
+    }
+
+    func undo(_ purchase: Purchase, undoManager: UndoManager?) {
+        guard let current = data.purchases.first(where: { $0.id == purchase.id }),
+              data.lists.contains(where: { $0.id == current.listID }) else { return }
+        let previousItem = data.items.first {
+            $0.productID == current.productID && $0.listID == current.listID
+        }
+        undo(current)
+        if let restored = data.items.first(where: {
+            $0.productID == current.productID && $0.listID == current.listID
+        }) {
+            undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+                target.redoPurchase(current, replacing: restored, previousItem: previousItem,
+                                    undoManager: undoManager)
+            }
+            undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
+        }
+    }
+
+    private func redoPurchase(_ purchase: Purchase, replacing restored: ShoppingItem,
+                              previousItem: ShoppingItem?, undoManager: UndoManager?) {
+        // Preserve the original event time and any row that existed before undo.
+        // A newer local/remote edit invalidates redo rather than being overwritten.
+        guard data.lists.contains(where: { $0.id == purchase.listID }),
+              data.items.first(where: { $0.id == restored.id }) == restored,
+              !data.purchases.contains(where: { $0.id == purchase.id }) else { return }
+        data.items.removeAll { $0.id == restored.id }
+        if let previousItem { data.items.append(previousItem) }
+        data.purchases.append(purchase)
+        updateUsualQuantity(for: purchase.productID)
+        persist()
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            target.undo(purchase, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("סימון כנקנה", comment: "Undo purchase"))
+    }
+
     private func buy(_ item: ShoppingItem, at date: Date) {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
@@ -815,6 +883,7 @@ final class ShoppingStore: ObservableObject {
         ProductDecisionService.shared.schedule(store: self)
     }
 }
+
 
 
 

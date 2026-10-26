@@ -28,15 +28,15 @@ struct ShoppingView: View {
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
     @State private var showingPreparation = false
-    @State private var showingPredictionDiagnostics = false
-    @State private var showingProductDecisions = false
+    @State private var showingSettings = false
+    @State private var shareAfterSettings = false
+    @State private var confirmingDeleteList = false
+    @State private var deletingListID: UUID?
     @State private var detailItem: ShoppingItem?
     @State private var placeFilter = "הכול"
     @State private var lastMarkAt = Date.distantPast
     @State private var showingNewList = false
-    @State private var showingRenameList = false
     @State private var showingNewSection = false
-    @State private var showingAppearance = false
     @State private var reordering = false
     @State private var listName = ""
     @State private var sectionName = ""
@@ -48,6 +48,8 @@ struct ShoppingView: View {
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
+    @Environment(\.undoManager) private var undoManager
+    @AppStorage("showProductCompletions") private var showProductCompletions = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -225,7 +227,7 @@ struct ShoppingView: View {
                                         Spacer()
                                         Button {
                                             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                                                store.undo(purchase)
+                                                store.undo(purchase, undoManager: undoManager)
                                             }
                                         } label: {
                                             Image(systemName: "arrow.uturn.backward")
@@ -237,7 +239,7 @@ struct ShoppingView: View {
                                     }
                                     .swipeActions {
                                         Button("ביטול קנייה", systemImage: "arrow.uturn.backward") {
-                                            store.undo(purchase)
+                                            store.undo(purchase, undoManager: undoManager)
                                         }
                                         .labelStyle(.iconOnly)
                                         .tint(Color(uiColor: .systemBlue))
@@ -377,7 +379,6 @@ struct ShoppingView: View {
                 }
             }
             .sheet(item: $editingCategory) { CategoryEditor(store: store, item: $0) }
-            .sheet(isPresented: $showingAppearance) { ListAppearanceEditor(store: store) }
             .onChange(of: editMode) { _, mode in
                 if !mode.isEditing {
                     selectedItemIDs.removeAll()
@@ -386,16 +387,34 @@ struct ShoppingView: View {
             }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
-            .sheet(isPresented: $showingPredictionDiagnostics) { PredictionDebugView(store: store) }
-            .sheet(isPresented: $showingProductDecisions) { ProductDecisionSettings(store: store) }
+            .sheet(isPresented: $showingSettings, onDismiss: {
+                if shareAfterSettings {
+                    shareAfterSettings = false
+                    sharingListID = store.selectedListID
+                    showingSharing = true
+                }
+            }) {
+                SettingsView(store: store) { shareAfterSettings = true }
+            }
+            .onChange(of: store.selectedListID) { _, _ in
+                undoManager?.removeAllActions(withTarget: store)
+                collapsedSections.removeAll()
+                placeFilter = "הכול"
+                selectedItemIDs.removeAll()
+            }
+            .confirmationDialog("למחוק את הרשימה ״\(store.currentList.name)״?", isPresented: $confirmingDeleteList, titleVisibility: .visible) {
+                Button("מחיקת הרשימה", role: .destructive) {
+                    guard deletingListID == store.selectedListID else { return }
+                    store.deleteCurrentList()
+                }
+            } message: {
+                Text(LocalizedStringKey(store.currentShare == nil
+                     ? "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו מכל המכשירים שלך."
+                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
+            }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
                 Button("יצירה") { closeEditor(); store.addList(name: listName) }
-                Button("ביטול", role: .cancel) {}
-            }
-            .alert("שינוי שם הרשימה", isPresented: $showingRenameList) {
-                TextField("שם החנות", text: $listName)
-                Button("שמירה") { store.renameCurrentList(to: listName) }
                 Button("ביטול", role: .cancel) {}
             }
             .alert("מקטע חדש", isPresented: $showingNewSection) {
@@ -495,6 +514,27 @@ if reordering {
         !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var productCompletions: [Product] {
+        guard showProductCompletions, addFocused else { return [] }
+        let query = preserveRawInput ? newName : ShoppingInputParser.parse(newName).name
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return [] }
+        return Array(store.matchingProducts(query).prefix(3))
+    }
+
+    private func useCompletion(_ product: Product) {
+        let parsed = ShoppingInputParser.parse(newName)
+        updateEditor {
+            newName = product.name
+            preserveRawInput = true
+            if !newQuantityOverridden {
+                newQuantity = parsed.unit == nil ? product.usualQuantity : parsed.quantity
+                newQuantityOverridden = true
+            }
+            if newUnit == nil { newUnit = parsed.unit ?? product.preferredUnit }
+        }
+        addInline()
+    }
+
     private var inlineAddRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
@@ -528,6 +568,28 @@ if reordering {
                         .accessibilityLabel("עריכת כמות למוצר חדש")
                         .accessibilityValue("\(newQuantity)")
                 }
+            }
+            if !productCompletions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(productCompletions) { product in
+                        Button { useCompletion(product) } label: {
+                            HStack {
+                                Text(product.name).foregroundStyle(.primary)
+                                Spacer()
+                                if store.items.contains(where: { $0.productID == product.id }) {
+                                    Text("כבר ברשימה · הוספת כמות").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "plus").foregroundStyle(.secondary)
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("הוספת \(product.name)")
+                    }
+                }
+                .padding(.leading, 48)
+                .padding(.trailing, 12)
             }
             if hasNewName {
                 VStack(alignment: .leading, spacing: 4) {
@@ -629,10 +691,6 @@ if reordering {
             Button("רשימה חדשה לחנות", systemImage: "plus") {
                 listName = ""; showingNewList = true
             }
-            Button("שינוי שם הרשימה", systemImage: "pencil") {
-                listName = store.currentList.name; showingRenameList = true
-            }
-            Button("צבע וסמל הרשימה", systemImage: "paintpalette") { showingAppearance = true }
         } label: {
             Image(systemName: store.currentList.symbolName)
                 .font(.title3)
@@ -643,8 +701,6 @@ if reordering {
     private var optionsMenu: some View {
         Menu {
             Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-            Button(groupBySection ? "הצגה לפי מסלול הקנייה" : "הצגת מקטעים",
-                   systemImage: "square.stack") { groupBySection.toggle() }
             Button("מקטע חדש", systemImage: "plus.rectangle.on.rectangle") {
                 sectionName = ""; showingNewSection = true
             }
@@ -655,16 +711,7 @@ if reordering {
                 reordering = true
                 editMode = .active
             }
-            Toggle("הצגת נקנו לאחרונה", systemImage: "checkmark.circle", isOn: $showRecentPurchases)
             Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
-            Button("אבחון הצעות חכמות", systemImage: "chart.bar.doc.horizontal") {
-                closeEditor()
-                showingPredictionDiagnostics = true
-            }
-            Button("זיהוי מוצרים", systemImage: "sparkles") {
-                closeEditor()
-                showingProductDecisions = true
-            }
             Button("בחירת פריטים", systemImage: "checkmark.circle") {
                 closeEditor()
                 reordering = false
@@ -679,29 +726,27 @@ if reordering {
             #if targetEnvironment(simulator)
             .disabled(true)
             #endif
-            Button(LocalizedStringKey(syncLabel), systemImage: "arrow.triangle.2.circlepath.icloud") {
-                #if !targetEnvironment(simulator)
-                Task { await store.cloudSync.synchronize() }
-                #endif
+            Divider()
+            Button("ביטול סימון כנקנה", systemImage: "arrow.uturn.backward") {
+                undoManager?.undo()
             }
-            #if targetEnvironment(simulator)
-            .disabled(true)
-            #endif
+            .disabled(undoManager?.canUndo != true || isAdding || editingNameID != nil)
+            .keyboardShortcut("z", modifiers: .command)
+            Button("ביצוע חוזר", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
+                .disabled(undoManager?.canRedo != true || isAdding || editingNameID != nil)
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+            Button("הגדרות", systemImage: "gearshape") { closeEditor(); showingSettings = true }
+            if store.canDeleteCurrentList {
+                Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) {
+                    closeEditor()
+                    deletingListID = store.selectedListID
+                    confirmingDeleteList = true
+                }
+            }
         } label: {
             Image(systemName: "ellipsis").font(.title3)
         }
         .accessibilityLabel("אפשרויות נוספות")
-    }
-
-    private var syncLabel: String {
-        switch store.syncStatus {
-        case .local: return "סנכרון iCloud"
-        case .syncing: return "מסנכרן עם iCloud…"
-        case .current: return "iCloud מעודכן"
-        case .unavailable: return "iCloud אינו זמין — נסה שוב"
-        case .accountChanged: return "חשבון iCloud השתנה — הנתונים נשמרו במכשיר"
-        case .failed: return "הסנכרון ממתין לחיבור — נסה שוב"
-        }
     }
 
     private var sectionNames: [String] { allSectionNames }
@@ -792,8 +837,8 @@ if reordering {
                     guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
                     lastMarkAt = .now
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    if reduceMotion { store.buy(item) }
-                    else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item) } }
+                    if reduceMotion { store.buy(item, undoManager: undoManager) }
+                    else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item, undoManager: undoManager) } }
                 } label: {
                     Circle()
                         .strokeBorder(listTint, lineWidth: 2)
@@ -1237,5 +1282,6 @@ struct ItemInlineDetails: View {
 private final class ShoppingItemFrameRegistry {
     var frames: [UUID: CGRect] = [:]
 }
+
 
 
