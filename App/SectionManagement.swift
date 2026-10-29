@@ -7,8 +7,9 @@ extension ShoppingData {
             return name.isEmpty ? "אחר" : name
         }
         let product = products.first { $0.id == item.productID }
-        return [product?.department, product?.category].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let legacy = [product?.department, product?.category].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? "אחר"
+        return legacySection(legacy, in: item.listID)
     }
 
     func sectionNames(in listID: UUID) -> [String] {
@@ -17,7 +18,7 @@ extension ShoppingData {
         let past = purchases.filter { $0.listID == listID }.map { purchase in
             if let explicit = purchase.sectionName { return explicit.isEmpty ? "אחר" : explicit }
             let product = products.first { $0.id == purchase.productID }
-            return product?.department ?? product?.category ?? "אחר"
+            return legacySection(product?.department ?? product?.category ?? "אחר", in: listID)
         }
         var seen = Set<String>()
         return (saved + active + past).filter { !$0.isEmpty && $0 != "אחר" && seen.insert($0).inserted } + ["אחר"]
@@ -42,6 +43,7 @@ extension ShoppingData {
         styles.removeValue(forKey: oldName)
         styles[name] = appearance
         lists[index].sectionStyles = styles
+        updateLegacySection(in: listID, from: oldName, to: name)
         return true
     }
 
@@ -54,12 +56,27 @@ extension ShoppingData {
         else { for i in items.indices where affected.contains(items[i].id) { items[i].sectionName = "" } }
         // History is retained, but cannot recreate the deleted aisle or restore it on undo.
         rewritePastSection(in: listID, from: name, to: "")
+        updateLegacySection(in: listID, from: name, to: "")
+    }
+
+    private func legacySection(_ name: String, in listID: UUID) -> String {
+        let mapped = lists.first { $0.id == listID }?.sectionAliases?[name] ?? name
+        return mapped.isEmpty ? "אחר" : mapped
+    }
+
+    private mutating func updateLegacySection(in listID: UUID, from name: String, to replacement: String) {
+        guard let i = lists.firstIndex(where: { $0.id == listID }) else { return }
+        var aliases = lists[i].sectionAliases ?? [:]
+        for key in Array(aliases.keys) where aliases[key] == name { aliases[key] = replacement }
+        aliases.removeValue(forKey: replacement)
+        aliases[name] = replacement
+        lists[i].sectionAliases = aliases
     }
 
     private mutating func rewritePastSection(in listID: UUID, from oldName: String, to name: String) {
         for i in purchases.indices where purchases[i].listID == listID {
             let product = products.first { $0.id == purchases[i].productID }
-            let existing = purchases[i].sectionName ?? product?.department ?? product?.category ?? "אחר"
+            let existing = purchases[i].sectionName ?? legacySection(product?.department ?? product?.category ?? "אחר", in: listID)
             if existing == oldName { purchases[i].sectionName = name }
         }
     }

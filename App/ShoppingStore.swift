@@ -380,6 +380,7 @@ final class ShoppingStore: ObservableObject {
               !data.lists[index].sections.contains(where: { $0.localizedCaseInsensitiveCompare(name) == .orderedSame })
         else { return }
         data.lists[index].sections.append(name)
+        data.lists[index].sectionAliases?.removeValue(forKey: name)
         persist()
     }
 

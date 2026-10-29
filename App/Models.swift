@@ -18,8 +18,9 @@ struct ShoppingList: Codable, Identifiable, Hashable {
     var tintName: String = "green"
     var symbolName: String = "cart"
     var sectionStyles: [String: SectionAppearance]? = nil
+    var sectionAliases: [String: String]? = nil
 
-    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName, sectionStyles }
+    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName, sectionStyles, sectionAliases }
     init(id: UUID, name: String, sections: [String] = [], tintName: String = "green", symbolName: String = "cart") {
         self.id = id; self.name = name; self.sections = sections
         self.tintName = tintName; self.symbolName = symbolName
@@ -32,6 +33,7 @@ struct ShoppingList: Codable, Identifiable, Hashable {
         tintName = try c.decodeIfPresent(String.self, forKey: .tintName) ?? "green"
         symbolName = try c.decodeIfPresent(String.self, forKey: .symbolName) ?? "cart"
         sectionStyles = try c.decodeIfPresent([String: SectionAppearance].self, forKey: .sectionStyles)
+        sectionAliases = try c.decodeIfPresent([String: String].self, forKey: .sectionAliases)
     }
 }
 

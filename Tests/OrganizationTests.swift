@@ -20,6 +20,9 @@ final class OrganizationTests: XCTestCase {
         XCTAssertEqual(data.sectionName(for: data.items[0]), "אחר")
         XCTAssertEqual(data.purchases.count, 1)
         XCTAssertEqual(data.purchases[0].sectionName, "")
+        // A re-added legacy product has no explicit aisle and must not revive it.
+        var readded = data.items[0]; readded.sectionName = nil
+        XCTAssertEqual(data.sectionName(for: readded), "אחר")
         XCTAssertEqual(data.sectionNames(in: ShoppingList.defaultID), ["ניקיון", "אחר"])
         let restored = try JSONDecoder().decode(ShoppingData.self, from: JSONEncoder().encode(data))
         XCTAssertEqual(restored.sectionNames(in: ShoppingList.defaultID), ["ניקיון", "אחר"])

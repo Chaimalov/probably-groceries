@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import AVFoundation
 
 // One focused question and answer beside the existing item photo/note.
 // Uses the same offline persistence and CloudKit item record as the request.
@@ -11,6 +13,9 @@ struct ClarificationView: View {
     @State private var conflict = false
     @State private var baseline: ItemClarification?
     @State private var sending = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var showingCamera = false
+    @State private var cameraDenied = false
 
     private var current: ShoppingItem? { store.data.items.first { $0.id == item.id && $0.listID == item.listID } }
 
@@ -24,6 +29,19 @@ struct ClarificationView: View {
                         if current.photoData != nil || current.photoFilename != nil {
                             ItemPhotoThumbnail(bytes: current.photoData, fileURL: store.legacyPhotoURL(for: current),
                                                name: "", fullImage: true).frame(maxHeight: 200)
+                        }
+                    }
+                    Section {
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            Label("צירוף תמונה", systemImage: "photo.badge.plus")
+                        }
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button("צילום", systemImage: "camera") {
+                                Task {
+                                    if await AVCaptureDevice.requestAccess(for: .video) { showingCamera = true }
+                                    else { cameraDenied = true }
+                                }
+                            }
                         }
                     }
                     Section("השאלה") {
@@ -51,7 +69,7 @@ struct ClarificationView: View {
                         }.disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
                     }
                     Section {
-                        Text("השאלה והתשובה נשמרות ליד המוצר ומסתנכרנות עם הרשימה. לצילום או לצירוף תמונה, פתחו את פרטי המוצר.")
+                        Text("השאלה, התשובה והתמונה נשמרות ליד המוצר ומסתנכרנות עם הרשימה.")
                             .font(.footnote).foregroundStyle(.secondary)
                         if store.storageError != nil {
                             Text("עדיין לא נשמר במכשיר").foregroundStyle(.red)
@@ -67,6 +85,20 @@ struct ClarificationView: View {
             .navigationTitle("צריך בירור").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("סיום") { dismiss() } } }
             .onAppear { baseline = current?.clarification }
+            .sheet(isPresented: $showingCamera) { ItemCamera { if let current { store.setPhoto($0, for: current) } } }
+            .onChange(of: selectedPhoto) { _, selection in
+                guard let selection else { return }
+                Task {
+                    if let bytes = try? await selection.loadTransferable(type: Data.self),
+                       selectedPhoto == selection, let current { store.setPhoto(bytes, for: current) }
+                }
+            }
+            .alert("אין גישה למצלמה", isPresented: $cameraDenied) {
+                Button("הגדרות") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+                Button("ביטול", role: .cancel) {}
+            } message: { Text("אפשר לאפשר גישה בהגדרות או לבחור תמונה מהספרייה.") }
             .alert("הבירור התעדכן", isPresented: $conflict) {
                 Button("סיום", role: .cancel) { baseline = current?.clarification }
             } message: { Text("המידע השתנה במכשיר אחר. הטקסט שהקלדת נשמר כאן; בדקו את העדכון לפני שמירה נוספת.") }
