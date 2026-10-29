@@ -14,7 +14,7 @@ struct CategoryEditor: View {
     }
 
     private var availableSections: [String] {
-        Array(Set(store.currentList.sections + store.departments + store.categories)).sorted()
+        store.sectionNames.filter { $0 != "אחר" }
     }
 
     var body: some View {
@@ -47,3 +47,4 @@ struct CategoryEditor: View {
         .presentationDetents([.medium, .large])
     }
 }
+

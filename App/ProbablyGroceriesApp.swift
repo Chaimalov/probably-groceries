@@ -35,9 +35,9 @@ struct ProbablyGroceriesApp: App {
     var body: some Scene {
         WindowGroup {
             ShoppingView(store: store)
-                .task { ProductDecisionService.shared.schedule(store: store) }
+                .task { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { ProductDecisionService.shared.schedule(store: store) }
+                    if phase == .active { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
                 }
                 .preferredColorScheme(testAppearance)
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))
@@ -82,4 +82,5 @@ struct ProbablyGroceriesApp: App {
         }
     }
 }
+
 

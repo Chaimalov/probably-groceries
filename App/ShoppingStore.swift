@@ -120,6 +120,7 @@ final class ShoppingStore: ObservableObject {
         selectedListID = id
         UserDefaults.standard.set(id.uuidString, forKey: "selectedShoppingListID")
         publishWidgetSnapshot()
+        refreshBadge()
         PhoneWatchBridge.shared.publish(watchSnapshot())
     }
 
@@ -379,16 +380,43 @@ final class ShoppingStore: ObservableObject {
               !data.lists[index].sections.contains(where: { $0.localizedCaseInsensitiveCompare(name) == .orderedSame })
         else { return }
         data.lists[index].sections.append(name)
+        data.lists[index].sectionAliases?.removeValue(forKey: name)
+        persist()
+    }
+
+    var sectionNames: [String] { data.sectionNames(in: selectedListID) }
+
+    @discardableResult
+    func editSection(_ oldName: String, name: String, appearance: SectionAppearance) -> Bool {
+        guard data.editSection(in: selectedListID, oldName: oldName, name: name, appearance: appearance) else { return false }
+        persist()
+        return true
+    }
+
+    func deleteSection(_ name: String, includingItems: Bool) {
+        guard name != "אחר" else { return }
+        if includingItems {
+            for item in items where section(for: item) == name { recordRemoval(item) }
+        }
+        data.deleteSection(in: selectedListID, name: name, includingItems: includingItems)
+        persist()
+    }
+
+    func setClarification(_ clarification: ItemClarification?, for item: ShoppingItem) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id && $0.listID == item.listID }) else { return }
+        data.items[index].clarification = clarification
+        persist()
+    }
+
+    func toggleUnavailable(_ item: ShoppingItem) {
+        guard let index = data.items.firstIndex(where: { $0.id == item.id && $0.listID == item.listID }) else { return }
+        data.items[index].unavailable = !(data.items[index].unavailable ?? false)
         persist()
     }
 
     func moveSection(from source: IndexSet, to destination: Int) {
         guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }) else { return }
-        var sections = data.lists[index].sections
-        for item in items {
-            let name = section(for: item)
-            if name != "אחר" && !sections.contains(name) { sections.append(name) }
-        }
+        var sections = sectionNames.filter { $0 != "אחר" }
         sections.move(fromOffsets: source, toOffset: destination)
         data.lists[index].sections = sections
         persist()
@@ -401,14 +429,7 @@ final class ShoppingStore: ObservableObject {
     }
 
     func section(for item: ShoppingItem) -> String {
-        if let explicit = item.sectionName {
-            let name = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
-            return name.isEmpty ? "אחר" : name
-        }
-        let name = [product(for: item.productID)?.department, product(for: item.productID)?.category]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? ""
-        return name.isEmpty ? "אחר" : name
+        data.sectionName(for: item)
     }
 
     func place(_ itemID: UUID, inSection destination: String?, before targetID: UUID? = nil) {
@@ -627,6 +648,8 @@ final class ShoppingStore: ObservableObject {
         data.purchases[data.purchases.count - 1].unit = current.unit
         data.purchases[data.purchases.count - 1].sectionName = current.sectionName
         data.purchases[data.purchases.count - 1].shoppingPlace = current.shoppingPlace
+        data.purchases[data.purchases.count - 1].clarification = current.clarification
+        data.purchases[data.purchases.count - 1].unavailable = current.unavailable
         updateUsualQuantity(for: current.productID)
         persist()
     }
@@ -653,6 +676,8 @@ final class ShoppingStore: ObservableObject {
             data.items[index].unit = data.items[index].unit ?? current.unit
             data.items[index].sectionName = data.items[index].sectionName ?? current.sectionName
             data.items[index].shoppingPlace = data.items[index].shoppingPlace ?? current.shoppingPlace
+            data.items[index].clarification = data.items[index].clarification ?? current.clarification
+            data.items[index].unavailable = data.items[index].unavailable ?? current.unavailable
         } else {
             data.items.append(ShoppingItem(id: current.sourceItemID,
                                            productID: current.productID,
@@ -665,6 +690,8 @@ final class ShoppingStore: ObservableObject {
             data.items[data.items.count - 1].unit = current.unit
             data.items[data.items.count - 1].sectionName = current.sectionName
             data.items[data.items.count - 1].shoppingPlace = current.shoppingPlace
+            data.items[data.items.count - 1].clarification = current.clarification
+            data.items[data.items.count - 1].unavailable = current.unavailable
         }
         updateUsualQuantity(for: current.productID)
         persist()
@@ -772,6 +799,7 @@ final class ShoppingStore: ObservableObject {
             try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
             storageError = nil
             publishWidgetSnapshot()
+            refreshBadge()
             PhoneWatchBridge.shared.publish(watchSnapshot())
         } catch {
             storageError = "השינויים עדיין לא נשמרו במכשיר. נסה שוב."
@@ -863,6 +891,10 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
     }
 
+    func refreshBadge() {
+        ShoppingBadge.shared.update(data: data, selectedListID: selectedListID)
+    }
+
     func retryLocalSave() { saveLocal() }
 
     func saveSyncMetadata() { saveLocal() }
@@ -883,6 +915,7 @@ final class ShoppingStore: ObservableObject {
         ProductDecisionService.shared.schedule(store: self)
     }
 }
+
 
 
 
