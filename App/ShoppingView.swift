@@ -1219,10 +1219,10 @@ struct ItemInlineDetails: View {
                 .onChange(of: item.note) { _, value in
                     if note != (value ?? "") { note = value ?? "" }
                 }
-            HStack(spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
                 Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
                     .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: "basket") {
+                Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: item.unavailable == true ? "basket.fill" : "basket") {
                     store.toggleUnavailable(item)
                 }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                 Button(item.isUrgent ? "הסר דגל" : "דחוף", systemImage: item.isUrgent ? "flag.fill" : "flag") {
