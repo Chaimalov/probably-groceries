@@ -17,8 +17,9 @@ struct ShoppingList: Codable, Identifiable, Hashable {
     var sections: [String] = []
     var tintName: String = "green"
     var symbolName: String = "cart"
+    var sectionStyles: [String: SectionAppearance]? = nil
 
-    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName }
+    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName, sectionStyles }
     init(id: UUID, name: String, sections: [String] = [], tintName: String = "green", symbolName: String = "cart") {
         self.id = id; self.name = name; self.sections = sections
         self.tintName = tintName; self.symbolName = symbolName
@@ -30,6 +31,7 @@ struct ShoppingList: Codable, Identifiable, Hashable {
         sections = try c.decodeIfPresent([String].self, forKey: .sections) ?? []
         tintName = try c.decodeIfPresent(String.self, forKey: .tintName) ?? "green"
         symbolName = try c.decodeIfPresent(String.self, forKey: .symbolName) ?? "cart"
+        sectionStyles = try c.decodeIfPresent([String: SectionAppearance].self, forKey: .sectionStyles)
     }
 }
 
@@ -47,8 +49,10 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var sectionName: String? = nil
     var shoppingPlace: String? = nil
     var photoData: Data? = nil
+    var clarification: ItemClarification? = nil
+    var unavailable: Bool? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName, shoppingPlace, photoData }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName, shoppingPlace, photoData, clarification, unavailable }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -69,6 +73,8 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
         shoppingPlace = try c.decodeIfPresent(String.self, forKey: .shoppingPlace)
         photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
+        clarification = try c.decodeIfPresent(ItemClarification.self, forKey: .clarification)
+        unavailable = try c.decodeIfPresent(Bool.self, forKey: .unavailable)
     }
 }
 
@@ -88,8 +94,10 @@ struct Purchase: Codable, Identifiable, Hashable {
     var sectionName: String? = nil
     var shoppingPlace: String? = nil
     var photoData: Data? = nil
+    var clarification: ItemClarification? = nil
+    var unavailable: Bool? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, actorID, originalOrder, wasUrgent, note, photoFilename, unit, sectionName, shoppingPlace, photoData }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, purchasedAt, sourceItemID, listID, actorID, originalOrder, wasUrgent, note, photoFilename, unit, sectionName, shoppingPlace, photoData, clarification, unavailable }
     init(id: UUID, productID: UUID, quantity: Int, purchasedAt: Date,
          sourceItemID: UUID, listID: UUID = ShoppingList.defaultID, wasUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -113,6 +121,8 @@ struct Purchase: Codable, Identifiable, Hashable {
         sectionName = try c.decodeIfPresent(String.self, forKey: .sectionName)
         shoppingPlace = try c.decodeIfPresent(String.self, forKey: .shoppingPlace)
         photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
+        clarification = try c.decodeIfPresent(ItemClarification.self, forKey: .clarification)
+        unavailable = try c.decodeIfPresent(Bool.self, forKey: .unavailable)
     }
 }
 
@@ -197,3 +207,15 @@ struct PredictionEvaluation: Identifiable {
 }
 
 
+
+
+struct SectionAppearance: Codable, Hashable {
+    var symbol: String
+    var tint: String
+}
+
+struct ItemClarification: Codable, Hashable {
+    var question: String
+    var answer: String? = nil
+    var resolved: Bool = false
+}

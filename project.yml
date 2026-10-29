@@ -133,6 +133,9 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - Tests/OrganizationTests.swift
+      - App/SectionManagement.swift
+      - App/BadgePolicy.swift
       - Tests/ShoppingDraftTests.swift
       - App/ShoppingDraft.swift
       - App/ShoppingSession.swift
@@ -194,5 +197,6 @@ schemes:
       debugEnabled: false
       targets:
         - ProbablyGroceriesUITests
+
 
 

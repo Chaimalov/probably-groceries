@@ -24,6 +24,7 @@ struct SettingsView: View {
                         showingRename = true
                     }
                     Button("צבע וסמל הרשימה", systemImage: "paintpalette") { showingAppearance = true }
+                    NavigationLink("ניהול מקטעים") { SectionSettingsView(store: store) }
                     Button(store.currentShare == nil ? "שיתוף הרשימה…" : "ניהול השיתוף…", systemImage: "person.2") {
                         dismiss()
                         onShare()
@@ -33,6 +34,7 @@ struct SettingsView: View {
                     #endif
                 }
                 Section("בזמן הקנייה") {
+                    NavigationLink("תג האפליקציה") { BadgeSettingsView(store: store) }
                     Toggle("הצגת מקטעים", isOn: $groupBySection)
                     Toggle("הצגת נקנו לאחרונה", isOn: $showRecentPurchases)
                     Toggle("הצעות בזמן ההקלדה", isOn: $showProductCompletions)
@@ -97,4 +99,5 @@ struct SettingsView: View {
         }
     }
 }
+
 
