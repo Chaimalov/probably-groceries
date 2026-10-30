@@ -701,11 +701,13 @@ final class ShoppingStore: ObservableObject {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
         let route = orderedItems(in: current.listID)
-        let originalOrder = route.firstIndex(where: { $0.id == current.id })
-        // Freeze this item's list, even if a widget targets a different list.
-        for (order, visible) in route.enumerated() {
+        let frozen = ShoppingRouteOrder.frozenPositions(for: route)
+        let originalOrder = frozen[current.id]
+        // Assign only missing positions; existing rows keep their gaps and do
+        // not create unrelated CloudKit revisions on every check-off.
+        for visible in route where visible.manualOrder == nil {
             if let index = data.items.firstIndex(where: { $0.id == visible.id }) {
-                data.items[index].manualOrder = order
+                data.items[index].manualOrder = frozen[visible.id]
             }
         }
         data.items.removeAll { $0.id == current.id }

@@ -28,3 +28,7 @@ Approved deviations: compact secondary quantity, remaining count on collapsed ai
 The first actual simulator captures (run 337, before final calibration) revealed a permanent bottom search field, oversized row rhythm, small aisle headings and a small add button. The native bottom search toolbar is now hidden while search is inactive; row rhythm is 44pt with 24pt circles, 40pt text-column offset and horizontally expanded 44pt hit regions that do not overlap adjacent rows. Aisle headings use semantic bold title2; controls keep native glass. The reference viewport is 393×852pt and the fidelity suite now creates an iPhone 15 simulator of that size instead of accepting the runner's first iPhone model.
 
 Two initial UI runs stopped in test navigation: Hebrew bidirectional isolation characters defeated an exact label match, then native menu presentation changed the presenting control's accessibility type. Stable item IDs and an outside-menu dismissal fix the test without changing application behavior. The captured list/menu remain useful audit evidence; they do not establish that later steps passed.
+
+
+## Check-off write amplification
+The baseline renumbered every surviving active item at each check-off. This created unrelated item revisions and made successive front-row purchases all record originalOrder=0. Positions are now assigned only when missing and gaps are retained. A focused test covers consecutive check-offs and adding a new item behind survivors. This reduces synchronization writes without changing the CloudKit schema or replacing the transport.

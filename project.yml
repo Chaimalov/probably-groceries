@@ -137,6 +137,7 @@ targets:
     sources:
       - Tests/ClarificationNoticeTests.swift
       - App/ClarificationNotice.swift
+      - Tests/ShoppingRouteFreezeTests.swift
       - Tests/ShoppingPresentationTests.swift
       - App/ShoppingPresentation.swift
       - Tests/OrganizationTests.swift
