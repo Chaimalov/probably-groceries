@@ -3,12 +3,14 @@ import SwiftUI
 struct ListAppearanceEditor: View {
     @ObservedObject var store: ShoppingStore
     @Environment(\.dismiss) private var dismiss
+    private let listID: UUID
     @State private var name: String
     @State private var tintName: String
     @State private var symbolName: String
 
     init(store: ShoppingStore) {
         self.store = store
+        listID = store.selectedListID
         _name = State(initialValue: store.currentList.name)
         _tintName = State(initialValue: store.currentList.tintName)
         _symbolName = State(initialValue: store.currentList.symbolName)
@@ -73,6 +75,7 @@ struct ListAppearanceEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("ביטול") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("שמירה") {
+                        guard store.selectedListID == listID else { dismiss(); return }
                         store.renameCurrentList(to: name)
                         store.setAppearance(tintName: tintName, symbolName: symbolName)
                         dismiss()

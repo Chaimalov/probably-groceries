@@ -5,7 +5,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
     func testRemindersFidelityAndStableCheckoff() {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing"]
+        app.launchArguments = ["-ui-testing", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"]
         app.launchEnvironment["UITEST_APPEARANCE"] = "dark"
         let names = ["ירקות", "קפואים", "חלבי", "שימורים", "אפייה וחדפ"]
         let listID = UUID().uuidString
@@ -28,7 +28,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["אפשרויות נוספות"].tap()
         XCTAssertTrue(app.buttons["הצגת פרטי הרשימה"].waitForExistence(timeout: 5))
         capture(app, "02-menu-IMG_1163")
-        app.buttons["אפשרויות נוספות"].tap()
+        // The presenting toolbar button becomes a PopUpButton while its native
+        // menu is open. Dismiss through the unobstructed outside surface.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)).tap()
         app.buttons["חיפוש"].tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))

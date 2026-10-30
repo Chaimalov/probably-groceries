@@ -21,3 +21,10 @@ Baseline: `b2d6617` (main). Contract: Probably-Groceries-Final-Implementation-Sp
 Implementation order: P0 stable completion presentation; P1 native fidelity/search/menus/editing; P2 contextual shopping tools; focused domain and UI validation; review, merge, existing release pipeline. No new backend, sync transport, widget or Watch UI rewrite.
 
 Approved deviations: compact secondary quantity, remaining count on collapsed aisles, checked rows retained until explicit transition, contextual clarification/completions, purpose-built Watch/widgets. CloudKit sharing uses UICloudSharingController: Reminders' first-party Messages/FaceTime collaboration popover is unavailable through that public controller.
+
+
+## Screenshot-driven corrections
+
+The first actual simulator captures (run 337, before final calibration) revealed a permanent bottom search field, oversized row rhythm, small aisle headings and a small add button. The native bottom search toolbar is now hidden while search is inactive; row rhythm is 44pt with 24pt circles, 40pt text-column offset and horizontally expanded 44pt hit regions that do not overlap adjacent rows. Aisle headings use semantic bold title2; controls keep native glass. The reference viewport is 393×852pt and the fidelity suite now creates an iPhone 15 simulator of that size instead of accepting the runner's first iPhone model.
+
+Two initial UI runs stopped in test navigation: Hebrew bidirectional isolation characters defeated an exact label match, then native menu presentation changed the presenting control's accessibility type. Stable item IDs and an outside-menu dismissal fix the test without changing application behavior. The captured list/menu remain useful audit evidence; they do not establish that later steps passed.

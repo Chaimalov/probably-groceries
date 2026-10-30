@@ -76,7 +76,13 @@ jobs:
       timeout-minutes: 10
       run: |
         set -euo pipefail
+        if [ "$UI_SUITE" = fidelity ]; then
+          # 393x852pt, matching the user's Reminders reference viewport.
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; print(next(r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["name"].startswith("iOS 27") and r["isAvailable"]))')
+          DEVICE_ID=$(xcrun simctl create 'Reminders Reference' com.apple.CoreSimulator.SimDeviceType.iPhone-15 "$RUNTIME_ID")
+        else
         DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys,os; print(next(d["udid"] for runtime, group in json.load(sys.stdin)["devices"].items() if "iOS-27" in runtime for d in group if d["name"].startswith(os.environ["UI_DEVICE"])))')
+        fi
         selection=("-only-testing:ProbablyGroceriesUITests")
         case "$UI_SUITE" in
           shopping) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineAddEnterPurchaseUndoAndPersistence") ;;

@@ -306,7 +306,7 @@ struct ShoppingView: View {
                 .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(0)
-                .environment(\.defaultMinListRowHeight, 52)
+                .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
                 .inspector(isPresented: Binding(
@@ -320,6 +320,7 @@ struct ShoppingView: View {
                     }
                 }
                 .toolbar { bottomActions() }
+                .toolbar(showingSearch || editMode.isEditing ? .visible : .hidden, for: .bottomBar)
                 .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
                     if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
                         HStack {
@@ -329,6 +330,7 @@ struct ShoppingView: View {
                                 .font(.title2)
                                 .frame(minWidth: 44, minHeight: 44)
                                 .buttonStyle(.glassProminent)
+                                .controlSize(.large)
                                 .buttonBorderShape(.circle)
                                 .tint(listTint)
                                 .accessibilityLabel("הוספת מוצר")
@@ -371,6 +373,9 @@ struct ShoppingView: View {
                         if store.widgetNavigation?.id == request.id { store.widgetNavigation = nil }
                     }
                     closeEditor()
+                    searchReturnID = nil
+                    searchText = ""
+                    showingSearch = false
                     placeFilter = "הכול"
                     editMode = .inactive
                     reordering = false
@@ -398,7 +403,7 @@ struct ShoppingView: View {
             .navigationBarTitleDisplayMode(.large)
             .background(ShoppingNavigationTitleTint(color: UIColor(listTint)))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { listPicker.tint(listTint) }
+                ToolbarItem(placement: .topBarLeading) { listPicker }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button("שיתוף הרשימה", systemImage: "person.2") { openSharing() }
                         .labelStyle(.iconOnly)
@@ -416,7 +421,9 @@ struct ShoppingView: View {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
                             .labelStyle(.iconOnly)
                             .keyboardShortcut(.return, modifiers: .command)
-                            .tint(listTint)
+                            .tint(.blue)
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.circle)
                     }
                 }
                 if editMode.isEditing {
@@ -484,6 +491,7 @@ struct ShoppingView: View {
                 undoManager?.removeAllActions(withTarget: store)
                 presentation.reset()
                 restoreCollapsedSections()
+                searchReturnID = nil
                 searchText = ""
                 showingSearch = false
                 placeFilter = "הכול"
@@ -573,6 +581,7 @@ if reordering {
     }
 
     private func startAdding(scroll: ScrollViewProxy, section: String? = nil) {
+        searchReturnID = nil
         showingSearch = false
         searchText = ""
         beginAdding()
@@ -595,7 +604,7 @@ if reordering {
             Image(systemName: "circle.dotted")
                 .font(.system(size: 24))
                 .foregroundStyle(.tertiary)
-                .frame(width: 44, height: 44)
+                .frame(width: 24, height: 44)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
@@ -603,6 +612,7 @@ if reordering {
         .accessibilityLabel("הוספת מוצר למקטע \(section)")
         .accessibilityIdentifier("section-add-" + section)
         .selectionDisabled(true)
+        .padding(.bottom, 8)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
@@ -636,15 +646,15 @@ if reordering {
 
     private var inlineAddRow: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 4) {
+            HStack(spacing: 16) {
                 Image(systemName: "circle")
                     .font(.system(size: 25, weight: .regular))
                     .foregroundStyle(.tertiary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 24, height: 44)
                 TextField("מה צריך לקנות?", text: $newName)
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(Color(uiColor: .label))
-                    .tint(listTint)
+                    .tint(.blue)
                     .focused($addFocused)
                     .submitLabel(.next)
                     .onSubmit { addInline() }
@@ -676,8 +686,10 @@ if reordering {
                                 if store.items.contains(where: { $0.productID == product.id }) {
                                     Text("כבר ברשימה · הוספת כמות").font(.caption).foregroundStyle(.secondary)
                                 }
-                                Text(quantityLabel(product.usualQuantity, unit: product.preferredUnit))
-                                    .foregroundStyle(.secondary)
+                                if product.usualQuantity > 1 || product.preferredUnit != nil {
+                                    Text(quantityLabel(product.usualQuantity, unit: product.preferredUnit))
+                                        .foregroundStyle(.secondary)
+                                }
                                 Image(systemName: "plus").foregroundStyle(.secondary)
                             }
                             .frame(minHeight: 44)
@@ -687,7 +699,7 @@ if reordering {
                         .accessibilityLabel("הוספת \(product.name)")
                     }
                 }
-                .padding(.leading, 48)
+                .padding(.leading, 40)
                 .padding(.trailing, 12)
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -745,20 +757,21 @@ if reordering {
                         }
                     }
                 }
-                .padding(.leading, 48)
+                .padding(.leading, 40)
                 .padding(.trailing, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 4)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
         .id("new-item")
         .selectionDisabled(true)
          .listRowBackground(Color.clear)
-        .background(Theme.editor,
-                    in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Theme.editor).padding(.horizontal, -10)
+        }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
@@ -788,7 +801,7 @@ if reordering {
                 listName = ""; showingNewList = true
             }
         } label: {
-            Image(systemName: store.currentList.symbolName)
+            Image(systemName: "chevron.backward")
                 .font(.title3)
         }
         .accessibilityLabel("בחירת חנות, \(store.currentList.name)")
@@ -815,18 +828,18 @@ if reordering {
             Section {
                 Button("קנייה חדשה", systemImage: "cart.badge.plus") { closeEditor(); presentation.reset(); showingPreparation = true }
                 Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
-                Button(store.currentShare == nil ? "שיתוף הרשימה…" : "ניהול השיתוף…", systemImage: "person.2") { openSharing() }
-                    #if targetEnvironment(simulator)
-                    .disabled(true)
-                    #endif
             }
             Section {
-                Button("ביטול", systemImage: "arrow.uturn.backward") { undoManager?.undo() }
-                    .disabled(undoManager?.canUndo != true || isAdding || editingNameID != nil)
-                    .keyboardShortcut("z", modifiers: .command)
-                Button("ביצוע חוזר", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
-                    .disabled(undoManager?.canRedo != true || isAdding || editingNameID != nil)
-                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                if undoManager?.canUndo == true {
+                    Button("ביטול", systemImage: "arrow.uturn.backward") { undoManager?.undo() }
+                        .disabled(isAdding || editingNameID != nil)
+                        .keyboardShortcut("z", modifiers: .command)
+                }
+                if undoManager?.canRedo == true {
+                    Button("ביצוע חוזר", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
+                        .disabled(isAdding || editingNameID != nil)
+                        .keyboardShortcut("z", modifiers: [.command, .shift])
+                }
                 Button("הגדרות", systemImage: "gearshape") { closeEditor(); showingSettings = true }
             }
             if store.canDeleteCurrentList {
@@ -886,7 +899,7 @@ if reordering {
         } label: {
             HStack(spacing: 8) {
                 Text(section)
-                    .font(.headline)
+                    .font(.title2.bold())
                     .foregroundStyle(.primary)
                 if collapsedSections.contains(section) {
                     Text("\(store.items.filter { store.section(for: $0) == section }.count)")
@@ -897,10 +910,8 @@ if reordering {
                 Spacer(minLength: 8)
                 Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
-            .padding(.leading, 4)
-            .padding(.trailing, 8)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -929,7 +940,7 @@ if reordering {
         if let product = store.product(for: item.productID) {
             let completed = !store.items.contains { $0.id == item.id }
             VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 if !editMode.isEditing {
                 Button {
                     updateEditor {
@@ -945,7 +956,8 @@ if reordering {
                     Image(systemName: completed ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 24, weight: .regular))
                         .foregroundStyle(completed ? listTint : Color(uiColor: .systemGray2))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 24, height: 44)
+                        .contentShape(ShoppingCheckHitTarget())
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(completed ? "ביטול קניית \(product.name)" : "נקנה \(product.name)")
@@ -959,7 +971,7 @@ if reordering {
                     if editingNameID == item.id {
                         HStack(spacing: 4) {
                         TextField("שם המוצר", text: $editedName)
-                            .tint(listTint)
+                            .tint(.blue)
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.next)
                             .onSubmit { continueBelow(item) }
@@ -1063,15 +1075,19 @@ if reordering {
                     saveRename(item)
                     detailItem = item
                 })
-                    .padding(.leading, 48)
+                    .padding(.leading, 40)
                     .padding(.trailing, 12)
                     .transition(.identity)
             }
             }
             .opacity(completed ? 0.5 : 1)
-            .padding(.vertical, editingNameID == item.id ? 8 : 2)
-            .background(editingNameID == item.id ? Theme.editor : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(.vertical, editingNameID == item.id ? 4 : 0)
+            .background {
+                if editingNameID == item.id {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Theme.editor).padding(.horizontal, -10)
+                }
+            }
             .listRowBackground(Color.clear)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
@@ -1290,7 +1306,7 @@ struct ItemInlineDetails: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             if showsQuantity {
                 InlineQuantityControls(quantity: Binding(
                     get: { item.quantity }, set: { store.updateQuantity(of: item, to: $0) }
@@ -1361,7 +1377,6 @@ struct ItemInlineDetails: View {
             .buttonStyle(ShoppingToolButtonStyle())
         }
         .buttonStyle(.borderless)
-        .padding(.vertical, 8)
         .sheet(isPresented: $showingClarification) { ClarificationView(store: store, item: item) }
         .sheet(isPresented: $showingCamera) { ItemCamera { store.setPhoto($0, for: item) } }
         .sheet(isPresented: $showingPhoto) {
@@ -1394,3 +1409,9 @@ private final class ShoppingItemFrameRegistry {
 
 
 
+
+private struct ShoppingCheckHitTarget: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -10, dy: 0))
+    }
+}
