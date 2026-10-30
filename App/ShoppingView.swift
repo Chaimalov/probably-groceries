@@ -345,7 +345,7 @@ struct ShoppingView: View {
                     if searching {
                         searchReturnID = itemFrames.frames.filter { $0.value.maxY > 160 }
                             .min { $0.value.minY < $1.value.minY }?.key
-                        closeEditor()
+                        if isAdding || editingNameID != nil { closeEditor() }
                     } else {
                         searchText = ""
                         if let searchReturnID {

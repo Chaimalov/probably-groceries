@@ -121,6 +121,19 @@ jobs:
         if [ -f "$RUNNER_TEMP/TestResults.xcresult/Info.plist" ]; then
           xcrun xcresulttool export attachments --path "$RUNNER_TEMP/TestResults.xcresult" --output-path "$RUNNER_TEMP/ui-screenshots"
         fi
+        if [ "$UI_SUITE" = fidelity ] && [ -f "$RUNNER_TEMP/ui-screenshots/manifest.json" ]; then
+          python3 - <<'PY'
+        import base64, json, os
+        from pathlib import Path
+        root = Path(os.environ['RUNNER_TEMP']) / 'ui-screenshots'
+        for result in json.loads((root / 'manifest.json').read_text()):
+            for item in result.get('attachments', []):
+                name = item.get('suggestedHumanReadableName', '')
+                path = root / item['exportedFileName']
+                if path.suffix == '.png' and name.startswith(('01-list', '02-menu', '03-search', '04-focused', '05-keyboard', '07-stable')):
+                    print('FidelityImage:' + name + ':' + base64.b64encode(path.read_bytes()).decode())
+        PY
+        fi
     - uses: actions/upload-artifact@v4
       if: success() || failure()
       with:

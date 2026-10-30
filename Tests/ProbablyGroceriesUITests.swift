@@ -34,9 +34,12 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["חיפוש"].tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
         search.typeText("ירקות")
+        XCTAssertEqual(search.value as? String, "ירקות")
         XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["קפואים"].exists)
+        let filtered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["קפואים"])
+        XCTAssertEqual(XCTWaiter.wait(for: [filtered], timeout: 5), .completed)
         capture(app, "03-search-IMG_1164")
         let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "ביטול", "cancel")).firstMatch
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
