@@ -53,7 +53,7 @@ final class CloudZoneCache {
         var updated = checkpoints
         updated[key] = checkpoint
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(updated).write(to: file, options: [.atomic, .completeUntilFirstUserAuthentication])
+        try JSONEncoder().encode(updated).write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         checkpoints = updated
         return fetched.0
     }
