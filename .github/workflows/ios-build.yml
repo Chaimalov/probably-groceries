@@ -11,7 +11,7 @@ name: iOS build
         description: 'Run simulator UI tests (normally omitted)'
         type: choice
         default: none
-        options: [none, shopping, preparation, drag, layout, all]
+        options: [none, shopping, preparation, drag, layout, fidelity, all]
 concurrency:
   group: ios-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -53,7 +53,7 @@ jobs:
           -destination 'generic/platform=watchOS Simulator' \
           CODE_SIGNING_ALLOWED=NO build
   ui-tests:
-    if: (github.event_name == 'workflow_dispatch' && inputs.ui_tests != 'none') || (github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[ui:layout]'))
+    if: (github.event_name == 'workflow_dispatch' && inputs.ui_tests != 'none') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.title, '[ui:layout]') || contains(github.event.pull_request.title, '[ui:fidelity]')))
     needs: checks
     runs-on: xcode-27
     timeout-minutes: 15
@@ -62,7 +62,7 @@ jobs:
       matrix:
         device: ${{ fromJSON((inputs.ui_tests == 'layout' || contains(github.event.pull_request.title, '[ui:layout]')) && '["iPhone","iPad"]' || '["iPhone"]') }}
     env:
-      UI_SUITE: ${{ inputs.ui_tests || 'layout' }}
+      UI_SUITE: ${{ inputs.ui_tests || (contains(github.event.pull_request.title, '[ui:fidelity]') && 'fidelity' || 'layout') }}
       UI_DEVICE: ${{ matrix.device }}
     steps:
     - uses: actions/checkout@v4
@@ -80,6 +80,7 @@ jobs:
         selection=("-only-testing:ProbablyGroceriesUITests")
         case "$UI_SUITE" in
           shopping) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineAddEnterPurchaseUndoAndPersistence") ;;
+          fidelity) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testRemindersFidelityAndStableCheckoff") ;;
           preparation) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testPreparationCloseResumeExcludeAndConfirmOnce") ;;
           drag) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch") ;;
           layout)

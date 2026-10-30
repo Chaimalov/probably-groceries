@@ -2,6 +2,81 @@ import XCTest
 import UIKit
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testRemindersFidelityAndStableCheckoff() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launchEnvironment["UITEST_APPEARANCE"] = "dark"
+        app.launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
+        app.buttons["רשימה חדשה לחנות"].tap()
+        app.alerts.textFields["שם החנות"].typeText("מכולת (קניות)")
+        app.alerts.buttons["יצירה"].tap()
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["ניהול המקטעים"].tap()
+        app.buttons["מקטע חדש"].tap()
+        app.alerts.textFields["שם המקטע"].typeText("היום")
+        app.alerts.buttons["יצירה"].tap()
+        app.buttons["הוספת מוצר למקטע היום"].tap()
+        let field = app.textFields["inlineAddField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let names = ["ירקות", "קפואים", "חלבי", "שימורים", "אפייה וחדפ"]
+        for name in names { field.typeText(name + "\n") }
+        field.typeText("\n") // Empty Return must not create a saved row.
+        app.buttons["סיום עריכה"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "נקנה ")).count, names.count)
+        capture(app, "01-list-IMG_1162")
+        app.buttons["אפשרויות נוספות"].tap()
+        XCTAssertTrue(app.buttons["הצגת פרטי הרשימה"].waitForExistence(timeout: 5))
+        capture(app, "02-menu-IMG_1163")
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["חיפוש"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.typeText("ירקות")
+        XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["קפואים"].exists)
+        capture(app, "03-search-IMG_1164")
+        let cancel = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "ביטול", "Cancel")).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        XCTAssertTrue(app.buttons["קפואים"].waitForExistence(timeout: 5))
+        app.buttons["ירקות"].tap()
+        XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["אפשרויות מוצר"].exists)
+        capture(app, "04-focused-editor-IMG_1165")
+        app.textFields["שם המוצר"].typeText("\n")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        capture(app, "05-keyboard-IMG_1166")
+        app.buttons["סיום עריכה"].tap()
+        // UICloudSharingController requires a signed iCloud device. Do not fake
+        // the Reminders collaboration popover in the unsigned simulator.
+        XCTAssertFalse(app.buttons["שיתוף הרשימה"].isEnabled)
+        for (index, name) in names.enumerated() {
+            let remaining = names.dropFirst(index + 1).map { app.buttons["נקנה " + $0] }
+            let positions = remaining.map { $0.frame.minY }
+            app.buttons["נקנה " + name].tap()
+            XCTAssertTrue(app.buttons["ביטול קניית " + name].waitForExistence(timeout: 5))
+            for (row, y) in zip(remaining, positions) {
+                XCTAssertEqual(row.frame.minY, y, accuracy: 1, "A09: checking one row must not move the next target")
+            }
+        }
+        capture(app, "07-stable-five-checkoffs")
+        app.buttons["ביטול קניית ירקות"].tap()
+        XCTAssertEqual(app.buttons.matching(identifier: "נקנה ירקות").count, 1)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["נקנה ירקות"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["ביטול קניית קפואים"].exists, "A stable re-entry releases completed placeholders")
+    }
+
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testPreparationCloseResumeExcludeAndConfirmOnce() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -90,7 +165,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertGreaterThan(alpha.frame.minY, gamma.frame.minY)
         for name in ["Drag One", "Drag Two"] {
             app.buttons["אפשרויות נוספות"].tap()
-            app.buttons["מקטע חדש"].tap()
+            app.buttons["ניהול המקטעים"].tap()
+        app.buttons["מקטע חדש"].tap()
             let sectionAlert = app.alerts["מקטע חדש"]
             XCTAssertTrue(sectionAlert.waitForExistence(timeout: 5))
             sectionAlert.textFields["שם המקטע"].typeText(name)
@@ -297,6 +373,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let section = "Dairy \(UUID().uuidString.prefix(6))"
         let shop = "Corner \(UUID().uuidString.prefix(6))"
         app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["ניהול המקטעים"].tap()
         app.buttons["מקטע חדש"].tap()
         let sectionAlert = app.alerts["מקטע חדש"]
         XCTAssertTrue(sectionAlert.waitForExistence(timeout: 10))

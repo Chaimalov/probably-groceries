@@ -430,7 +430,13 @@ struct ShoppingView: View {
                     }
                 }
             }
-            .onChange(of: store.items) { _, items in
+            .onChange(of: store.items) { oldItems, items in
+                let currentIDs = Set(items.map(\.id))
+                let purchasedIDs = Set(store.purchases.map(\.sourceItemID))
+                let previousRows = presentation.rows(active: oldItems, purchases: store.purchases, listID: store.selectedListID)
+                for item in oldItems where !currentIDs.contains(item.id) && purchasedIDs.contains(item.id) {
+                    presentation.retain(item, among: previousRows)
+                }
                 if placeFilter != "הכול" && placeFilter != "ללא מקום" && !items.contains(where: { $0.shoppingPlace == placeFilter }) { placeFilter = "הכול" }
             }
             .onChange(of: nameFocused) { oldID, newID in
@@ -684,24 +690,22 @@ if reordering {
                 .padding(.leading, 48)
                 .padding(.trailing, 12)
             }
-            if hasNewName {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                     if quantityExpanded {
                         InlineQuantityControls(quantity: Binding(
                             get: { newQuantity },
                             set: { newQuantity = $0; newQuantityOverridden = true }
                         ), unit: $newUnit, isNew: true)
                     }
-                    if showingNewNote {
-                        TextField("הערה למוצר…", text: $newNote, axis: .vertical)
-                            .lineLimit(1...3)
-                            .accessibilityIdentifier("newItemNoteField")
-                    }
+                    TextField("הערה למוצר…", text: $newNote, axis: .vertical)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .lineLimit(1...3)
+                        .accessibilityIdentifier("newItemNoteField")
                     if let newPhotoData {
                         ItemPhotoThumbnail(bytes: newPhotoData, fileURL: nil, name: newName, side: 44)
                     }
                     HStack(spacing: 8) {
-                        Button("הערה", systemImage: "text.alignright") { showingNewNote.toggle() }
+                        Button("כמות", systemImage: "number") { updateEditor { quantityExpanded.toggle() } }
                             .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                         PhotosPicker(selection: $newPhoto, matching: .images) {
                             Image(systemName: "photo.badge.plus")
@@ -745,10 +749,9 @@ if reordering {
                 .padding(.trailing, 12)
                 .padding(.top, 8)
                 .padding(.bottom, 12)
-            }
         }
         .padding(.horizontal, 4)
-        .padding(.vertical, hasNewName ? 8 : 4)
+        .padding(.vertical, 8)
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
         .id("new-item")
@@ -860,7 +863,7 @@ if reordering {
         }
     }
 
-    private var sectionNames: [String] { allSectionNames }
+    private var sectionNames: [String] { searchText.isEmpty ? allSectionNames : allSectionNames.filter { !items(in: $0).isEmpty } }
 
     private var allSectionNames: [String] {
         store.sectionNames
@@ -926,7 +929,7 @@ if reordering {
         if let product = store.product(for: item.productID) {
             let completed = !store.items.contains { $0.id == item.id }
             VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if !editMode.isEditing {
                 Button {
                     updateEditor {
@@ -947,6 +950,9 @@ if reordering {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(completed ? "ביטול קניית \(product.name)" : "נקנה \(product.name)")
                 .accessibilityValue(completed ? "נקנה" : "לקנייה")
+                .alignmentGuide(.firstTextBaseline) { dimensions in
+                    dimensions[VerticalAlignment.center] + UIFont.preferredFont(forTextStyle: .body).capHeight / 2
+                }
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     if editingNameID == item.id {
@@ -1138,6 +1144,7 @@ if reordering {
         NativeShoppingDrag(entry: entry, listID: store.selectedListID,
                            enabled: !editMode.isEditing && editingNameID == nil && !isAdding,
                            tint: UIColor(listTint), previewContent: dragPreviewContent(for: entry)) { entries, after in
+            presentation.reset() // An explicit drop is a stable presentation transition.
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 if case .section(let source)? = entries.first,
                    case .section(let target) = entry {
@@ -1302,44 +1309,18 @@ struct ItemInlineDetails: View {
                 .onChange(of: item.note) { _, value in
                     if note != (value ?? "") { note = value ?? "" }
                 }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], alignment: .leading, spacing: 8) {
                 if let onQuantity {
-                    Button("כמות", systemImage: "number", action: onQuantity)
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                    Button("כמות", systemImage: "number", action: onQuantity).labelStyle(.iconOnly)
                 }
                 if let onSection {
-                    Button("מקטע", systemImage: "square.grid.2x2", action: onSection)
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                    Button("מקטע", systemImage: "square.grid.2x2", action: onSection).labelStyle(.iconOnly)
                 }
-                if let onDetails {
-                    Button("פרטי מוצר", systemImage: "info.circle", action: onDetails)
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                }
-                Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
-                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: item.unavailable == true ? "basket.fill" : "basket") {
-                    store.toggleUnavailable(item)
-                }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                 Button(item.isUrgent ? "הסר דגל" : "דחוף", systemImage: item.isUrgent ? "flag.fill" : "flag") {
                     store.toggleUrgent(item)
                 }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(item.isUrgent ? Color.orange : Color(uiColor: .label))
-                .frame(minWidth: 44, minHeight: 44)
-                if item.photoData != nil || item.photoFilename != nil {
-                    Button { showingPhoto = true } label: {
-                        ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
-                                           name: store.product(for: item.productID)?.name ?? "", side: 52)
-                    }.accessibilityLabel("הגדלת תמונת המוצר")
-                }
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("צילום", systemImage: "camera") {
-                        Task {
-                            let allowed = await AVCaptureDevice.requestAccess(for: .video)
-                            if allowed { showingCamera = true } else { cameraDenied = true }
-                        }
-                    }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
@@ -1353,12 +1334,28 @@ struct ItemInlineDetails: View {
                         }
                     }
                 }
-                if item.photoFilename != nil || item.photoData != nil {
-                    Button("הסרת תמונה", systemImage: "xmark.circle") {
-                        store.removePhoto(from: item)
+                Menu {
+                    if let onDetails { Button("פרטי מוצר", systemImage: "info.circle", action: onDetails) }
+                    Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
+                    Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: "basket") {
+                        store.toggleUnavailable(item)
                     }
-                    .labelStyle(.iconOnly)
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button("צילום", systemImage: "camera") {
+                            Task {
+                                if await AVCaptureDevice.requestAccess(for: .video) { showingCamera = true }
+                                else { cameraDenied = true }
+                            }
+                        }
+                    }
+                    if item.photoFilename != nil || item.photoData != nil {
+                        Button("הגדלת תמונת המוצר", systemImage: "photo") { showingPhoto = true }
+                        Button("הסרת תמונה", systemImage: "trash", role: .destructive) { store.removePhoto(from: item) }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
                 }
+                .accessibilityLabel("אפשרויות מוצר")
             }
             .font(.body)
             .tint(Color(uiColor: .label))
