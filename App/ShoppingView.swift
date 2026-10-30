@@ -424,11 +424,13 @@ struct ShoppingView: View {
                         .disabled(true)
                         #endif
                     optionsMenu
-                    if !isAdding && editingNameID == nil {
+                    if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
                         Button("חיפוש", systemImage: "magnifyingglass") { showingSearch = true }
                             .labelStyle(.iconOnly)
                     }
                 }
+                DefaultToolbarItem(kind: .search, placement: UIDevice.current.userInterfaceIdiom == .phone ? .bottomBar : .topBarTrailing)
+                    .hidden(!showingSearch)
                 if !editMode.isEditing && (isAdding || editingNameID != nil) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }

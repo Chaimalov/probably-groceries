@@ -35,6 +35,9 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
+        let introduction = app.buttons.matching(NSPredicate(format: "label IN %@", ["Continue", "המשך", "להמשיך"])).firstMatch
+        if introduction.waitForExistence(timeout: 2) { introduction.tap() }
+        search.tap()
         search.typeText("ירקות")
         XCTAssertEqual(search.value as? String, "ירקות")
         XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5))
@@ -42,8 +45,12 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [filtered], timeout: 5), .completed)
         capture(app, "03-search-IMG_1164")
         let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "ביטול", "cancel")).firstMatch
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
-        cancel.tap()
+        if cancel.exists { cancel.tap() }
+        else {
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: max(22, search.frame.minX / 2) - app.frame.minX,
+                                       dy: search.frame.midY - app.frame.minY)).tap()
+        }
         XCTAssertTrue(app.buttons["קפואים"].waitForExistence(timeout: 5))
         app.buttons["ירקות"].tap()
         XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
