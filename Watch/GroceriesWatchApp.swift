@@ -14,6 +14,9 @@ struct GroceriesWatchApp: App {
                     if phase == .active { store.refresh() }
                 }
         }
+        .backgroundTask(.watchConnectivity) {
+            await store.receiveBackgroundUpdate()
+        }
     }
 }
 

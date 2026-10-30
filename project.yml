@@ -19,6 +19,7 @@ targets:
     entitlements:
       path: App/ProbablyGroceries.entitlements
       properties:
+        aps-environment: development
         com.apple.developer.icloud-container-identifiers:
           - iCloud.com.chaimalov.probablygroceries
         com.apple.developer.icloud-services:
@@ -36,6 +37,7 @@ targets:
         UILaunchScreen: {}
         NSCameraUsageDescription: צילום מוצר כדי לעזור לזהות אותו ברשימת הקניות
         CKSharingSupported: true
+        UIBackgroundModes: [remote-notification, fetch]
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - probablygroceries

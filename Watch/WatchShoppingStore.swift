@@ -101,6 +101,14 @@ final class WatchShoppingStore: NSObject, ObservableObject, WCSessionDelegate {
         Task { @MainActor in self.refresh() }
     }
 
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        Task { @MainActor in self.receive(message) }
+    }
+
+    func receiveBackgroundUpdate() {
+        receive(WCSession.default.receivedApplicationContext)
+    }
+
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         Task { @MainActor in self.receive(applicationContext) }
     }

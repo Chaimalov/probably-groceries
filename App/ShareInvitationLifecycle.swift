@@ -19,6 +19,30 @@ final class ShareInvitationInbox: ObservableObject {
 }
 
 final class SharingAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        PhoneWatchBridge.shared.start()
+        #if !targetEnvironment(simulator)
+        application.registerForRemoteNotifications()
+        ShoppingStore.shared.cloudSync.start()
+        #endif
+        return true
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo),
+              notification.containerIdentifier == PersonalCloudSync.containerIdentifier else {
+            completionHandler(.noData)
+            return
+        }
+        Task { @MainActor in
+            let store = ShoppingStore.shared
+            await store.cloudSync.synchronize()
+            completionHandler(store.syncStatus == .current ? .newData : .failed)
+        }
+    }
+
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)

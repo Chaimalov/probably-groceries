@@ -89,3 +89,7 @@ Release compilation and automated interactions do not establish visual or physic
 - Return while renaming saves the product and focuses an empty draft immediately below it in the same section. Repeated Return preserves insertion order and section. A draft stays temporary until it has a name; Done removes an empty draft.
 - The section picker does not move the composer while choosing. After submission, the next draft follows the committed item. Keyboard focus is restored after the native List relocates it.
 - Quantity summaries abbreviate known units (יח׳, חב׳, ל׳, בק׳, קופ׳, שק׳, גל׳, ג׳). The picker and VoiceOver retain full unit names. Stored values and custom units are unchanged.
+
+## Device feedback — 30 October 2026
+
+- Ordinary shopping rows have no persistent info button. Tap the name to reveal inline editing; its tool palette includes the accessible product-details action. This supersedes the PRD's original always-visible details icon.

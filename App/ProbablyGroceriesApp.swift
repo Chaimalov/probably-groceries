@@ -26,7 +26,6 @@ struct ProbablyGroceriesApp: App {
     }
 
     init() {
-        PhoneWatchBridge.shared.start()
         if ShoppingStore.shared.storageError == nil {
             PhoneWatchBridge.shared.publish(ShoppingStore.shared.watchSnapshot())
         }
@@ -38,6 +37,9 @@ struct ProbablyGroceriesApp: App {
                 .task { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
+                    #if !targetEnvironment(simulator)
+                    if phase == .background { Task { await store.cloudSync.synchronize() } }
+                    #endif
                 }
                 .preferredColorScheme(testAppearance)
                 .environment(\.locale, Locale(identifier: usesHebrew ? "he_IL" : "en"))

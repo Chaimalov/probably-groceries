@@ -942,18 +942,12 @@ if reordering {
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                     .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
-                if !editMode.isEditing {
-                    Button("פרטי מוצר", systemImage: "info.circle") {
-                        if editingNameID == item.id { saveRename(item) }
-                        detailItem = item
-                    }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                    .font(.body).foregroundStyle(Color(uiColor: .secondaryLabel))
-                    .frame(minWidth: 44, minHeight: 44)
-                }
             }
             if editingNameID == item.id && !editMode.isEditing {
-                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded)
+                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded, onDetails: {
+                    saveRename(item)
+                    detailItem = item
+                })
                     .padding(.leading, 48)
                     .padding(.trailing, 12)
                     .transition(.identity)
@@ -1187,6 +1181,7 @@ struct ItemInlineDetails: View {
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
     let showsQuantity: Bool
+    let onDetails: (() -> Void)?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showingCamera = false
     @State private var cameraDenied = false
@@ -1194,10 +1189,11 @@ struct ItemInlineDetails: View {
     @State private var note: String
     @State private var showingClarification = false
 
-    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true) {
+    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true, onDetails: (() -> Void)? = nil) {
         self.store = store
         self.item = item
         self.showsQuantity = showsQuantity
+        self.onDetails = onDetails
         _note = State(initialValue: item.note ?? "")
     }
 
@@ -1220,6 +1216,10 @@ struct ItemInlineDetails: View {
                     if note != (value ?? "") { note = value ?? "" }
                 }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
+                if let onDetails {
+                    Button("פרטי מוצר", systemImage: "info.circle", action: onDetails)
+                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                }
                 Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
                     .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                 Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: item.unavailable == true ? "basket.fill" : "basket") {

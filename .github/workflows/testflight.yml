@@ -141,6 +141,7 @@ jobs:
         print('Signed iCloud services:', services)
         assert 'iCloud.com.chaimalov.probablygroceries' in containers, 'Missing signed iCloud container'
         assert 'CloudKit' in services, 'Missing signed CloudKit service'
+        assert entitlements.get('aps-environment') == 'production', 'Missing signed production push entitlement'
         groups = entitlements.get('com.apple.security.application-groups', [])
         assert 'group.com.chaimalov.probablygroceries' in groups, 'Missing app group entitlement'
         widget_path = Path(os.environ['RUNNER_TEMP']) / 'widget-entitlements.plist'
