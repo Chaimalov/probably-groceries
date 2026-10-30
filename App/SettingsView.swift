@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @AppStorage("showProductCompletions") private var showProductCompletions = true
+    @AppStorage("shoppingHapticsEnabled") private var hapticsEnabled = true
     @State private var showingAppearance = false
     @State private var showingRename = false
     @State private var showingDecisions = false
@@ -38,6 +39,7 @@ struct SettingsView: View {
                     Toggle("הצגת מקטעים", isOn: $groupBySection)
                     Toggle("הצגת נקנו לאחרונה", isOn: $showRecentPurchases)
                     Toggle("הצעות בזמן ההקלדה", isOn: $showProductCompletions)
+                    Toggle("משוב רטט בסימון", isOn: $hapticsEnabled)
                 }
                 Section {
                     Button("זיהוי מוצרים", systemImage: "sparkles") { showingDecisions = true }

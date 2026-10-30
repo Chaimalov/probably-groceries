@@ -278,6 +278,50 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func remove(_ item: ShoppingItem, undoManager: UndoManager?) {
+        remove(Set([item.id]), undoManager: undoManager)
+    }
+
+    func remove(_ ids: Set<UUID>, undoManager: UndoManager?) {
+        let originals = data.items.filter { ids.contains($0.id) }.map { item in
+            var saved = item
+            if saved.photoData == nil, let url = legacyPhotoURL(for: item) {
+                saved.photoData = try? Data(contentsOf: url)
+            }
+            return saved
+        }
+        guard !originals.isEmpty else { return }
+        let previousDeferrals = data.deferrals
+        remove(ids)
+        let removedDeferrals = data.deferrals
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            var restoredIDs: Set<UUID> = []
+            for var item in originals {
+                // Do not overwrite a newer row or restore into a deleted list.
+                guard target.data.lists.contains(where: { $0.id == item.listID }),
+                      !target.data.items.contains(where: { $0.id == item.id || ($0.listID == item.listID && $0.productID == item.productID) }),
+                      !target.data.purchases.contains(where: { $0.sourceItemID == item.id }) else { continue }
+                item.photoFilename = nil // Photo bytes above survive the removed legacy file.
+                target.data.items.append(item)
+                restoredIDs.insert(item.id)
+                let matches: (Deferral) -> Bool = { $0.listID == item.listID && $0.productID == item.productID }
+                // Only undo the deferral written by this deletion.
+                if target.data.deferrals.first(where: matches) == removedDeferrals.first(where: matches) {
+                    target.data.deferrals.removeAll(where: matches)
+                    if let previous = previousDeferrals.first(where: matches) { target.data.deferrals.append(previous) }
+                }
+            }
+            guard !restoredIDs.isEmpty else { return }
+            target.persist()
+            let redoIDs = restoredIDs
+            undoManager?.registerUndo(withTarget: target) { [weak undoManager] target in
+                target.remove(redoIDs, undoManager: undoManager)
+            }
+            undoManager?.setActionName(NSLocalizedString("מחיקת מוצרים", comment: "Undo deletion"))
+        }
+        undoManager?.setActionName(NSLocalizedString("מחיקת מוצרים", comment: "Undo deletion"))
+    }
+
     func updateNote(of item: ShoppingItem, to value: String) {
         guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
         data.items[index].note = value.isEmpty ? nil : value
@@ -516,6 +560,18 @@ final class ShoppingStore: ObservableObject {
         data.products[index].category = trimmedCategory?.isEmpty == false ? trimmedCategory : nil
         data.items[itemIndex].sectionName = trimmedDepartment?.isEmpty == false ? trimmedDepartment : ""
         persist()
+    }
+
+    func rename(_ item: ShoppingItem, to name: String, undoManager: UndoManager?) {
+        guard let previous = product(for: item.productID)?.name else { return }
+        rename(item, to: name)
+        guard let updated = product(for: item.productID)?.name, updated != previous else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            guard target.product(for: item.productID)?.name == updated,
+                  target.data.items.contains(where: { $0.id == item.id }) else { return }
+            target.rename(item, to: previous, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("שינוי שם מוצר", comment: "Undo rename"))
     }
 
     func toggleUrgent(_ item: ShoppingItem) {

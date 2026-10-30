@@ -135,6 +135,8 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - Tests/ShoppingPresentationTests.swift
+      - App/ShoppingPresentation.swift
       - Tests/OrganizationTests.swift
       - App/SectionManagement.swift
       - App/BadgePolicy.swift
