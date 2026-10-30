@@ -103,3 +103,12 @@ Release compilation and automated interactions do not establish visual or physic
 ## Device feedback — 30 October 2026
 
 - Ordinary shopping rows have no persistent info button. Tap the name to reveal inline editing; its tool palette includes the accessible product-details action. This supersedes the PRD's original always-visible details icon.
+
+
+## Build 80 device feedback — 30 October 2026
+
+- Reminders uses the rounded system type family; use `.fontDesign(.rounded)` for shopping content and a rounded preferred large-title/headline font for the native navigation title. Keep semantic text sizes and Dynamic Type.
+- A section keeps one down-chevron view and rotates it outward when collapsed (left in RTL, right in LTR). Animate rotation with the existing collapse transaction, respecting Reduce Motion.
+- Overflow has five persistent entries: new shopping trip, selection, organization, history and settings. Organization holds list details, section creation/editing and reorder. View preferences and list deletion remain in Settings; Undo/Redo appear only when available.
+- Settings buttons use native blue and switches explicitly use system green, independent of the shopping list's neutral toolbar tint.
+- Large-title styling belongs to the current UINavigationItem, cached by item, color and content size. Never repeatedly rewrite shared UINavigationBar appearances while the user scrolls. Preserve UIKit's large-title collapse and native glass backgrounds. The physical-device bounce/flicker fix requires installed-build confirmation.

@@ -17,6 +17,7 @@ struct BadgeSettingsView: View {
         Form {
             Section {
                 Toggle("מספר מוצרים על אייקון האפליקציה", isOn: $enabled)
+                    .tint(.green)
             } footer: { Text("כשהמספר אפס, התג נעלם. הספירה מתעדכנת אחרי שינוי ברשימה או קבלת סנכרון.") }
             if enabled {
                 Section("מה סופרים") {
@@ -36,11 +37,15 @@ struct BadgeSettingsView: View {
                                     UserDefaults.standard.set(ids.sorted(), forKey: "shoppingBadgeListIDs")
                                     store.refreshBadge()
                                 }))
+                                .tint(.green)
                         }
                     }
                     Toggle("דחופים בלבד", isOn: $urgentOnly)
+                        .tint(.green)
                     Toggle("סכום כמויות במקום שורות", isOn: $quantities)
+                        .tint(.green)
                     Toggle("ללא מוצרים שלא היו בחנות", isOn: $excludeUnavailable)
+                        .tint(.green)
                 }
                 Section {
                     LabeledContent("המספר כרגע", value: "\(BadgePolicy.count(in: store.data, selectedListID: store.selectedListID))")
