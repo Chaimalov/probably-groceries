@@ -22,7 +22,6 @@ struct ShoppingView: View {
     @State private var newUrgent = false
     @State private var newPhotoData: Data?
     @State private var newPhoto: PhotosPickerItem?
-    @State private var showingNewNote = false
     @State private var originalEditedName = ""
     @State private var editingCategory: ShoppingItem?
     @State private var editingNameID: UUID?
@@ -134,7 +133,7 @@ struct ShoppingView: View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
-                    if displayItems.isEmpty && !isAdding && !reordering && searchText.isEmpty {
+                    if displayItems.isEmpty && !isAdding && !reordering && searchText.isEmpty && allSectionNames.count <= 1 {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("הרשימה פנויה")
                                 .font(.title3.weight(.semibold))
@@ -320,7 +319,7 @@ struct ShoppingView: View {
                             .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
                     }
                 }
-                .toolbar { bottomActions(scroll) }
+                .toolbar { bottomActions() }
                 .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
                     if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
                         HStack {
@@ -543,7 +542,7 @@ struct ShoppingView: View {
     }
 
     @ToolbarContentBuilder
-    private func bottomActions(_ scroll: ScrollViewProxy) -> some ToolbarContent {
+    private func bottomActions() -> some ToolbarContent {
 if reordering {
                         ToolbarItem(placement: .bottomBar) {
                             Text("גרור את ידיות הסידור של המוצרים")
@@ -602,6 +601,7 @@ if reordering {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("הוספת מוצר למקטע \(section)")
+        .accessibilityIdentifier("section-add-" + section)
         .selectionDisabled(true)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
@@ -874,7 +874,7 @@ if reordering {
     }
 
     private func quantityLabel(_ quantity: Int, unit: String?) -> String {
-        guard let unit, !unit.isEmpty else { return "×\(quantity)" }
+        guard let unit, !unit.isEmpty else { return "\(quantity)" }
         return "\(quantity) \(ShoppingUnit.shortLabel(unit))"
     }
 
@@ -950,6 +950,7 @@ if reordering {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(completed ? "ביטול קניית \(product.name)" : "נקנה \(product.name)")
                 .accessibilityValue(completed ? "נקנה" : "לקנייה")
+                .accessibilityIdentifier("purchase-" + item.id.uuidString)
                 .alignmentGuide(.firstTextBaseline) { dimensions in
                     dimensions[VerticalAlignment.center] + UIFont.preferredFont(forTextStyle: .body).capHeight / 2
                 }
@@ -1068,7 +1069,6 @@ if reordering {
             }
             }
             .opacity(completed ? 0.5 : 1)
-            .padding(.horizontal, 0)
             .padding(.vertical, editingNameID == item.id ? 8 : 2)
             .background(editingNameID == item.id ? Theme.editor : Color.clear,
                         in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -1198,7 +1198,6 @@ if reordering {
             newUrgent = false
             newPhotoData = nil
             newPhoto = nil
-            showingNewNote = false
             quantityExpanded = false
             addFocused = continueAdding
         }
@@ -1243,7 +1242,6 @@ if reordering {
             newUrgent = false
             newPhotoData = nil
             newPhoto = nil
-            showingNewNote = false
             addFocused = false
             editingNameID = nil
             nameFocused = nil

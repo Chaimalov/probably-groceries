@@ -7,24 +7,23 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
         app.launchEnvironment["UITEST_APPEARANCE"] = "dark"
-        app.launch()
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "בחירת חנות")).firstMatch.tap()
-        app.buttons["רשימה חדשה לחנות"].tap()
-        app.alerts.textFields["שם החנות"].typeText("מכולת (קניות)")
-        app.alerts.buttons["יצירה"].tap()
-        app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["ניהול המקטעים"].tap()
-        app.buttons["מקטע חדש"].tap()
-        app.alerts.textFields["שם המקטע"].typeText("היום")
-        app.alerts.buttons["יצירה"].tap()
-        app.buttons["הוספת מוצר למקטע היום"].tap()
-        let field = app.textFields["inlineAddField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
         let names = ["ירקות", "קפואים", "חלבי", "שימורים", "אפייה וחדפ"]
-        for name in names { field.typeText(name + "\n") }
-        field.typeText("\n") // Empty Return must not create a saved row.
-        app.buttons["סיום עריכה"].tap()
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "נקנה ")).count, names.count)
+        let listID = UUID().uuidString
+        let itemIDs = Dictionary(uniqueKeysWithValues: names.map { ($0, UUID().uuidString) })
+        let fixture: [String: Any] = [
+            "lists": [["id": listID, "name": "מכולת (קניות)", "sections": ["היום", "מאפייה"]]],
+            "products": names.map { ["id": itemIDs[$0]!, "name": $0, "usualQuantity": 1] as [String: Any] },
+            "items": names.enumerated().map { index, name in
+                ["id": itemIDs[name]!, "productID": itemIDs[name]!, "quantity": 1,
+                 "addedAt": 0, "listID": listID, "sectionName": "היום", "manualOrder": index] as [String: Any]
+            }
+        ]
+        app.launchEnvironment["UITEST_FIXTURE_JSON"] = String(data: try! JSONSerialization.data(withJSONObject: fixture), encoding: .utf8)!
+        app.launch()
+        app.launchEnvironment.removeValue(forKey: "UITEST_FIXTURE_JSON")
+        let checks = Dictionary(uniqueKeysWithValues: names.map { ($0, app.buttons["purchase-" + itemIDs[$0]!]) })
+        XCTAssertTrue(checks[names[0]]!.waitForExistence(timeout: 10))
+        let field = app.textFields["inlineAddField"]
         capture(app, "01-list-IMG_1162")
         app.buttons["אפשרויות נוספות"].tap()
         XCTAssertTrue(app.buttons["הצגת פרטי הרשימה"].waitForExistence(timeout: 5))
@@ -37,7 +36,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["קפואים"].exists)
         capture(app, "03-search-IMG_1164")
-        let cancel = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "ביטול", "Cancel")).firstMatch
+        let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "ביטול", "cancel")).firstMatch
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         cancel.tap()
         XCTAssertTrue(app.buttons["קפואים"].waitForExistence(timeout: 5))
@@ -48,26 +47,45 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.textFields["שם המוצר"].typeText("\n")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         capture(app, "05-keyboard-IMG_1166")
+        field.typeText("לחם\nביצים\n")
+        field.typeText("\n")
+        XCTAssertTrue(app.buttons["לחם"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ביצים"].waitForExistence(timeout: 5))
         app.buttons["סיום עריכה"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "נקנה ")).count, 7, "Empty Return must not persist a phantom item")
         // UICloudSharingController requires a signed iCloud device. Do not fake
         // the Reminders collaboration popover in the unsigned simulator.
         XCTAssertFalse(app.buttons["שיתוף הרשימה"].isEnabled)
         for (index, name) in names.enumerated() {
-            let remaining = names.dropFirst(index + 1).map { app.buttons["נקנה " + $0] }
+            let remaining = names.dropFirst(index + 1).map { checks[$0]! }
             let positions = remaining.map { $0.frame.minY }
-            app.buttons["נקנה " + name].tap()
-            XCTAssertTrue(app.buttons["ביטול קניית " + name].waitForExistence(timeout: 5))
+            checks[name]!.tap()
+            XCTAssertEqual(checks[name]!.value as? String, "נקנה")
             for (row, y) in zip(remaining, positions) {
                 XCTAssertEqual(row.frame.minY, y, accuracy: 1, "A09: checking one row must not move the next target")
             }
         }
         capture(app, "07-stable-five-checkoffs")
-        app.buttons["ביטול קניית ירקות"].tap()
-        XCTAssertEqual(app.buttons.matching(identifier: "נקנה ירקות").count, 1)
+        checks["ירקות"]!.tap()
+        XCTAssertEqual(checks["ירקות"]!.value as? String, "לקנייה")
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.buttons["נקנה ירקות"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["ביטול קניית קפואים"].exists, "A stable re-entry releases completed placeholders")
+        XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5))
+        XCTAssertFalse(checks["קפואים"]!.exists, "A stable re-entry releases completed placeholders")
+        app.buttons["ירקות"].tap()
+        let rename = app.textFields["שם המוצר"]
+        rename.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "ירקות".count) + "ירקות טריים")
+        app.buttons["סיום עריכה"].tap()
+        XCTAssertTrue(app.buttons["ירקות טריים"].waitForExistence(timeout: 5))
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["ביטול"].tap()
+        XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5), "Rename joins the system undo stack")
+        app.buttons["ירקות"].swipeRight()
+        if app.buttons["הסר"].exists { app.buttons["הסר"].tap() }
+        XCTAssertFalse(checks["ירקות"]!.exists)
+        app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["ביטול"].tap()
+        XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5), "Undo restores the deleted item without a duplicate")
     }
 
     private func capture(_ app: XCUIApplication, _ name: String) {

@@ -82,8 +82,20 @@ final class ShoppingStore: ObservableObject {
         fileURL = path
         journalURL = directory.appendingPathComponent("sync-journal.json")
         let loadedData: ShoppingData
+        #if targetEnvironment(simulator)
+        let fixture = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+            ? ProcessInfo.processInfo.environment["UITEST_FIXTURE_JSON"]?.data(using: .utf8) : nil
+        if fixture != nil {
+            UserDefaults.standard.set(true, forKey: "groupShoppingByCategory")
+            UserDefaults.standard.set("{}", forKey: "collapsedShoppingSections")
+        }
+        #else
+        let fixture: Data? = nil
+        #endif
         do {
-            if FileManager.default.fileExists(atPath: path.path) {
+            if let fixture {
+                loadedData = try JSONDecoder().decode(ShoppingData.self, from: fixture)
+            } else if FileManager.default.fileExists(atPath: path.path) {
                 loadedData = try JSONDecoder().decode(ShoppingData.self, from: Data(contentsOf: path))
             } else { loadedData = ShoppingData() }
         } catch {
@@ -99,6 +111,7 @@ final class ShoppingStore: ObservableObject {
         lastJournaledData = loadedData
         syncJournal = (try? Data(contentsOf: journalURL))
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
+        if fixture != nil { syncJournal = SyncJournal() }
         syncJournal.seed(loadedData)
         selectedListID = listID
         if !loadFailed { publishWidgetSnapshot() }

@@ -22,10 +22,13 @@ struct ShoppingNavigationTitleTint: UIViewControllerRepresentable {
 
         func apply() {
             guard let bar = navigationController?.navigationBar else { return }
-            let standard = bar.standardAppearance.copy() as! UINavigationBarAppearance
+            let standardColor = bar.standardAppearance.largeTitleTextAttributes[.foregroundColor] as? UIColor
+            let edgeColor = bar.scrollEdgeAppearance?.largeTitleTextAttributes[.foregroundColor] as? UIColor
+            guard standardColor?.isEqual(color) != true || edgeColor?.isEqual(color) != true else { return }
+            let standard = bar.standardAppearance.copy()
             standard.largeTitleTextAttributes[.foregroundColor] = color
             bar.standardAppearance = standard
-            let edge = (bar.scrollEdgeAppearance ?? standard).copy() as! UINavigationBarAppearance
+            let edge = (bar.scrollEdgeAppearance ?? standard).copy()
             edge.largeTitleTextAttributes[.foregroundColor] = color
             bar.scrollEdgeAppearance = edge
         }
