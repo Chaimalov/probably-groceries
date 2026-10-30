@@ -35,6 +35,9 @@ struct ProbablyGroceriesApp: App {
         WindowGroup {
             ShoppingView(store: store)
                 .task { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
+                .task(id: store.sharedLists.map(\.listID)) {
+                    await ClarificationNotifications.requestPermission(hasSharedLists: !store.sharedLists.isEmpty)
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { ProductDecisionService.shared.schedule(store: store); store.refreshBadge() }
                     #if !targetEnvironment(simulator)
@@ -49,16 +52,14 @@ struct ProbablyGroceriesApp: App {
                     guard url.scheme == "probablygroceries" else { return }
                     let parts = url.pathComponents.filter { $0 != "/" }
                     if url.host == "list", let id = parts.first.flatMap(UUID.init(uuidString:)) {
-                        store.selectList(id)
+                        store.widgetNavigation = ShoppingStore.WidgetNavigation(listID: id, openListOnly: true)
                     }
                     if url.host == "edit", let id = parts.first.flatMap(UUID.init(uuidString:)),
                        let item = store.data.items.first(where: { $0.id == id }) {
-                        store.selectList(item.listID)
-                        store.widgetNavigation = ShoppingStore.WidgetNavigation(itemID: id)
+                        store.widgetNavigation = ShoppingStore.WidgetNavigation(itemID: id, listID: item.listID)
                     }
                     if url.host == "add" {
-                        if let id = parts.first.flatMap(UUID.init(uuidString:)) { store.selectList(id) }
-                        store.widgetNavigation = ShoppingStore.WidgetNavigation()
+                        store.widgetNavigation = ShoppingStore.WidgetNavigation(listID: parts.first.flatMap(UUID.init(uuidString:)))
                     }
                 }
                 .alert("לא ניתן להצטרף כרגע", isPresented: Binding(

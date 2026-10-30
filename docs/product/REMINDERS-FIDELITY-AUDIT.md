@@ -14,7 +14,7 @@ Baseline: `b2d6617` (main). Contract: Probably-Groceries-Final-Implementation-Sp
 | Search | Missing | Native searchable interface, contextual filtering and restoration of prior visible row. |
 | Menus | Native overflow, settings, list deletion only inside settings | Group overflow; direct list details, completed visibility, sections and destructive deletion; prominent native sharing action. |
 | Suggestions | Permanent likely/maybe sections plus inline autocomplete and preparation | Remove permanent suggestions; preserve preparation and contextual autocomplete with usual quantity. |
-| Clarification | Item-scoped question/answer/photo, conflict check, local-save and sync status | Preserve. Dedicated partner alert, unread receipt and item notification routing do not exist; do not claim implemented by generic silent CloudKit push. |
+| Clarification | Item-scoped question/answer/photo, conflict check, local-save and sync status | Dedicated local alerts are derived from accepted remote question/answer changes, with notification-to-item routing and device-local read receipts. Delivery depends on CloudKit waking the signed app and notification permission; physical-device validation remains required. |
 | Accessibility | Semantic fonts, RTL, 44pt controls, VoiceOver actions, Reduce Motion | Keep, check Dynamic Type and quantities; screenshots are required for visual acceptance. |
 | Release | PR host-domain tests + unsigned iOS/Watch builds; main checks trigger signed TestFlight upload and existing group distribution | Reuse. Local environment has no Swift/Xcode/simulator; CI and signed-device verification must be distinguished. |
 

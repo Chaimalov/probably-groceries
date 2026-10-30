@@ -41,6 +41,7 @@ struct ShoppingView: View {
     @State private var showingSectionManagement = false
     @AppStorage("collapsedShoppingSections") private var savedCollapsedSections = "{}"
     @AppStorage("shoppingHapticsEnabled") private var hapticsEnabled = true
+    @AppStorage("clarificationReadReplies") private var clarificationReceipts = "{}"
     @State private var showingNewList = false
     @State private var showingNewSection = false
     @State private var editingSection: String?
@@ -372,6 +373,11 @@ struct ShoppingView: View {
                     defer {
                         if store.widgetNavigation?.id == request.id { store.widgetNavigation = nil }
                     }
+                    if let listID = request.listID, listID != store.selectedListID {
+                        guard store.data.lists.contains(where: { $0.id == listID }) else { return }
+                        switchList(to: listID)
+                        await Task.yield()
+                    }
                     closeEditor()
                     searchReturnID = nil
                     searchText = ""
@@ -379,10 +385,17 @@ struct ShoppingView: View {
                     placeFilter = "הכול"
                     editMode = .inactive
                     reordering = false
+                    if request.openListOnly { return }
                     if let id = request.itemID,
                        let item = store.items.first(where: { $0.id == id }),
                        let product = store.product(for: item.productID) {
                         collapsedSections.remove(store.section(for: item))
+                        if request.openClarification {
+                            await Task.yield()
+                            scroll.scrollTo(item.id, anchor: .center)
+                            clarificationItem = item
+                            return
+                        }
                         updateEditor {
                             editedName = product.name
                             originalEditedName = product.name
@@ -1021,14 +1034,15 @@ if reordering {
                         .buttonStyle(.plain)
                         .disabled(completed)
                     }
-                    if let clarification = item.clarification, !clarification.resolved {
+                    if let clarification = item.clarification, !clarification.resolved,
+                       clarification.answer == nil || ClarificationReadState.hasUnreadReply(item, receipts: clarificationReceipts) {
                         Button {
                             closeEditor(); clarificationItem = item
                         } label: {
                             Label(clarification.answer == nil ? "צריך בירור" : "יש תשובה", systemImage: "bubble.left.and.bubble.right")
                                 .font(.subheadline).foregroundStyle(.teal)
                                 .frame(minHeight: 44)
-                        }.buttonStyle(.borderless)
+                        }.buttonStyle(.borderless).disabled(completed)
                     }
                     if item.unavailable == true {
                         Label("לא היה בחנות", systemImage: "basket")

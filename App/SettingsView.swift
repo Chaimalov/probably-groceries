@@ -1,13 +1,17 @@
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     @ObservedObject var store: ShoppingStore
     let onShare: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @AppStorage("showProductCompletions") private var showProductCompletions = true
     @AppStorage("shoppingHapticsEnabled") private var hapticsEnabled = true
+    @AppStorage("clarificationNotificationsEnabled") private var clarificationAlerts = true
+    @State private var alertsAllowed = true
     @State private var showingAppearance = false
     @State private var showingRename = false
     @State private var showingDecisions = false
@@ -41,6 +45,16 @@ struct SettingsView: View {
                     Toggle("הצעות בזמן ההקלדה", isOn: $showProductCompletions)
                     Toggle("משוב רטט בסימון", isOn: $hapticsEnabled)
                 }
+                Section("עדכונים מהשותף") {
+                    Toggle("התראות על בירור מוצרים", isOn: $clarificationAlerts)
+                    if clarificationAlerts && !alertsAllowed {
+                        Text("כדי לקבל התראה על שאלה או תשובה, אפשר לאפשר התראות בהגדרות האייפון.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("פתיחת הגדרות האייפון") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                        }
+                    }
+                }
                 Section {
                     Button("זיהוי מוצרים", systemImage: "sparkles") { showingDecisions = true }
                     Label(LocalizedStringKey(syncLabel), systemImage: "icloud")
@@ -67,6 +81,17 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("הגדרות")
+            .task { await readAlertPermission() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await readAlertPermission() } }
+            }
+            .onChange(of: clarificationAlerts) { _, enabled in
+                guard enabled else { return }
+                Task {
+                    await ClarificationNotifications.requestPermission(hasSharedLists: !store.sharedLists.isEmpty)
+                    await readAlertPermission()
+                }
+            }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("סיום") { dismiss() } } }
             .sheet(isPresented: $showingAppearance) { ListAppearanceEditor(store: store) }
             .sheet(isPresented: $showingDecisions) { ProductDecisionSettings(store: store) }
@@ -88,6 +113,10 @@ struct SettingsView: View {
                      : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
             }
         }
+    }
+
+    private func readAlertPermission() async {
+        alertsAllowed = await UNUserNotificationCenter.current().notificationSettings().alertSetting == .enabled
     }
 
     private var syncLabel: String {

@@ -9,6 +9,9 @@ final class ShoppingStore: ObservableObject {
     struct WidgetNavigation: Identifiable {
         let id = UUID()
         var itemID: UUID? = nil
+        var listID: UUID? = nil
+        var openListOnly = false
+        var openClarification = false
     }
     @Published var widgetNavigation: WidgetNavigation?
 
@@ -326,9 +329,12 @@ final class ShoppingStore: ObservableObject {
             }
             guard !restoredIDs.isEmpty else { return }
             target.persist()
-            let redoIDs = restoredIDs
+            let restoredRows = target.data.items.filter { restoredIDs.contains($0.id) }
             undoManager?.registerUndo(withTarget: target) { [weak undoManager] target in
-                target.remove(redoIDs, undoManager: undoManager)
+                guard restoredRows.allSatisfy({ row in
+                    target.data.items.first(where: { $0.id == row.id }) == row
+                }) else { return }
+                target.remove(Set(restoredRows.map(\.id)), undoManager: undoManager)
             }
             undoManager?.setActionName(NSLocalizedString("מחיקת מוצרים", comment: "Undo deletion"))
         }
@@ -972,6 +978,7 @@ final class ShoppingStore: ObservableObject {
 
     func mergeRemote(_ revisions: [SyncRevision]) {
         guard !loadFailed else { return }
+        let before = data
         var changed = false
         for revision in revisions {
             changed = syncJournal.merge(revision, into: &data) || changed
@@ -982,6 +989,11 @@ final class ShoppingStore: ObservableObject {
             selectedListID = data.lists.first?.id ?? ShoppingList.defaultID
         }
         saveLocal()
+        if storageError == nil && ClarificationNotifications.enabled {
+            let notices = ClarificationNotice.changes(from: before, to: data,
+                sharedListIDs: Set(sharedLists.map(\.listID)))
+            ClarificationNotifications.enqueue(notices, products: data.products, items: data.items)
+        }
         ProductDecisionService.shared.schedule(store: self)
     }
 }
