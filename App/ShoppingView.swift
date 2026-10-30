@@ -54,6 +54,8 @@ struct ShoppingView: View {
     @State private var selectedItemIDs: Set<UUID> = []
     @State private var itemFrames = ShoppingItemFrameRegistry()
     @State private var editMode: EditMode = .inactive
+    @State private var addFocusGeneration = 0
+    @State private var pendingAddFocus = false
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
@@ -357,14 +359,6 @@ struct ShoppingView: View {
                         }
                     }
                 }
-                .task(id: addingAfterID) {
-                    guard isAdding, addingAfterID != nil else { return }
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
-                    // The native List keeps the focused row above the keyboard.
-                    // Re-centering after every Return fights that adjustment.
-                    addFocused = true
-                }
                 .task(id: store.widgetNavigation?.id) {
                     guard let request = store.widgetNavigation else { return }
                     // Resolve after list-switch handlers have finished, including cold launches.
@@ -407,7 +401,8 @@ struct ShoppingView: View {
                         scroll.scrollTo(item.id, anchor: .center)
                     } else if request.itemID == nil {
                         beginAdding()
-                        addFocused = true
+                        await Task.yield()
+                        scroll.scrollTo("new-item", anchor: .bottom)
                     }
                 }
 
@@ -604,7 +599,6 @@ if reordering {
             await Task.yield()
             updateEditor {
                 scroll.scrollTo("new-item", anchor: .bottom)
-                addFocused = true
             }
         }
     }
@@ -776,6 +770,19 @@ if reordering {
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
         .id("new-item")
+        .task(id: addFocusGeneration) {
+            guard isAdding, pendingAddFocus else { return }
+            let generation = addFocusGeneration
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            // Mount the relocated row and let the previous Return event finish
+            // before moving UIKit's first responder to the new text field.
+            DispatchQueue.main.async {
+                guard isAdding, pendingAddFocus, generation == addFocusGeneration else { return }
+                pendingAddFocus = false
+                addFocused = true
+            }
+        }
         .selectionDisabled(true)
          .listRowBackground(Color.clear)
         .background {
@@ -1191,10 +1198,19 @@ if reordering {
         }
     }
 
+    private func requestAddFocus() {
+        addFocused = false
+        pendingAddFocus = true
+        addFocusGeneration += 1
+    }
+
     private func beginAdding() {
         closeEditor()
         presentation.reset()
-        updateEditor { isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false }
+        updateEditor {
+            isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false
+            requestAddFocus()
+        }
     }
 
     private func addInline(continueAdding: Bool = true) {
@@ -1226,7 +1242,8 @@ if reordering {
             newPhotoData = nil
             newPhoto = nil
             quantityExpanded = false
-            addFocused = continueAdding
+            if continueAdding { requestAddFocus() }
+            else { addFocused = false; pendingAddFocus = false }
         }
     }
 
@@ -1248,7 +1265,7 @@ if reordering {
             addingAfterID = item.id
             collapsedSections.remove(store.section(for: item))
             isAdding = true
-            addFocused = true
+            requestAddFocus()
         }
     }
 
@@ -1270,6 +1287,7 @@ if reordering {
             newPhotoData = nil
             newPhoto = nil
             addFocused = false
+            pendingAddFocus = false
             editingNameID = nil
             nameFocused = nil
             quantityExpanded = false
