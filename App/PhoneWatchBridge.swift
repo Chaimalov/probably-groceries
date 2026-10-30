@@ -8,6 +8,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
 
     func start() {
         guard WCSession.isSupported() else { return }
+        guard WCSession.default.delegate == nil else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
     }
@@ -17,7 +18,13 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated,
               WCSession.default.isWatchAppInstalled,
               let data = try? JSONEncoder().encode(snapshot) else { return }
-        try? WCSession.default.updateApplicationContext([WatchShoppingWire.snapshot: data])
+        let payload: [String: Any] = [WatchShoppingWire.snapshot: data]
+        try? WCSession.default.updateApplicationContext(payload)
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(payload, replyHandler: nil, errorHandler: { _ in
+                // The application context remains queued if live delivery fails.
+            })
+        }
     }
 
     private func receive(_ message: [String: Any]) -> [String: Any] {
@@ -45,13 +52,30 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         }
     }
 
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in
+            if session.isReachable, let latest = self.latest { self.publish(latest) }
+        }
+    }
+
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any],
                             replyHandler: @escaping ([String: Any]) -> Void) {
-        Task { @MainActor in replyHandler(self.receive(message)) }
+        Task { @MainActor in
+            // Reply promptly with durable local state; push fresh cloud state
+            // as it arrives rather than timing out WatchConnectivity's reply.
+            replyHandler(self.receive(message))
+            if message[WatchShoppingWire.refresh] as? Bool == true {
+                await ShoppingStore.shared.cloudSync.synchronize()
+                self.publish(ShoppingStore.shared.watchSnapshot())
+            }
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        Task { @MainActor in _ = self.receive(userInfo) }
+        Task { @MainActor in
+            _ = self.receive(userInfo)
+            await ShoppingStore.shared.cloudSync.synchronize()
+        }
     }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}

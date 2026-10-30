@@ -1,5 +1,7 @@
 import CloudKit
 import Foundation
+import OSLog
+import UIKit
 
 @MainActor
 final class PersonalCloudSync: ObservableObject {
@@ -26,19 +28,71 @@ final class PersonalCloudSync: ObservableObject {
     private weak var store: ShoppingStore?
     private let personalZone = CKRecordZone(zoneName: "Groceries")
     private var started = false
-    private var syncing = false
+    private var syncTask: Task<Void, Never>?
+    private var retryDelay: TimeInterval?
+    private var subscriptionsReady = false
+    private let changes = CloudZoneCache()
+    private let logger = Logger(subsystem: "com.chaimalov.probablygroceries", category: "CloudSync")
     private var needsAnotherPass = false
     private var scheduled: Task<Void, Never>?
 
     init(store: ShoppingStore) { self.store = store }
-    func start() { started = true; schedule() }
-    func schedule() {
+    func start() { started = true; schedule(after: 0) }
+    func schedule(after delay: TimeInterval = 0.2) {
         guard started else { return }
+        if syncTask != nil { needsAnotherPass = true; return }
         scheduled?.cancel()
         scheduled = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(700))
-            guard !Task.isCancelled else { return }
-            await self?.synchronize()
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self else { return }
+            // Do not let a later edit cancel a CloudKit operation already running.
+            self.scheduled = nil
+            await self.synchronize()
+        }
+    }
+
+    // All callers (including a watch request or silent push) await the same
+    // in-flight work. Edits arriving during it get a further pass before return.
+    func synchronize() async {
+        started = true
+        if let syncTask {
+            needsAnotherPass = true
+            await syncTask.value
+            return
+        }
+        scheduled?.cancel()
+        scheduled = nil
+        let task = Task {
+            let lease = CloudSyncBackgroundLease()
+            defer { lease.end() }
+            repeat {
+                self.needsAnotherPass = false
+                await self.performSync()
+            } while self.needsAnotherPass && self.status == .current
+        }
+        syncTask = task
+        await task.value
+        syncTask = nil
+        if let delay = retryDelay {
+            retryDelay = nil
+            schedule(after: delay)
+        }
+    }
+
+    private func installSubscriptions() async {
+        guard !subscriptionsReady else { return }
+        do {
+            for database in [container.privateCloudDatabase, container.sharedCloudDatabase] {
+                let subscription = CKDatabaseSubscription(subscriptionID: "shopping-database-v1")
+                let info = CKSubscription.NotificationInfo()
+                info.shouldSendContentAvailable = true
+                subscription.notificationInfo = info
+                _ = try await database.save(subscription)
+            }
+            subscriptionsReady = true
+        } catch {
+            // A push registration failure must not prevent normal shopping sync.
+            logger.error("CloudKit subscription registration failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -55,17 +109,12 @@ final class PersonalCloudSync: ObservableObject {
         }
     }
 
-    func synchronize() async {
-        if syncing { needsAnotherPass = true; return }
+    private func performSync() async {
         guard let store else { return }
-        syncing = true
         status = .syncing
-        defer {
-            syncing = false
-            if needsAnotherPass { needsAnotherPass = false; schedule() }
-        }
         do {
             try await verifyAccount()
+            await installSubscriptions()
             let privateDB = container.privateCloudDatabase
             if !store.syncJournal.zoneReady {
                 _ = try await privateDB.save(personalZone)
@@ -117,33 +166,60 @@ final class PersonalCloudSync: ObservableObject {
             status = missingAccess ? .failed : .current
         } catch SharingError.accountChanged { status = .accountChanged
         } catch SharingError.unavailable { status = .unavailable
-        } catch { status = .failed }
+        } catch {
+            status = .failed
+            retryDelay = max(5, min((error as? CKError)?.retryAfterSeconds ?? 10, 300))
+            logger.error("CloudKit sync failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func upload(database: CKDatabase, zoneID: CKRecordZone.ID,
                         remote: [String: (SyncRevision, CKRecord)], keys: Set<String>) async throws {
         guard let store else { return }
-        for local in store.syncJournal.revisions.values.filter({ keys.contains($0.key) })
-            .sorted(by: { $0.key < $1.key }) {
-            if let server = remote[local.key], !Self.preferred(local, over: server.0) { continue }
-            var base = remote[local.key]?.1 ?? CKRecord(recordType: "ShoppingEntity",
-                recordID: CKRecord.ID(recordName: local.key, zoneID: zoneID))
-            for attempt in 0..<2 {
-                base["modifiedAt"] = local.modifiedAt as NSDate
-                base["deleted"] = NSNumber(value: local.payload == nil)
-                base["payload"] = local.payload as NSData?
-                do {
-                    _ = try await database.save(base)
-                    break
-                } catch let error as CKError where error.code == .serverRecordChanged && attempt == 0 {
-                    guard let server = error.serverRecord, let revision = Self.revision(server) else { throw error }
-                    if !Self.preferred(local, over: revision) {
-                        store.mergeRemote([revision])
-                        break
-                    }
-                    base = server
+        // Snapshot revisions before awaiting so an edit made during upload is
+        // sent by the next pass, rather than being marked as already uploaded.
+        let pending = store.syncJournal.revisions.values.filter { local in
+            keys.contains(local.key) && (remote[local.key].map { Self.preferred(local, over: $0.0) } ?? true)
+        }.sorted { $0.key < $1.key }
+        for offset in stride(from: 0, to: pending.count, by: 50) {
+            let batch = Array(pending[offset..<min(offset + 50, pending.count)])
+            let records = batch.map { local in
+                let record = remote[local.key]?.1 ?? CKRecord(recordType: "ShoppingEntity",
+                    recordID: CKRecord.ID(recordName: local.key, zoneID: zoneID))
+                record["modifiedAt"] = local.modifiedAt as NSDate
+                record["deleted"] = NSNumber(value: local.payload == nil)
+                record["payload"] = local.payload as NSData?
+                return record
+            }
+            let results = try await saveBatch(records, database: database)
+            for (local, record) in zip(batch, records) {
+                guard let result = results[record.recordID] else { throw SharingError.syncFailed }
+                switch result {
+                case .success: break
+                case .failure(let error):
+                    guard let conflict = error as? CKError, conflict.code == .serverRecordChanged,
+                          let server = conflict.serverRecord, let revision = Self.revision(server) else { throw error }
+                    if Self.preferred(local, over: revision) {
+                        server["modifiedAt"] = local.modifiedAt as NSDate
+                        server["deleted"] = NSNumber(value: local.payload == nil)
+                        server["payload"] = local.payload as NSData?
+                        _ = try await database.save(server)
+                    } else { store.mergeRemote([revision]) }
                 }
             }
+        }
+    }
+
+    private func saveBatch(_ records: [CKRecord], database: CKDatabase) async throws
+        -> [CKRecord.ID: Result<CKRecord, Error>] {
+        do {
+            return try await database.modifyRecords(saving: records, deleting: [],
+                savePolicy: .ifServerRecordUnchanged, atomically: false).saveResults
+        } catch let error as CKError where error.code == .limitExceeded && records.count > 1 {
+            let middle = records.count / 2
+            let first = try await saveBatch(Array(records[..<middle]), database: database)
+            let second = try await saveBatch(Array(records[middle...]), database: database)
+            return first.merging(second) { _, new in new }
         }
     }
 
@@ -158,27 +234,9 @@ final class PersonalCloudSync: ObservableObject {
                             payload: deleted ? nil : record["payload"] as? Data)
     }
 
-    // Zone changes support the shared DB and avoid query-index requirements.
-    // This small v1 refetches from nil; tombstones remain regular records.
     private func fetchRecords(database: CKDatabase, zoneID: CKRecordZone.ID) async throws
         -> [String: (SyncRevision, CKRecord)] {
-        let records: [CKRecord] = try await withCheckedThrowingContinuation { continuation in
-            let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID],
-                                                               configurationsByRecordZoneID: nil)
-            operation.fetchAllChanges = true
-            let collector = CloudRecordCollector()
-            operation.recordWasChangedBlock = { _, result in collector.append(result) }
-            operation.recordZoneFetchResultBlock = { _, result in
-                if case .failure(let error) = result { collector.fail(error) }
-            }
-            operation.fetchRecordZoneChangesResultBlock = { result in
-                switch result {
-                case .failure(let error): continuation.resume(throwing: error)
-                case .success: continuation.resume(with: collector.result())
-                }
-            }
-            database.add(operation)
-        }
+        let records = try await changes.fetch(database: database, zoneID: zoneID)
         var result: [String: (SyncRevision, CKRecord)] = [:]
         for record in records {
             if let revision = Self.revision(record) { result[revision.key] = (revision, record) }
@@ -187,9 +245,7 @@ final class PersonalCloudSync: ObservableObject {
     }
 
     private func finishSync() async throws {
-        while syncing { try await Task.sleep(for: .milliseconds(100)) }
         await synchronize()
-        while syncing { try await Task.sleep(for: .milliseconds(100)) }
         guard status == .current else {
             if status == .accountChanged { throw SharingError.accountChanged }
             if status == .unavailable { throw SharingError.unavailable }
@@ -231,22 +287,19 @@ final class PersonalCloudSync: ObservableObject {
     }
 }
 
-// CloudKit callbacks run outside the main actor. Partial results are failures.
-private final class CloudRecordCollector: @unchecked Sendable {
-    private let lock = NSLock()
-    private var records: [CKRecord] = []
-    private var error: Error?
-    func append(_ result: Result<CKRecord, Error>) {
-        lock.lock(); defer { lock.unlock() }
-        switch result {
-        case .success(let record): records.append(record)
-        case .failure(let failure): error = failure
+// Keep phone work alive after replying to the watch or leaving the UI. The
+// local journal and zone checkpoint remain safe if iOS expires this budget.
+@MainActor
+private final class CloudSyncBackgroundLease {
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+    init() {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "Shopping sync") { [weak self] in
+            self?.end()
         }
     }
-    func fail(_ failure: Error) { lock.lock(); defer { lock.unlock() }; error = failure }
-    func result() -> Result<[CKRecord], Error> {
-        lock.lock(); defer { lock.unlock() }
-        if let error { return .failure(error) }
-        return .success(records)
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
     }
 }

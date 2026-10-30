@@ -34,6 +34,7 @@ final class ShoppingStore: ObservableObject {
             updated.keys.formUnion(bindings[index].keys)
             bindings[index] = updated
         } else { bindings.append(binding) }
+        guard bindings != sharedLists else { return }
         syncJournal.sharedLists = bindings
         saveSyncMetadata()
     }
