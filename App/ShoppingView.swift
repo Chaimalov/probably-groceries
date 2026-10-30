@@ -29,8 +29,6 @@ struct ShoppingView: View {
     @State private var showingPreparation = false
     @State private var showingSettings = false
     @State private var shareAfterSettings = false
-    @State private var confirmingDeleteList = false
-    @State private var deletingListID: UUID?
     @State private var detailItem: ShoppingItem?
     @State private var placeFilter = "הכול"
     @State private var presentation = ShoppingPresentation()
@@ -62,6 +60,7 @@ struct ShoppingView: View {
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @Environment(\.undoManager) private var undoManager
     @AppStorage("showProductCompletions") private var showProductCompletions = true
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -408,6 +407,7 @@ struct ShoppingView: View {
 
             }
             .navigationTitle(store.currentList.name)
+            .fontDesign(.rounded)
             .navigationBarTitleDisplayMode(.large)
             .background(ShoppingNavigationTitleTint(color: UIColor(listTint)))
             .toolbar {
@@ -501,16 +501,6 @@ struct ShoppingView: View {
                 showingSearch = false
                 placeFilter = "הכול"
                 selectedItemIDs.removeAll()
-            }
-            .confirmationDialog("למחוק את הרשימה ״\(store.currentList.name)״?", isPresented: $confirmingDeleteList, titleVisibility: .visible) {
-                Button("מחיקת הרשימה", role: .destructive) {
-                    guard deletingListID == store.selectedListID else { return }
-                    store.deleteCurrentList()
-                }
-            } message: {
-                Text(LocalizedStringKey(store.currentShare == nil
-                     ? "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו מכל המכשירים שלך."
-                     : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
             }
             .alert("רשימה חדשה לחנות", isPresented: $showingNewList) {
                 TextField("שם החנות", text: $listName)
@@ -827,23 +817,19 @@ if reordering {
     private var optionsMenu: some View {
         Menu {
             Section {
-                Toggle("הצגת מקטעים", isOn: $groupBySection)
-                Button("הצגת פרטי הרשימה", systemImage: "info.circle") { closeEditor(); showingListDetails = true }
+                Button("קנייה חדשה", systemImage: "cart.badge.plus") { closeEditor(); presentation.reset(); showingPreparation = true }
                 Button("בחירת פריטים", systemImage: "checkmark.circle") {
                     closeEditor(); presentation.reset(); reordering = false; editMode = .active
                 }
-                Menu("ניהול המקטעים", systemImage: "line.3.horizontal.decrease") {
+                Menu("ארגון הרשימה", systemImage: "line.3.horizontal.decrease") {
+                    Button("הצגת פרטי הרשימה", systemImage: "info.circle") { closeEditor(); showingListDetails = true }
                     Button("מקטע חדש", systemImage: "plus.rectangle.on.rectangle") { sectionName = ""; showingNewSection = true }
                     Button("עריכת מקטעים", systemImage: "pencil") { closeEditor(); showingSectionManagement = true }
+                    Button("סידור מוצרים", systemImage: "arrow.up.arrow.down") {
+                        closeEditor(); presentation.reset(); addingToSection = nil
+                        selectedItemIDs.removeAll(); reordering = true; editMode = .active
+                    }
                 }
-                Button("סידור מוצרים", systemImage: "arrow.up.arrow.down") {
-                    closeEditor(); presentation.reset(); addingToSection = nil
-                    selectedItemIDs.removeAll(); reordering = true; editMode = .active
-                }
-                Toggle("הצגת מוצרים שנקנו", isOn: $showRecentPurchases)
-            }
-            Section {
-                Button("קנייה חדשה", systemImage: "cart.badge.plus") { closeEditor(); presentation.reset(); showingPreparation = true }
                 Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
             }
             Section {
@@ -858,13 +844,6 @@ if reordering {
                         .keyboardShortcut("z", modifiers: [.command, .shift])
                 }
                 Button("הגדרות", systemImage: "gearshape") { closeEditor(); showingSettings = true }
-            }
-            if store.canDeleteCurrentList {
-                Section {
-                    Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) {
-                        closeEditor(); deletingListID = store.selectedListID; confirmingDeleteList = true
-                    }
-                }
             }
         } label: {
             Image(systemName: "ellipsis").font(.title3)
@@ -925,7 +904,9 @@ if reordering {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
+                Image(systemName: "chevron.down")
+                    .rotationEffect(.degrees(collapsedSections.contains(section)
+                        ? (layoutDirection == .rightToLeft ? 90 : -90) : 0))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
             }

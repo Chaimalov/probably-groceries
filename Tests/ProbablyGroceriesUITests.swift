@@ -26,7 +26,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let field = app.textFields["inlineAddField"]
         capture(app, "01-list-IMG_1162")
         app.buttons["אפשרויות נוספות"].tap()
-        XCTAssertTrue(app.buttons["הצגת פרטי הרשימה"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ארגון הרשימה"].waitForExistence(timeout: 5))
         capture(app, "02-menu-IMG_1163")
         // The presenting toolbar button becomes a PopUpButton while its native
         // menu is open. Dismiss through the unobstructed outside surface.
@@ -208,7 +208,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertGreaterThan(alpha.frame.minY, gamma.frame.minY)
         for name in ["Drag One", "Drag Two"] {
             app.buttons["אפשרויות נוספות"].tap()
-            app.buttons["ניהול המקטעים"].tap()
+            app.buttons["ארגון הרשימה"].tap()
         app.buttons["מקטע חדש"].tap()
             let sectionAlert = app.alerts["מקטע חדש"]
             XCTAssertTrue(sectionAlert.waitForExistence(timeout: 5))
@@ -416,7 +416,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let section = "Dairy \(UUID().uuidString.prefix(6))"
         let shop = "Corner \(UUID().uuidString.prefix(6))"
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["ניהול המקטעים"].tap()
+        app.buttons["ארגון הרשימה"].tap()
         app.buttons["מקטע חדש"].tap()
         let sectionAlert = app.alerts["מקטע חדש"]
         XCTAssertTrue(sectionAlert.waitForExistence(timeout: 10))

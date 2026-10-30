@@ -41,12 +41,17 @@ struct SettingsView: View {
                 Section("בזמן הקנייה") {
                     NavigationLink("תג האפליקציה") { BadgeSettingsView(store: store) }
                     Toggle("הצגת מקטעים", isOn: $groupBySection)
+                        .tint(.green)
                     Toggle("הצגת נקנו לאחרונה", isOn: $showRecentPurchases)
+                        .tint(.green)
                     Toggle("הצעות בזמן ההקלדה", isOn: $showProductCompletions)
+                        .tint(.green)
                     Toggle("משוב רטט בסימון", isOn: $hapticsEnabled)
+                        .tint(.green)
                 }
                 Section("עדכונים מהשותף") {
                     Toggle("התראות על בירור מוצרים", isOn: $clarificationAlerts)
+                        .tint(.green)
                     if clarificationAlerts && !alertsAllowed {
                         Text("כדי לקבל התראה על שאלה או תשובה, אפשר לאפשר התראות בהגדרות האייפון.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -80,6 +85,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .tint(.blue)
             .navigationTitle("הגדרות")
             .task { await readAlertPermission() }
             .onChange(of: scenePhase) { _, phase in
