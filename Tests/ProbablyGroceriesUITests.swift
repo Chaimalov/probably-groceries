@@ -31,7 +31,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         // The presenting toolbar button becomes a PopUpButton while its native
         // menu is open. Dismiss through the unobstructed outside surface.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)).tap()
-        app.buttons["חיפוש"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "חיפוש", "search")).firstMatch.tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -44,7 +44,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let filtered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["קפואים"])
         XCTAssertEqual(XCTWaiter.wait(for: [filtered], timeout: 5), .completed)
         capture(app, "03-search-IMG_1164")
-        let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "ביטול", "cancel")).firstMatch
+        let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@ OR label IN %@", "ביטול", "cancel", ["בטל", "סגירה", "סיום"])).firstMatch
         if cancel.exists { cancel.tap() }
         else {
             let origin = app.coordinate(withNormalizedOffset: .zero)

@@ -321,7 +321,6 @@ struct ShoppingView: View {
                     }
                 }
                 .toolbar { bottomActions() }
-                .toolbar(showingSearch || editMode.isEditing ? .visible : .hidden, for: .bottomBar)
                 .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
                     if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
                         HStack {
@@ -342,6 +341,7 @@ struct ShoppingView: View {
                     }
                 }
                 .searchable(text: $searchText, isPresented: $showingSearch, placement: .automatic, prompt: "חיפוש")
+                .searchToolbarBehavior(.minimize)
                 .onChange(of: showingSearch) { _, searching in
                     if searching {
                         searchReturnID = itemFrames.frames.filter { $0.value.maxY > 160 }
@@ -424,13 +424,8 @@ struct ShoppingView: View {
                         .disabled(true)
                         #endif
                     optionsMenu
-                    if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
-                        Button("חיפוש", systemImage: "magnifyingglass") { showingSearch = true }
-                            .labelStyle(.iconOnly)
-                    }
                 }
-                DefaultToolbarItem(kind: .search, placement: UIDevice.current.userInterfaceIdiom == .phone ? .bottomBar : .topBarTrailing)
-                    .hidden(!showingSearch)
+                DefaultToolbarItem(kind: .search, placement: .topBarTrailing)
                 if !editMode.isEditing && (isAdding || editingNameID != nil) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
