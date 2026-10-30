@@ -91,13 +91,13 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["סיום עריכה"].tap()
         XCTAssertTrue(app.buttons["ירקות טריים"].waitForExistence(timeout: 5))
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["ביטול"].tap()
+        app.buttons["undoShoppingAction"].firstMatch.tap()
         XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5), "Rename joins the system undo stack")
         app.buttons["ירקות"].swipeRight()
         if app.buttons["הסר"].exists { app.buttons["הסר"].tap() }
         XCTAssertFalse(checks["ירקות"]!.exists)
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["ביטול"].tap()
+        app.buttons["undoShoppingAction"].firstMatch.tap()
         XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5), "Undo restores the deleted item without a duplicate")
     }
 
@@ -292,7 +292,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.switches["הצגת נקנו לאחרונה"].tap()
         app.buttons["סיום"].tap()
         XCTAssertTrue(app.buttons["ביטול"].waitForExistence(timeout: 10), "Hiding purchases must not delete their events")
-        app.buttons["ביטול"].tap()
+        app.buttons["undoShoppingAction"].firstMatch.tap()
         XCTAssertTrue(buy.waitForExistence(timeout: 10))
         buy.tap()
         app.buttons["אפשרויות נוספות"].tap()
@@ -516,7 +516,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertTrue(app.switches["הצעות בזמן ההקלדה"].waitForExistence(timeout: 5))
         app.swipeUp()
         app.buttons["מחיקת הרשימה"].tap()
-        app.buttons["ביטול"].tap()
+        app.buttons["undoShoppingAction"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["הגדרות"].exists)
         app.buttons["מחיקת הרשימה"].tap()
         app.buttons.matching(identifier: "מחיקת הרשימה").allElementsBoundByIndex.last!.tap()
