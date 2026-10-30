@@ -91,14 +91,26 @@ final class ProbablyGroceriesUITests: XCTestCase {
         app.buttons["סיום עריכה"].tap()
         XCTAssertTrue(app.buttons["ירקות טריים"].waitForExistence(timeout: 5))
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["undoShoppingAction"].firstMatch.tap()
+        tapVisibleMenuUndo(app)
         XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5), "Rename joins the system undo stack")
         app.buttons["ירקות"].swipeRight()
         if app.buttons["הסר"].exists { app.buttons["הסר"].tap() }
         XCTAssertFalse(checks["ירקות"]!.exists)
         app.buttons["אפשרויות נוספות"].tap()
-        app.buttons["undoShoppingAction"].firstMatch.tap()
+        tapVisibleMenuUndo(app)
         XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5), "Undo restores the deleted item without a duplicate")
+    }
+
+    private func tapVisibleMenuUndo(_ app: XCUIApplication) {
+        // Native UIKit menu actions do not retain SwiftUI accessibility IDs.
+        // Offscreen swipe actions share the label but cannot receive a tap.
+        let query = app.buttons.matching(NSPredicate(format: "label == %@", "ביטול"))
+        XCTAssertTrue(query.firstMatch.waitForExistence(timeout: 5))
+        guard let action = query.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("The visible shopping Undo menu action is missing")
+            return
+        }
+        action.tap()
     }
 
     private func capture(_ app: XCUIApplication, _ name: String) {

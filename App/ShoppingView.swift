@@ -849,7 +849,6 @@ if reordering {
             Section {
                 if undoManager?.canUndo == true {
                     Button("ביטול", systemImage: "arrow.uturn.backward") { undoManager?.undo() }
-                        .accessibilityIdentifier("undoShoppingAction")
                         .disabled(isAdding || editingNameID != nil)
                         .keyboardShortcut("z", modifiers: .command)
                 }
