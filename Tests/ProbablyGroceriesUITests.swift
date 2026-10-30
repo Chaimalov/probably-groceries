@@ -2,6 +2,124 @@ import XCTest
 import UIKit
 
 final class ProbablyGroceriesUITests: XCTestCase {
+    func testRemindersFidelityAndStableCheckoff() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"]
+        app.launchEnvironment["UITEST_APPEARANCE"] = "dark"
+        let names = ["ירקות", "קפואים", "חלבי", "שימורים", "אפייה וחדפ"]
+        let listID = UUID().uuidString
+        let itemIDs = Dictionary(uniqueKeysWithValues: names.map { ($0, UUID().uuidString) })
+        let fixture: [String: Any] = [
+            "lists": [["id": listID, "name": "מכולת (קניות)", "sections": ["היום", "מאפייה"]]],
+            "products": names.map { ["id": itemIDs[$0]!, "name": $0, "usualQuantity": 1] as [String: Any] },
+            "items": names.enumerated().map { index, name in
+                ["id": itemIDs[name]!, "productID": itemIDs[name]!, "quantity": 1,
+                 "addedAt": 0, "listID": listID, "sectionName": "היום", "manualOrder": index] as [String: Any]
+            }
+        ]
+        app.launchEnvironment["UITEST_FIXTURE_JSON"] = String(data: try! JSONSerialization.data(withJSONObject: fixture), encoding: .utf8)!
+        app.launch()
+        app.launchEnvironment.removeValue(forKey: "UITEST_FIXTURE_JSON")
+        let checks = Dictionary(uniqueKeysWithValues: names.map { ($0, app.buttons["purchase-" + itemIDs[$0]!]) })
+        XCTAssertTrue(checks[names[0]]!.waitForExistence(timeout: 10))
+        let field = app.textFields["inlineAddField"]
+        capture(app, "01-list-IMG_1162")
+        app.buttons["אפשרויות נוספות"].tap()
+        XCTAssertTrue(app.buttons["הצגת פרטי הרשימה"].waitForExistence(timeout: 5))
+        capture(app, "02-menu-IMG_1163")
+        // The presenting toolbar button becomes a PopUpButton while its native
+        // menu is open. Dismiss through the unobstructed outside surface.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)).tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@", "חיפוש", "search")).firstMatch.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        let introduction = app.buttons.matching(NSPredicate(format: "label IN %@", ["Continue", "המשך", "להמשיך"])).firstMatch
+        if introduction.waitForExistence(timeout: 2) { introduction.tap() }
+        search.tap()
+        search.typeText("ירקות")
+        XCTAssertEqual(search.value as? String, "ירקות")
+        XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5))
+        let filtered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["קפואים"])
+        XCTAssertEqual(XCTWaiter.wait(for: [filtered], timeout: 5), .completed)
+        capture(app, "03-search-IMG_1164")
+        let cancel = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS[c] %@ OR label IN %@", "ביטול", "cancel", ["בטל", "סגירה", "סיום"])).firstMatch
+        if cancel.exists { cancel.tap() }
+        else {
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: max(22, search.frame.minX / 2) - app.frame.minX,
+                                       dy: search.frame.midY - app.frame.minY)).tap()
+        }
+        XCTAssertTrue(app.buttons["קפואים"].waitForExistence(timeout: 5))
+        app.buttons["ירקות"].tap()
+        XCTAssertTrue(app.textFields["שם המוצר"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["אפשרויות מוצר"].exists)
+        capture(app, "04-focused-editor-IMG_1165")
+        app.textFields["שם המוצר"].typeText("\n")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        capture(app, "05-keyboard-IMG_1166")
+        field.typeText("לחם\n")
+        field.typeText("ביצים\n")
+        field.typeText("\n")
+        XCTAssertTrue(app.buttons["לחם"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ביצים"].waitForExistence(timeout: 5))
+        app.buttons["סיום עריכה"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "נקנה ")).count, 7, "Empty Return must not persist a phantom item")
+        // UICloudSharingController requires a signed iCloud device. Do not fake
+        // the Reminders collaboration popover in the unsigned simulator.
+        XCTAssertFalse(app.buttons["שיתוף הרשימה"].isEnabled)
+        for (index, name) in names.enumerated() {
+            let remaining = names.dropFirst(index + 1).map { checks[$0]! }
+            let positions = remaining.map { $0.frame.minY }
+            checks[name]!.tap()
+            XCTAssertEqual(checks[name]!.value as? String, "נקנה")
+            for (row, y) in zip(remaining, positions) {
+                XCTAssertEqual(row.frame.minY, y, accuracy: 1, "A09: checking one row must not move the next target")
+            }
+        }
+        capture(app, "07-stable-five-checkoffs")
+        checks["ירקות"]!.tap()
+        XCTAssertEqual(checks["ירקות"]!.value as? String, "לקנייה")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5))
+        XCTAssertFalse(checks["קפואים"]!.exists, "A stable re-entry releases completed placeholders")
+        app.buttons["ירקות"].tap()
+        let rename = app.textFields["שם המוצר"]
+        rename.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "ירקות".count) + "ירקות טריים")
+        app.buttons["סיום עריכה"].tap()
+        XCTAssertTrue(app.buttons["ירקות טריים"].waitForExistence(timeout: 5))
+        app.buttons["אפשרויות נוספות"].tap()
+        tapVisibleMenuUndo(app)
+        XCTAssertTrue(app.buttons["ירקות"].waitForExistence(timeout: 5), "Rename joins the system undo stack")
+        app.buttons["ירקות"].swipeRight()
+        if app.buttons["הסר"].exists { app.buttons["הסר"].tap() }
+        XCTAssertFalse(checks["ירקות"]!.exists)
+        app.buttons["אפשרויות נוספות"].tap()
+        tapVisibleMenuUndo(app)
+        XCTAssertTrue(checks["ירקות"]!.waitForExistence(timeout: 5), "Undo restores the deleted item without a duplicate")
+    }
+
+    private func tapVisibleMenuUndo(_ app: XCUIApplication) {
+        // Native UIKit menu actions do not retain SwiftUI accessibility IDs.
+        // Offscreen swipe actions share the label but cannot receive a tap.
+        let query = app.buttons.matching(NSPredicate(format: "label == %@", "ביטול"))
+        XCTAssertTrue(query.firstMatch.waitForExistence(timeout: 5))
+        guard let action = query.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("The visible shopping Undo menu action is missing")
+            return
+        }
+        action.tap()
+    }
+
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testPreparationCloseResumeExcludeAndConfirmOnce() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -90,7 +208,8 @@ final class ProbablyGroceriesUITests: XCTestCase {
         XCTAssertGreaterThan(alpha.frame.minY, gamma.frame.minY)
         for name in ["Drag One", "Drag Two"] {
             app.buttons["אפשרויות נוספות"].tap()
-            app.buttons["מקטע חדש"].tap()
+            app.buttons["ניהול המקטעים"].tap()
+        app.buttons["מקטע חדש"].tap()
             let sectionAlert = app.alerts["מקטע חדש"]
             XCTAssertTrue(sectionAlert.waitForExistence(timeout: 5))
             sectionAlert.textFields["שם המקטע"].typeText(name)
@@ -297,6 +416,7 @@ final class ProbablyGroceriesUITests: XCTestCase {
         let section = "Dairy \(UUID().uuidString.prefix(6))"
         let shop = "Corner \(UUID().uuidString.prefix(6))"
         app.buttons["אפשרויות נוספות"].tap()
+        app.buttons["ניהול המקטעים"].tap()
         app.buttons["מקטע חדש"].tap()
         let sectionAlert = app.alerts["מקטע חדש"]
         XCTAssertTrue(sectionAlert.waitForExistence(timeout: 10))

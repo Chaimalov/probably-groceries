@@ -11,7 +11,7 @@ name: iOS build
         description: 'Run simulator UI tests (normally omitted)'
         type: choice
         default: none
-        options: [none, shopping, preparation, drag, layout, all]
+        options: [none, shopping, preparation, drag, layout, fidelity, all]
 concurrency:
   group: ios-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -53,7 +53,7 @@ jobs:
           -destination 'generic/platform=watchOS Simulator' \
           CODE_SIGNING_ALLOWED=NO build
   ui-tests:
-    if: (github.event_name == 'workflow_dispatch' && inputs.ui_tests != 'none') || (github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[ui:layout]'))
+    if: (github.event_name == 'workflow_dispatch' && inputs.ui_tests != 'none') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.title, '[ui:layout]') || contains(github.event.pull_request.title, '[ui:fidelity]')))
     needs: checks
     runs-on: xcode-27
     timeout-minutes: 15
@@ -62,7 +62,7 @@ jobs:
       matrix:
         device: ${{ fromJSON((inputs.ui_tests == 'layout' || contains(github.event.pull_request.title, '[ui:layout]')) && '["iPhone","iPad"]' || '["iPhone"]') }}
     env:
-      UI_SUITE: ${{ inputs.ui_tests || 'layout' }}
+      UI_SUITE: ${{ inputs.ui_tests || (contains(github.event.pull_request.title, '[ui:fidelity]') && 'fidelity' || 'layout') }}
       UI_DEVICE: ${{ matrix.device }}
     steps:
     - uses: actions/checkout@v4
@@ -76,10 +76,17 @@ jobs:
       timeout-minutes: 10
       run: |
         set -euo pipefail
+        if [ "$UI_SUITE" = fidelity ]; then
+          # 393x852pt, matching the user's Reminders reference viewport.
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; print(next(r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["name"].startswith("iOS 27") and r["isAvailable"]))')
+          DEVICE_ID=$(xcrun simctl create 'Reminders Reference' com.apple.CoreSimulator.SimDeviceType.iPhone-15 "$RUNTIME_ID")
+        else
         DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys,os; print(next(d["udid"] for runtime, group in json.load(sys.stdin)["devices"].items() if "iOS-27" in runtime for d in group if d["name"].startswith(os.environ["UI_DEVICE"])))')
+        fi
         selection=("-only-testing:ProbablyGroceriesUITests")
         case "$UI_SUITE" in
           shopping) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testInlineAddEnterPurchaseUndoAndPersistence") ;;
+          fidelity) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testRemindersFidelityAndStableCheckoff") ;;
           preparation) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testPreparationCloseResumeExcludeAndConfirmOnce") ;;
           drag) selection=("-only-testing:ProbablyGroceriesUITests/ProbablyGroceriesUITests/testTouchAndHoldReordersWithoutBuyingAndSurvivesRelaunch") ;;
           layout)
@@ -113,6 +120,19 @@ jobs:
       run: |
         if [ -f "$RUNNER_TEMP/TestResults.xcresult/Info.plist" ]; then
           xcrun xcresulttool export attachments --path "$RUNNER_TEMP/TestResults.xcresult" --output-path "$RUNNER_TEMP/ui-screenshots"
+        fi
+        if [ "$UI_SUITE" = fidelity ] && [ -f "$RUNNER_TEMP/ui-screenshots/manifest.json" ]; then
+          python3 - <<'PY'
+        import base64, json, os
+        from pathlib import Path
+        root = Path(os.environ['RUNNER_TEMP']) / 'ui-screenshots'
+        for result in json.loads((root / 'manifest.json').read_text()):
+            for item in result.get('attachments', []):
+                name = item.get('suggestedHumanReadableName', '')
+                path = root / item['exportedFileName']
+                if path.suffix == '.png' and name.startswith(('01-list', '02-menu', '03-search', '04-focused', '05-keyboard', '07-stable')):
+                    print('FidelityImage:' + name + ':' + base64.b64encode(path.read_bytes()).decode())
+        PY
         fi
     - uses: actions/upload-artifact@v4
       if: success() || failure()

@@ -263,3 +263,24 @@
 "star" = "Star";
 "shippingbox" = "Box";
 "השאלה, התשובה והתמונה נשמרות ליד המוצר ומסתנכרנות עם הרשימה." = "The question, answer and photo stay with the item and sync with the list.";
+
+// Reminders fidelity and contextual shopping tools
+"הצגת פרטי הרשימה" = "Show List Info";
+"ניהול המקטעים" = "Manage Sections";
+"עריכת מקטעים" = "Edit Sections";
+"הצגת מוצרים שנקנו" = "Show Purchased Items";
+"שיתוף הרשימה" = "Share List";
+"אפשרויות מוצר" = "Item Options";
+"כמות" = "Quantity";
+"פרטי הרשימה" = "List Info";
+"שם הרשימה" = "List Name";
+"משוב רטט בסימון" = "Haptic Feedback When Checking Off";
+"מחיקת מוצרים" = "Delete Items";
+"שינוי שם מוצר" = "Rename Item";
+"חיפוש" = "Search";
+
+"עדכונים מהשותף" = "Updates from Your Partner";
+"התראות על בירור מוצרים" = "Product Question Notifications";
+"כדי לקבל התראה על שאלה או תשובה, אפשר לאפשר התראות בהגדרות האייפון." = "Allow notifications in iPhone Settings to hear about questions and answers.";
+"שאלה על %@" = "A question about %@";
+"יש תשובה לגבי %@" = "An answer about %@";

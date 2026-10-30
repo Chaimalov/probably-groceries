@@ -1,6 +1,7 @@
 import CloudKit
 import Combine
 import UIKit
+import UserNotifications
 
 // SwiftUI's scene delegate receives both cold-launch and warm invitations.
 // Queue them until the app's single store is ready, retaining failures for retry.
@@ -18,9 +19,10 @@ final class ShareInvitationInbox: ObservableObject {
     func retry() { generation += 1 }
 }
 
-final class SharingAppDelegate: NSObject, UIApplicationDelegate {
+final class SharingAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
         PhoneWatchBridge.shared.start()
         #if !targetEnvironment(simulator)
         application.registerForRemoteNotifications()
@@ -41,6 +43,26 @@ final class SharingAppDelegate: NSObject, UIApplicationDelegate {
             await store.cloudSync.synchronize()
             completionHandler(store.syncStatus == .current ? .newData : .failed)
         }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        guard info["groceriesAction"] as? String == "clarification",
+              let item = (info["itemID"] as? String).flatMap(UUID.init(uuidString:)),
+              let list = (info["listID"] as? String).flatMap(UUID.init(uuidString:)) else {
+            completionHandler(); return
+        }
+        Task { @MainActor in
+            ShoppingStore.shared.widgetNavigation = ShoppingStore.WidgetNavigation(
+                itemID: item, listID: list, openClarification: true)
+            completionHandler()
+        }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,

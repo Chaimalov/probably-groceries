@@ -22,7 +22,6 @@ struct ShoppingView: View {
     @State private var newUrgent = false
     @State private var newPhotoData: Data?
     @State private var newPhoto: PhotosPickerItem?
-    @State private var showingNewNote = false
     @State private var originalEditedName = ""
     @State private var editingCategory: ShoppingItem?
     @State private var editingNameID: UUID?
@@ -34,7 +33,15 @@ struct ShoppingView: View {
     @State private var deletingListID: UUID?
     @State private var detailItem: ShoppingItem?
     @State private var placeFilter = "הכול"
-    @State private var lastMarkAt = Date.distantPast
+    @State private var presentation = ShoppingPresentation()
+    @State private var searchText = ""
+    @State private var showingSearch = false
+    @State private var searchReturnID: UUID?
+    @State private var showingListDetails = false
+    @State private var showingSectionManagement = false
+    @AppStorage("collapsedShoppingSections") private var savedCollapsedSections = "{}"
+    @AppStorage("shoppingHapticsEnabled") private var hapticsEnabled = true
+    @AppStorage("clarificationReadReplies") private var clarificationReceipts = "{}"
     @State private var showingNewList = false
     @State private var showingNewSection = false
     @State private var editingSection: String?
@@ -47,6 +54,8 @@ struct ShoppingView: View {
     @State private var selectedItemIDs: Set<UUID> = []
     @State private var itemFrames = ShoppingItemFrameRegistry()
     @State private var editMode: EditMode = .inactive
+    @State private var addFocusGeneration = 0
+    @State private var pendingAddFocus = false
     @FocusState private var addFocused: Bool
     @FocusState private var nameFocused: UUID?
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
@@ -57,18 +66,30 @@ struct ShoppingView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
 
-    private var likely: [Suggestion] { store.suggestions.filter { $0.tier == .likely } }
-    private var maybe: [Suggestion] { store.suggestions.filter { $0.tier == .maybe } }
     private var listTint: Color { Theme.tint(for: store.currentList.tintName) }
     private var showsSections: Bool {
-        groupBySection && allSectionNames.contains { $0 != "אחר" }
+        groupBySection
     }
     private var selectionFullyUrgent: Bool {
         !selectedItemIDs.isEmpty && store.items.filter { selectedItemIDs.contains($0.id) }.allSatisfy(\.isUrgent)
     }
 
+    private var displayItems: [ShoppingItem] {
+        presentation.rows(active: store.items, purchases: store.purchases, listID: store.selectedListID)
+    }
+
     private var visibleItems: [ShoppingItem] {
-        store.items.filter { placeFilter == "הכול" || (placeFilter == "ללא מקום" ? $0.shoppingPlace == nil : $0.shoppingPlace == placeFilter) }
+        displayItems.filter { item in
+            let matchesPlace = placeFilter == "הכול" || (placeFilter == "ללא מקום" ? item.shoppingPlace == nil : item.shoppingPlace == placeFilter)
+            let matchesSearch = searchText.isEmpty || [store.product(for: item.productID)?.name, item.note, store.section(for: item)]
+                .compactMap { $0 }.contains { $0.localizedStandardContains(searchText) }
+            return matchesPlace && matchesSearch
+        }
+    }
+
+    private var recentPurchases: [Purchase] {
+        let inlineIDs = Set(displayItems.map(\.id))
+        return store.recentPurchases.filter { !inlineIDs.contains($0.sourceItemID) }
     }
 
     var body: some View {
@@ -115,7 +136,7 @@ struct ShoppingView: View {
         NavigationStack {
             ScrollViewReader { scroll in
                 List(selection: reordering ? nil : $selectedItemIDs) {
-                    if store.items.isEmpty && !isAdding && !reordering {
+                    if displayItems.isEmpty && !isAdding && !reordering && searchText.isEmpty && allSectionNames.count <= 1 {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("הרשימה פנויה")
                                 .font(.title3.weight(.semibold))
@@ -181,6 +202,9 @@ struct ShoppingView: View {
                                     if isAdding && composerSection == section && !items(in: section).contains(where: { $0.id == addingAfterID }) {
                                         inlineAddRow
                                     }
+                                    if !isAdding && editingNameID == nil && !editMode.isEditing && searchText.isEmpty {
+                                        sectionAddRow(section, scroll: scroll)
+                                    }
                                 }
                             }
                             .listSectionSeparator(.hidden, edges: .all)
@@ -209,15 +233,9 @@ struct ShoppingView: View {
 
 
 
-                    if !likely.isEmpty {
-                        suggestionSection("כנראה צריך שוב", items: likely)
-                    }
-                    if !maybe.isEmpty {
-                        suggestionSection("אולי צריך שוב", items: maybe)
-                    }
-                    if showRecentPurchases && !store.recentPurchases.isEmpty {
+                    if showRecentPurchases && !recentPurchases.isEmpty && searchText.isEmpty {
                         Section("נקנו לאחרונה") {
-                            ForEach(store.recentPurchases) { purchase in
+                            ForEach(recentPurchases) { purchase in
                                 if let product = store.product(for: purchase.productID) {
                                     HStack {
                                         Image(systemName: "checkmark.circle.fill")
@@ -291,7 +309,7 @@ struct ShoppingView: View {
                 .environment(\.editMode, $editMode)
                 .listRowSpacing(0)
                 .listSectionSpacing(0)
-                .environment(\.defaultMinListRowHeight, 54)
+                .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 0)
                 .scrollDismissesKeyboard(.interactively)
                 .inspector(isPresented: Binding(
@@ -304,13 +322,42 @@ struct ShoppingView: View {
                             .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
                     }
                 }
-                .toolbar { bottomActions(scroll) }
-                .task(id: addingAfterID) {
-                    guard isAdding, addingAfterID != nil else { return }
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
-                    scroll.scrollTo("new-item", anchor: .center)
-                    addFocused = true
+                .toolbar { bottomActions() }
+                .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+                    if !editMode.isEditing && !isAdding && editingNameID == nil && !showingSearch {
+                        HStack {
+                            Spacer()
+                            Button("מוצר חדש", systemImage: "plus") { startAdding(scroll: scroll) }
+                                .labelStyle(.iconOnly)
+                                .font(.title2)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .buttonStyle(.glassProminent)
+                                .controlSize(.large)
+                                .buttonBorderShape(.circle)
+                                .tint(listTint)
+                                .accessibilityLabel("הוספת מוצר")
+                                .keyboardShortcut("n", modifiers: .command)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                    }
+                }
+                .searchable(text: $searchText, isPresented: $showingSearch, placement: .automatic, prompt: "חיפוש")
+                .searchToolbarBehavior(.minimize)
+                .onChange(of: showingSearch) { _, searching in
+                    if searching {
+                        searchReturnID = itemFrames.frames.filter { $0.value.maxY > 160 }
+                            .min { $0.value.minY < $1.value.minY }?.key
+                        if isAdding || editingNameID != nil { closeEditor() }
+                    } else {
+                        searchText = ""
+                        if let searchReturnID {
+                            Task { @MainActor in
+                                await Task.yield()
+                                scroll.scrollTo(searchReturnID, anchor: .top)
+                            }
+                        }
+                    }
                 }
                 .task(id: store.widgetNavigation?.id) {
                     guard let request = store.widgetNavigation else { return }
@@ -320,14 +367,29 @@ struct ShoppingView: View {
                     defer {
                         if store.widgetNavigation?.id == request.id { store.widgetNavigation = nil }
                     }
+                    if let listID = request.listID, listID != store.selectedListID {
+                        guard store.data.lists.contains(where: { $0.id == listID }) else { return }
+                        switchList(to: listID)
+                        await Task.yield()
+                    }
                     closeEditor()
+                    searchReturnID = nil
+                    searchText = ""
+                    showingSearch = false
                     placeFilter = "הכול"
                     editMode = .inactive
                     reordering = false
+                    if request.openListOnly { return }
                     if let id = request.itemID,
                        let item = store.items.first(where: { $0.id == id }),
                        let product = store.product(for: item.productID) {
                         collapsedSections.remove(store.section(for: item))
+                        if request.openClarification {
+                            await Task.yield()
+                            scroll.scrollTo(item.id, anchor: .center)
+                            clarificationItem = item
+                            return
+                        }
                         updateEditor {
                             editedName = product.name
                             originalEditedName = product.name
@@ -339,22 +401,34 @@ struct ShoppingView: View {
                         scroll.scrollTo(item.id, anchor: .center)
                     } else if request.itemID == nil {
                         beginAdding()
-                        addFocused = true
+                        await Task.yield()
+                        scroll.scrollTo("new-item", anchor: .bottom)
                     }
                 }
 
             }
             .navigationTitle(store.currentList.name)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
+            .background(ShoppingNavigationTitleTint(color: UIColor(listTint)))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { listPicker.tint(listTint) }
-                ToolbarItem(placement: .topBarTrailing) { optionsMenu.tint(Color(uiColor: .label)) }
+                ToolbarItem(placement: .topBarLeading) { listPicker }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("שיתוף הרשימה", systemImage: "person.2") { openSharing() }
+                        .labelStyle(.iconOnly)
+                        #if targetEnvironment(simulator)
+                        .disabled(true)
+                        #endif
+                    optionsMenu
+                }
+                DefaultToolbarItem(kind: .search, placement: .topBarTrailing)
                 if !editMode.isEditing && (isAdding || editingNameID != nil) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("סיום עריכה", systemImage: "checkmark") { closeEditor() }
                             .labelStyle(.iconOnly)
                             .keyboardShortcut(.return, modifiers: .command)
-                            .tint(listTint)
+                            .tint(.blue)
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.circle)
                     }
                 }
                 if editMode.isEditing {
@@ -367,7 +441,13 @@ struct ShoppingView: View {
                     }
                 }
             }
-            .onChange(of: store.items) { _, items in
+            .onChange(of: store.items) { oldItems, items in
+                let currentIDs = Set(items.map(\.id))
+                let purchasedIDs = Set(store.purchases.map(\.sourceItemID))
+                let previousRows = presentation.rows(active: oldItems, purchases: store.purchases, listID: store.selectedListID)
+                for item in oldItems where !currentIDs.contains(item.id) && purchasedIDs.contains(item.id) {
+                    presentation.retain(item, among: previousRows)
+                }
                 if placeFilter != "הכול" && placeFilter != "ללא מקום" && !items.contains(where: { $0.shoppingPlace == placeFilter }) { placeFilter = "הכול" }
             }
             .onChange(of: nameFocused) { oldID, newID in
@@ -381,6 +461,15 @@ struct ShoppingView: View {
                     updateEditor { self.editingNameID = nil; nameFocused = nil }
                 }
             }
+            .sheet(isPresented: $showingListDetails) { ListAppearanceEditor(store: store) }
+            .sheet(isPresented: $showingSectionManagement) {
+                NavigationStack {
+                    SectionSettingsView(store: store)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("סיום") { showingSectionManagement = false } } }
+                }
+            }
+            .onAppear { restoreCollapsedSections() }
+            .onChange(of: collapsedSections) { _, _ in persistCollapsedSections() }
             .sheet(isPresented: $showingSectionEditor) {
                 if let editingSection { SectionEditor(store: store, section: editingSection) }
             }
@@ -405,7 +494,11 @@ struct ShoppingView: View {
             }
             .onChange(of: store.selectedListID) { _, _ in
                 undoManager?.removeAllActions(withTarget: store)
-                collapsedSections.removeAll()
+                presentation.reset()
+                restoreCollapsedSections()
+                searchReturnID = nil
+                searchText = ""
+                showingSearch = false
                 placeFilter = "הכול"
                 selectedItemIDs.removeAll()
             }
@@ -445,6 +538,7 @@ struct ShoppingView: View {
             #endif
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background { presentation.reset() }
             #if !targetEnvironment(simulator)
             if phase == .active { store.cloudSync.start() }
             #endif
@@ -461,7 +555,7 @@ struct ShoppingView: View {
     }
 
     @ToolbarContentBuilder
-    private func bottomActions(_ scroll: ScrollViewProxy) -> some ToolbarContent {
+    private func bottomActions() -> some ToolbarContent {
 if reordering {
                         ToolbarItem(placement: .bottomBar) {
                             Text("גרור את ידיות הסידור של המוצרים")
@@ -482,38 +576,50 @@ if reordering {
                             }
                             .disabled(selectedItemIDs.isEmpty)
                             Button("מחיקה", systemImage: "trash", role: .destructive) {
-                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs) }
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { store.remove(selectedItemIDs, undoManager: undoManager) }
                                 selectedItemIDs.removeAll()
                                 editMode = .inactive
                             }
                             .disabled(selectedItemIDs.isEmpty)
                         }
-                    } else if !isAdding && editingNameID == nil {
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-                                .tint(listTint)
-                        }
-                        ToolbarSpacer(.flexible, placement: .bottomBar)
-                        ToolbarItem(placement: .bottomBar) {
-                            Button("מוצר חדש", systemImage: "plus") {
-                                beginAdding()
-                                Task { @MainActor in
-                                    await Task.yield()
-                                    var transaction = Transaction(animation: nil)
-                                    transaction.disablesAnimations = true
-                                    withTransaction(transaction) {
-                                        scroll.scrollTo("new-item", anchor: .bottom)
-                                        addFocused = true
-                                    }
-                                }
-                            }
-                            .labelStyle(.titleAndIcon)
-                            .fontWeight(.semibold)
-                            .accessibilityLabel("הוספת מוצר")
-                            .keyboardShortcut("n", modifiers: .command)
-                            .tint(listTint)
-                        }
                     }
+    }
+
+    private func startAdding(scroll: ScrollViewProxy, section: String? = nil) {
+        searchReturnID = nil
+        showingSearch = false
+        searchText = ""
+        beginAdding()
+        updateEditor {
+            addingToSection = section
+            composerSection = section
+            if let section { collapsedSections.remove(section) }
+        }
+        Task { @MainActor in
+            await Task.yield()
+            updateEditor {
+                scroll.scrollTo("new-item", anchor: .bottom)
+            }
+        }
+    }
+
+    private func sectionAddRow(_ section: String, scroll: ScrollViewProxy) -> some View {
+        Button { startAdding(scroll: scroll, section: section) } label: {
+            Image(systemName: "circle.dotted")
+                .font(.system(size: 24))
+                .foregroundStyle(.tertiary)
+                .frame(width: 24, height: 44)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("הוספת מוצר למקטע \(section)")
+        .accessibilityIdentifier("section-add-" + section)
+        .selectionDisabled(true)
+        .padding(.bottom, 8)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
 
@@ -544,15 +650,15 @@ if reordering {
 
     private var inlineAddRow: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 4) {
+            HStack(spacing: 16) {
                 Image(systemName: "circle")
                     .font(.system(size: 25, weight: .regular))
-                    .foregroundStyle(listTint.opacity(0.8))
-                    .frame(width: 44, height: 44)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 24, height: 44)
                 TextField("מה צריך לקנות?", text: $newName)
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(Color(uiColor: .label))
-                    .tint(listTint)
+                    .tint(.blue)
                     .focused($addFocused)
                     .submitLabel(.next)
                     .onSubmit { addInline() }
@@ -567,9 +673,7 @@ if reordering {
                     Button("×\(newQuantity) \(newUnit.map(ShoppingUnit.shortLabel) ?? "")") { updateEditor { quantityExpanded.toggle() } }
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Theme.control, in: Capsule())
+                        .padding(.horizontal, 4)
                         .frame(minWidth: 44, minHeight: 44)
                         .accessibilityIdentifier("newItemQuantityButton")
                         .accessibilityLabel("עריכת כמות למוצר חדש")
@@ -586,6 +690,10 @@ if reordering {
                                 if store.items.contains(where: { $0.productID == product.id }) {
                                     Text("כבר ברשימה · הוספת כמות").font(.caption).foregroundStyle(.secondary)
                                 }
+                                if product.usualQuantity > 1 || product.preferredUnit != nil {
+                                    Text(quantityLabel(product.usualQuantity, unit: product.preferredUnit))
+                                        .foregroundStyle(.secondary)
+                                }
                                 Image(systemName: "plus").foregroundStyle(.secondary)
                             }
                             .frame(minHeight: 44)
@@ -595,27 +703,25 @@ if reordering {
                         .accessibilityLabel("הוספת \(product.name)")
                     }
                 }
-                .padding(.leading, 48)
+                .padding(.leading, 40)
                 .padding(.trailing, 12)
             }
-            if hasNewName {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                     if quantityExpanded {
                         InlineQuantityControls(quantity: Binding(
                             get: { newQuantity },
                             set: { newQuantity = $0; newQuantityOverridden = true }
                         ), unit: $newUnit, isNew: true)
                     }
-                    if showingNewNote {
-                        TextField("הערה למוצר…", text: $newNote, axis: .vertical)
-                            .lineLimit(1...3)
-                            .accessibilityIdentifier("newItemNoteField")
-                    }
+                    TextField("הערה למוצר…", text: $newNote, axis: .vertical)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .lineLimit(1...3)
+                        .accessibilityIdentifier("newItemNoteField")
                     if let newPhotoData {
                         ItemPhotoThumbnail(bytes: newPhotoData, fileURL: nil, name: newName, side: 44)
                     }
                     HStack(spacing: 8) {
-                        Button("הערה", systemImage: "text.alignright") { showingNewNote.toggle() }
+                        Button("כמות", systemImage: "number") { updateEditor { quantityExpanded.toggle() } }
                             .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
                         PhotosPicker(selection: $newPhoto, matching: .images) {
                             Image(systemName: "photo.badge.plus")
@@ -655,21 +761,34 @@ if reordering {
                         }
                     }
                 }
-                .padding(.leading, 48)
+                .padding(.leading, 40)
                 .padding(.trailing, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-            }
+                .padding(.top, 4)
+                .padding(.bottom, 4)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, hasNewName ? 8 : 4)
+        .padding(.vertical, 4)
         // Automatic List button styling makes multiple row buttons fire together.
         .buttonStyle(.borderless)
         .id("new-item")
+        .task(id: addFocusGeneration) {
+            guard isAdding, pendingAddFocus else { return }
+            let generation = addFocusGeneration
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            // Mount the relocated row and let the previous Return event finish
+            // before moving UIKit's first responder to the new text field.
+            DispatchQueue.main.async {
+                guard isAdding, pendingAddFocus, generation == addFocusGeneration else { return }
+                pendingAddFocus = false
+                addFocused = true
+            }
+        }
         .selectionDisabled(true)
          .listRowBackground(Color.clear)
-        .background(Theme.editor,
-                    in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Theme.editor).padding(.horizontal, -10)
+        }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
@@ -699,7 +818,7 @@ if reordering {
                 listName = ""; showingNewList = true
             }
         } label: {
-            Image(systemName: store.currentList.symbolName)
+            Image(systemName: "chevron.backward")
                 .font(.title3)
         }
         .accessibilityLabel("בחירת חנות, \(store.currentList.name)")
@@ -707,50 +826,74 @@ if reordering {
 
     private var optionsMenu: some View {
         Menu {
-            Button("קנייה חדשה", systemImage: "cart.badge.plus") { showingPreparation = true }
-            Button("מקטע חדש", systemImage: "plus.rectangle.on.rectangle") {
-                sectionName = ""; showingNewSection = true
+            Section {
+                Toggle("הצגת מקטעים", isOn: $groupBySection)
+                Button("הצגת פרטי הרשימה", systemImage: "info.circle") { closeEditor(); showingListDetails = true }
+                Button("בחירת פריטים", systemImage: "checkmark.circle") {
+                    closeEditor(); presentation.reset(); reordering = false; editMode = .active
+                }
+                Menu("ניהול המקטעים", systemImage: "line.3.horizontal.decrease") {
+                    Button("מקטע חדש", systemImage: "plus.rectangle.on.rectangle") { sectionName = ""; showingNewSection = true }
+                    Button("עריכת מקטעים", systemImage: "pencil") { closeEditor(); showingSectionManagement = true }
+                }
+                Button("סידור מוצרים", systemImage: "arrow.up.arrow.down") {
+                    closeEditor(); presentation.reset(); addingToSection = nil
+                    selectedItemIDs.removeAll(); reordering = true; editMode = .active
+                }
+                Toggle("הצגת מוצרים שנקנו", isOn: $showRecentPurchases)
             }
-            Button("סידור מוצרים", systemImage: "line.3.horizontal") {
-                closeEditor()
-                addingToSection = nil
-                selectedItemIDs.removeAll()
-                reordering = true
-                editMode = .active
+            Section {
+                Button("קנייה חדשה", systemImage: "cart.badge.plus") { closeEditor(); presentation.reset(); showingPreparation = true }
+                Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
             }
-            Button("היסטוריית קניות", systemImage: "clock") { showingHistory = true }
-            Button("בחירת פריטים", systemImage: "checkmark.circle") {
-                closeEditor()
-                reordering = false
-                editMode = .active
+            Section {
+                if undoManager?.canUndo == true {
+                    Button("ביטול", systemImage: "arrow.uturn.backward") { undoManager?.undo() }
+                        .disabled(isAdding || editingNameID != nil)
+                        .keyboardShortcut("z", modifiers: .command)
+                }
+                if undoManager?.canRedo == true {
+                    Button("ביצוע חוזר", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
+                        .disabled(isAdding || editingNameID != nil)
+                        .keyboardShortcut("z", modifiers: [.command, .shift])
+                }
+                Button("הגדרות", systemImage: "gearshape") { closeEditor(); showingSettings = true }
             }
-            Divider()
-            Button(store.currentShare == nil ? "שיתוף הרשימה…" : "ניהול השיתוף…",
-                   systemImage: "person.2") {
-                sharingListID = store.selectedListID
-                showingSharing = true
+            if store.canDeleteCurrentList {
+                Section {
+                    Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) {
+                        closeEditor(); deletingListID = store.selectedListID; confirmingDeleteList = true
+                    }
+                }
             }
-            #if targetEnvironment(simulator)
-            .disabled(true)
-            #endif
-            Divider()
-            Button("ביטול סימון כנקנה", systemImage: "arrow.uturn.backward") {
-                undoManager?.undo()
-            }
-            .disabled(undoManager?.canUndo != true || isAdding || editingNameID != nil)
-            .keyboardShortcut("z", modifiers: .command)
-            Button("ביצוע חוזר", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
-                .disabled(undoManager?.canRedo != true || isAdding || editingNameID != nil)
-                .keyboardShortcut("z", modifiers: [.command, .shift])
-            Button("הגדרות", systemImage: "gearshape") { closeEditor(); showingSettings = true }
-
         } label: {
             Image(systemName: "ellipsis").font(.title3)
         }
         .accessibilityLabel("אפשרויות נוספות")
     }
 
-    private var sectionNames: [String] { allSectionNames }
+    private func openSharing() {
+        closeEditor()
+        sharingListID = store.selectedListID
+        showingSharing = true
+    }
+
+    private func restoreCollapsedSections() {
+        let saved = savedCollapsedSections.data(using: .utf8)
+            .flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        collapsedSections = Set(saved[store.selectedListID.uuidString] ?? [])
+    }
+
+    private func persistCollapsedSections() {
+        var saved = savedCollapsedSections.data(using: .utf8)
+            .flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        saved[store.selectedListID.uuidString] = collapsedSections.sorted()
+        if let data = try? JSONEncoder().encode(saved), let value = String(data: data, encoding: .utf8) {
+            savedCollapsedSections = value
+        }
+    }
+
+    private var sectionNames: [String] { searchText.isEmpty ? allSectionNames : allSectionNames.filter { !items(in: $0).isEmpty } }
 
     private var allSectionNames: [String] {
         store.sectionNames
@@ -761,16 +904,8 @@ if reordering {
     }
 
     private func quantityLabel(_ quantity: Int, unit: String?) -> String {
-        guard let unit, !unit.isEmpty else { return "×\(quantity)" }
+        guard let unit, !unit.isEmpty else { return "\(quantity)" }
         return "\(quantity) \(ShoppingUnit.shortLabel(unit))"
-    }
-
-    private func aisleStyle(_ name: String) -> (symbol: String, color: Color) {
-        if let appearance = store.currentList.sectionStyles?[name] {
-            return (appearance.symbol, Theme.tint(for: appearance.tint))
-        }
-        let appearance = Theme.sectionAppearance(for: name, listTint: store.currentList.tintName)
-        return (appearance.symbol, Theme.tint(for: appearance.tint))
     }
 
     private func sectionHeader(_ section: String) -> some View {
@@ -780,17 +915,11 @@ if reordering {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: aisleStyle(section).symbol)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(aisleStyle(section).color)
-                    .frame(width: 32, height: 32)
-                    .background(aisleStyle(section).color.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-                    .accessibilityHidden(true)
                 Text(section)
-                    .font(.headline)
+                    .font(.title2.bold())
                     .foregroundStyle(.primary)
                 if collapsedSections.contains(section) {
-                    Text("\(items(in: section).count)")
+                    Text("\(store.items.filter { store.section(for: $0) == section }.count)")
                         .font(.subheadline.weight(.medium))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -798,15 +927,13 @@ if reordering {
                 Spacer(minLength: 8)
                 Image(systemName: collapsedSections.contains(section) ? "chevron.backward" : "chevron.down")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
-            .padding(.leading, 4)
-            .padding(.trailing, 8)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(section), \(items(in: section).count) מוצרים")
+        .accessibilityLabel("\(section), \(store.items.filter { store.section(for: $0) == section }.count) מוצרים")
         .accessibilityHint(collapsedSections.contains(section) ? "הרחבת מקטע" : "צמצום מקטע")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if section != "אחר" {
@@ -819,35 +946,49 @@ if reordering {
             guard section != "אחר" else { return }
             closeEditor(); editingSection = section; showingSectionEditor = true
         }
-        .padding(.top, 4)
+        .padding(.top, 12)
+        .overlay(alignment: .top) {
+            if section != sectionNames.first { Divider() }
+        }
     }
 
     @ViewBuilder
     private func itemRow(_ item: ShoppingItem) -> some View {
         if let product = store.product(for: item.productID) {
+            let completed = !store.items.contains { $0.id == item.id }
             VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 if !editMode.isEditing {
                 Button {
-                    guard Date.now.timeIntervalSince(lastMarkAt) > 0.35 else { return }
-                    lastMarkAt = .now
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    if reduceMotion { store.buy(item, undoManager: undoManager) }
-                    else { withAnimation(.easeOut(duration: 0.18)) { store.buy(item, undoManager: undoManager) } }
+                    updateEditor {
+                        if let purchase = store.purchases.first(where: { $0.sourceItemID == item.id }) {
+                            store.undo(purchase, undoManager: undoManager)
+                        } else {
+                            presentation.retain(item, among: displayItems)
+                            store.buy(item, undoManager: undoManager)
+                        }
+                    }
+                    if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                 } label: {
-                    Circle()
-                        .strokeBorder(listTint, lineWidth: 2)
-                        .frame(width: 25, height: 25)
-                        .frame(width: 44, height: 44)
+                    Image(systemName: completed ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 24, weight: .regular))
+                        .foregroundStyle(completed ? listTint : Color(uiColor: .systemGray2))
+                        .frame(width: 24, height: 44)
+                        .contentShape(ShoppingCheckHitTarget())
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("נקנה \(product.name)")
+                .accessibilityLabel(completed ? "ביטול קניית \(product.name)" : "נקנה \(product.name)")
+                .accessibilityValue(completed ? "נקנה" : "לקנייה")
+                .accessibilityIdentifier("purchase-" + item.id.uuidString)
+                .alignmentGuide(.firstTextBaseline) { dimensions in
+                    dimensions[VerticalAlignment.center] + UIFont.preferredFont(forTextStyle: .body).capHeight / 2
+                }
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     if editingNameID == item.id {
                         HStack(spacing: 4) {
                         TextField("שם המוצר", text: $editedName)
-                            .tint(listTint)
+                            .tint(.blue)
                             .focused($nameFocused, equals: item.id)
                             .submitLabel(.next)
                             .onSubmit { continueBelow(item) }
@@ -895,15 +1036,17 @@ if reordering {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .disabled(completed)
                     }
-                    if let clarification = item.clarification, !clarification.resolved {
+                    if let clarification = item.clarification, !clarification.resolved,
+                       clarification.answer == nil || ClarificationReadState.hasUnreadReply(item, receipts: clarificationReceipts) {
                         Button {
                             closeEditor(); clarificationItem = item
                         } label: {
                             Label(clarification.answer == nil ? "צריך בירור" : "יש תשובה", systemImage: "bubble.left.and.bubble.right")
                                 .font(.subheadline).foregroundStyle(.teal)
                                 .frame(minHeight: 44)
-                        }.buttonStyle(.borderless)
+                        }.buttonStyle(.borderless).disabled(completed)
                     }
                     if item.unavailable == true {
                         Label("לא היה בחנות", systemImage: "basket")
@@ -938,51 +1081,60 @@ if reordering {
                     .multilineTextAlignment(.trailing)
                     .buttonStyle(.plain)
                     .frame(minWidth: 44, maxWidth: 110, minHeight: 44, alignment: .trailing)
-                    .disabled(editMode.isEditing)
+                    .disabled(editMode.isEditing || completed)
                     .accessibilityLabel("עריכת כמות והערות עבור \(product.name)")
                     .accessibilityValue("כמות \(item.quantity) \(item.unit ?? "")")
                 }
             }
             if editingNameID == item.id && !editMode.isEditing {
-                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded, onDetails: {
+                ItemInlineDetails(store: store, item: item, showsQuantity: quantityExpanded,
+                    onQuantity: { updateEditor { quantityExpanded.toggle() } },
+                    onSection: { saveRename(item); editingCategory = item }, onDetails: {
                     saveRename(item)
                     detailItem = item
                 })
-                    .padding(.leading, 48)
+                    .padding(.leading, 40)
                     .padding(.trailing, 12)
                     .transition(.identity)
             }
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, editingNameID == item.id ? 8 : 2)
-            .background(editingNameID == item.id ? Theme.editor : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .opacity(completed ? 0.5 : 1)
+            .padding(.vertical, editingNameID == item.id ? 4 : 0)
+            .background {
+                if editingNameID == item.id {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Theme.editor).padding(.horizontal, -10)
+                }
+            }
             .listRowBackground(Color.clear)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button(item.isUrgent ? "הסר דגל" : "דחוף",
                        systemImage: item.isUrgent ? "flag.slash" : "flag") {
                     store.toggleUrgent(item)
                 }
+                .disabled(completed)
                 .labelStyle(.iconOnly)
                 .tint(Color(red: 0.62, green: 0.34, blue: 0.02))
                 Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") {
                     closeEditor(); clarificationItem = item
-                }.tint(.teal)
+                }.tint(.teal).disabled(completed)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item) }
+                Button("הסר", systemImage: "trash", role: .destructive) { store.remove(item, undoManager: undoManager) }
+                    .disabled(completed)
                     .labelStyle(.iconOnly)
                     .tint(.red)
                 Button("מקטע", systemImage: "square.grid.2x2") { editingCategory = item }
+                    .disabled(completed)
                     .labelStyle(.iconOnly)
                     .tint(Color(uiColor: .systemBlue))
             }
             .background {
-                nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil)
+                if !completed { nativeDrag(.item(item.id), section: showsSections ? store.section(for: item) : nil) }
             }
             .accessibilityAction(named: "העברה למעלה") { moveItem(item, down: false) }
             .accessibilityAction(named: "העברה למטה") { moveItem(item, down: true) }
-            .selectionDisabled(!editMode.isEditing)
+            .selectionDisabled(!editMode.isEditing || completed)
             .tag(item.id)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { _, frame in
                 itemFrames.frames[item.id] = frame
@@ -1026,6 +1178,7 @@ if reordering {
         NativeShoppingDrag(entry: entry, listID: store.selectedListID,
                            enabled: !editMode.isEditing && editingNameID == nil && !isAdding,
                            tint: UIColor(listTint), previewContent: dragPreviewContent(for: entry)) { entries, after in
+            presentation.reset() // An explicit drop is a stable presentation transition.
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 if case .section(let source)? = entries.first,
                    case .section(let target) = entry {
@@ -1045,42 +1198,19 @@ if reordering {
         }
     }
 
-    private func suggestionSection(_ title: String, items: [Suggestion]) -> some View {
-        Section(title) {
-            ForEach(items) { suggestion in
-                HStack(spacing: 12) {
-                    Image(systemName: "circle.dotted")
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 30)
-                    VStack(alignment: .leading) {
-                        Text(suggestion.product.name)
-                        if suggestion.quantity > 1 || suggestion.product.preferredUnit != nil {
-                            Text("בדרך כלל \(quantityLabel(suggestion.quantity, unit: suggestion.product.preferredUnit))")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Button {
-                        store.add(suggestion)
-                    } label: { Image(systemName: "plus.circle.fill").font(.title3) }
-                        .accessibilityLabel("הוספת \(suggestion.product.name) לרשימה")
-                }
-                .swipeActions(edge: .trailing) {
-                    Button("לא עכשיו", systemImage: "clock") { store.deferSuggestion(suggestion) }
-                        .labelStyle(.iconOnly)
-                        .tint(Color(uiColor: .systemIndigo))
-                }
-                .listRowSeparator(.hidden)
-                .selectionDisabled(true)
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            }
-        }
-        .listSectionSeparator(.hidden)
+    private func requestAddFocus() {
+        addFocused = false
+        pendingAddFocus = true
+        addFocusGeneration += 1
     }
 
     private func beginAdding() {
         closeEditor()
-        updateEditor { isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false }
+        presentation.reset()
+        updateEditor {
+            isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false
+            requestAddFocus()
+        }
     }
 
     private func addInline(continueAdding: Bool = true) {
@@ -1111,20 +1241,21 @@ if reordering {
             newUrgent = false
             newPhotoData = nil
             newPhoto = nil
-            showingNewNote = false
             quantityExpanded = false
-            addFocused = continueAdding
+            if continueAdding { requestAddFocus() }
+            else { addFocused = false; pendingAddFocus = false }
         }
     }
 
     private func saveRename(_ item: ShoppingItem) {
         guard editedName != originalEditedName else { return }
-        store.rename(item, to: editedName)
+        store.rename(item, to: editedName, undoManager: undoManager)
         originalEditedName = editedName
     }
 
     private func continueBelow(_ item: ShoppingItem) {
         saveRename(item)
+        presentation.reset()
         updateEditor {
             editingNameID = nil
             nameFocused = nil
@@ -1134,7 +1265,7 @@ if reordering {
             addingAfterID = item.id
             collapsedSections.remove(store.section(for: item))
             isAdding = true
-            addFocused = true
+            requestAddFocus()
         }
     }
 
@@ -1155,8 +1286,8 @@ if reordering {
             newUrgent = false
             newPhotoData = nil
             newPhoto = nil
-            showingNewNote = false
             addFocused = false
+            pendingAddFocus = false
             editingNameID = nil
             nameFocused = nil
             quantityExpanded = false
@@ -1166,7 +1297,8 @@ if reordering {
     private func switchList(to id: UUID) {
         closeEditor()
         store.selectList(id)
-        collapsedSections.removeAll()
+        presentation.reset()
+        restoreCollapsedSections()
         placeFilter = "הכול"
         addingToSection = nil
         selectedItemIDs.removeAll()
@@ -1182,6 +1314,8 @@ struct ItemInlineDetails: View {
     let item: ShoppingItem
     let showsQuantity: Bool
     let onDetails: (() -> Void)?
+    let onQuantity: (() -> Void)?
+    let onSection: (() -> Void)?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showingCamera = false
     @State private var cameraDenied = false
@@ -1189,16 +1323,19 @@ struct ItemInlineDetails: View {
     @State private var note: String
     @State private var showingClarification = false
 
-    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true, onDetails: (() -> Void)? = nil) {
+    init(store: ShoppingStore, item: ShoppingItem, showsQuantity: Bool = true, onQuantity: (() -> Void)? = nil,
+         onSection: (() -> Void)? = nil, onDetails: (() -> Void)? = nil) {
         self.store = store
         self.item = item
         self.showsQuantity = showsQuantity
         self.onDetails = onDetails
+        self.onQuantity = onQuantity
+        self.onSection = onSection
         _note = State(initialValue: item.note ?? "")
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             if showsQuantity {
                 InlineQuantityControls(quantity: Binding(
                     get: { item.quantity }, set: { store.updateQuantity(of: item, to: $0) }
@@ -1215,36 +1352,18 @@ struct ItemInlineDetails: View {
                 .onChange(of: item.note) { _, value in
                     if note != (value ?? "") { note = value ?? "" }
                 }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
-                if let onDetails {
-                    Button("פרטי מוצר", systemImage: "info.circle", action: onDetails)
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], alignment: .leading, spacing: 8) {
+                if let onQuantity {
+                    Button("כמות", systemImage: "number", action: onQuantity).labelStyle(.iconOnly)
                 }
-                Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
-                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: item.unavailable == true ? "basket.fill" : "basket") {
-                    store.toggleUnavailable(item)
-                }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                if let onSection {
+                    Button("מקטע", systemImage: "square.grid.2x2", action: onSection).labelStyle(.iconOnly)
+                }
                 Button(item.isUrgent ? "הסר דגל" : "דחוף", systemImage: item.isUrgent ? "flag.fill" : "flag") {
                     store.toggleUrgent(item)
                 }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(item.isUrgent ? Color.orange : Color(uiColor: .label))
-                .frame(minWidth: 44, minHeight: 44)
-                if item.photoData != nil || item.photoFilename != nil {
-                    Button { showingPhoto = true } label: {
-                        ItemPhotoThumbnail(bytes: item.photoData, fileURL: store.legacyPhotoURL(for: item),
-                                           name: store.product(for: item.productID)?.name ?? "", side: 52)
-                    }.accessibilityLabel("הגדלת תמונת המוצר")
-                }
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("צילום", systemImage: "camera") {
-                        Task {
-                            let allowed = await AVCaptureDevice.requestAccess(for: .video)
-                            if allowed { showingCamera = true } else { cameraDenied = true }
-                        }
-                    }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                }
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     Label(item.photoFilename == nil && item.photoData == nil ? "צירוף תמונה" : "החלפת תמונה", systemImage: "photo.badge.plus")
                 }
@@ -1258,12 +1377,28 @@ struct ItemInlineDetails: View {
                         }
                     }
                 }
-                if item.photoFilename != nil || item.photoData != nil {
-                    Button("הסרת תמונה", systemImage: "xmark.circle") {
-                        store.removePhoto(from: item)
+                Menu {
+                    if let onDetails { Button("פרטי מוצר", systemImage: "info.circle", action: onDetails) }
+                    Button("צריך בירור", systemImage: "bubble.left.and.bubble.right") { showingClarification = true }
+                    Button(item.unavailable == true ? "אפשר לקנות שוב" : "לא היה בחנות", systemImage: "basket") {
+                        store.toggleUnavailable(item)
                     }
-                    .labelStyle(.iconOnly)
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button("צילום", systemImage: "camera") {
+                            Task {
+                                if await AVCaptureDevice.requestAccess(for: .video) { showingCamera = true }
+                                else { cameraDenied = true }
+                            }
+                        }
+                    }
+                    if item.photoFilename != nil || item.photoData != nil {
+                        Button("הגדלת תמונת המוצר", systemImage: "photo") { showingPhoto = true }
+                        Button("הסרת תמונה", systemImage: "trash", role: .destructive) { store.removePhoto(from: item) }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
                 }
+                .accessibilityLabel("אפשרויות מוצר")
             }
             .font(.body)
             .tint(Color(uiColor: .label))
@@ -1271,7 +1406,6 @@ struct ItemInlineDetails: View {
             .buttonStyle(ShoppingToolButtonStyle())
         }
         .buttonStyle(.borderless)
-        .padding(.vertical, 8)
         .sheet(isPresented: $showingClarification) { ClarificationView(store: store, item: item) }
         .sheet(isPresented: $showingCamera) { ItemCamera { store.setPhoto($0, for: item) } }
         .sheet(isPresented: $showingPhoto) {
@@ -1304,3 +1438,9 @@ private final class ShoppingItemFrameRegistry {
 
 
 
+
+private struct ShoppingCheckHitTarget: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -10, dy: 0))
+    }
+}

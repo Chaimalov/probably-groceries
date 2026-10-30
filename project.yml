@@ -135,6 +135,11 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - Tests/ClarificationNoticeTests.swift
+      - App/ClarificationNotice.swift
+      - Tests/ShoppingRouteFreezeTests.swift
+      - Tests/ShoppingPresentationTests.swift
+      - App/ShoppingPresentation.swift
       - Tests/OrganizationTests.swift
       - App/SectionManagement.swift
       - App/BadgePolicy.swift

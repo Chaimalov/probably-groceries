@@ -2,6 +2,18 @@ import Foundation
 
 /// Learns aisle order from the exact times items were checked off on each trip.
 enum ShoppingRouteOrder {
+    // Preserve gaps left by purchases. Renumbering survivors rewrites unrelated
+    // CloudKit records and makes several consecutive undos restore at index zero.
+    static func frozenPositions(for items: [ShoppingItem]) -> [UUID: Int] {
+        var next = (items.compactMap(\.manualOrder).max() ?? -1) + 1
+        var result: [UUID: Int] = [:]
+        for item in items {
+            if let position = item.manualOrder { result[item.id] = position }
+            else { result[item.id] = next; next += 1 }
+        }
+        return result
+    }
+
     static func positions(from purchases: [Purchase]) -> [UUID: Double] {
         let events = purchases.sorted {
             if $0.purchasedAt != $1.purchasedAt { return $0.purchasedAt < $1.purchasedAt }

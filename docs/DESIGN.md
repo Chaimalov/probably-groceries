@@ -1,3 +1,13 @@
+# Current design contract — 30 October 2026
+
+The approved Probably-Groceries-Final-Implementation-Spec.md v2.0 and the user's six Apple Reminders screenshots supersede the historical botanical iterations below. Use a semantic system background, colored native large title, plain sections with no decorative aisle artwork, thin check circles, contextual editors and a native floating plus. Suggestions belong in typing/preparation, not permanent list sections. Preserve the existing data, CloudKit, Watch and widget implementations.
+
+See [implementation audit](product/REMINDERS-FIDELITY-AUDIT.md) for the baseline, changes and limitations. `ShoppingPresentation` is transient per-window state: it keeps explicitly completed rows in place during shopping, while the persisted purchase log remains the only source of truth. Backgrounding, switching lists, starting an add/preparation/selection operation or dropping a reorder releases that presentation snapshot. No expiry timer.
+
+The compact toolbar's native list picker replaces Reminders' back-to-lists affordance: it permits switching grocery stores without adding an overview screen. CloudKit collaboration uses the public system sharing controller; do not recreate Reminders' private communication popover.
+
+---
+
 # iOS design direction
 
 The preferred prototype uses large native typography and a compact, separator-free list like Apple Reminders. Keep breathing room around the headline and sections rather than between every product. Use “Maybe” for uncertainty. Do not repeat “Likely” on every row or show raw percentages by default.

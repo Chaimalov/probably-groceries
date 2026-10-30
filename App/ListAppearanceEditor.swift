@@ -3,11 +3,15 @@ import SwiftUI
 struct ListAppearanceEditor: View {
     @ObservedObject var store: ShoppingStore
     @Environment(\.dismiss) private var dismiss
+    private let listID: UUID
+    @State private var name: String
     @State private var tintName: String
     @State private var symbolName: String
 
     init(store: ShoppingStore) {
         self.store = store
+        listID = store.selectedListID
+        _name = State(initialValue: store.currentList.name)
         _tintName = State(initialValue: store.currentList.tintName)
         _symbolName = State(initialValue: store.currentList.symbolName)
     }
@@ -16,7 +20,8 @@ struct ListAppearanceEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    Label(store.currentList.name, systemImage: symbolName)
+                    TextField("שם הרשימה", text: $name)
+                    Label(name, systemImage: symbolName)
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(Theme.tint(for: tintName))
                         .frame(maxWidth: .infinity, minHeight: 76)
@@ -63,16 +68,18 @@ struct ListAppearanceEditor: View {
                     .padding(.vertical, 4)
                 }
             }
-            .navigationTitle("מראה הרשימה")
+            .navigationTitle("פרטי הרשימה")
             .navigationBarTitleDisplayMode(.inline)
             .tint(Theme.tint(for: tintName))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("ביטול") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("שמירה") {
+                        guard store.selectedListID == listID else { dismiss(); return }
+                        store.renameCurrentList(to: name)
                         store.setAppearance(tintName: tintName, symbolName: symbolName)
                         dismiss()
-                    }
+                    }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }

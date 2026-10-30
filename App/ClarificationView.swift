@@ -8,6 +8,7 @@ struct ClarificationView: View {
     @ObservedObject var store: ShoppingStore
     let item: ShoppingItem
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("clarificationReadReplies") private var clarificationReceipts = "{}"
     @State private var question = ""
     @State private var answer = ""
     @State private var conflict = false
@@ -84,7 +85,8 @@ struct ClarificationView: View {
             }
             .navigationTitle("צריך בירור").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("סיום") { dismiss() } } }
-            .onAppear { baseline = current?.clarification }
+            .onAppear { baseline = current?.clarification; markReplyRead() }
+            .onChange(of: current?.clarification) { _, _ in markReplyRead() }
             .sheet(isPresented: $showingCamera) { ItemCamera { if let current { store.setPhoto($0, for: current) } } }
             .onChange(of: selectedPhoto) { _, selection in
                 guard let selection else { return }
@@ -103,6 +105,11 @@ struct ClarificationView: View {
                 Button("סיום", role: .cancel) { baseline = current?.clarification }
             } message: { Text("המידע השתנה במכשיר אחר. הטקסט שהקלדת נשמר כאן; בדקו את העדכון לפני שמירה נוספת.") }
         }
+    }
+
+    private func markReplyRead() {
+        guard let current else { return }
+        clarificationReceipts = ClarificationReadState.markingRead(current, receipts: clarificationReceipts)
     }
 
     private func save(_ value: ItemClarification) {

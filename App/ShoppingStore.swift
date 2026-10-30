@@ -9,6 +9,9 @@ final class ShoppingStore: ObservableObject {
     struct WidgetNavigation: Identifiable {
         let id = UUID()
         var itemID: UUID? = nil
+        var listID: UUID? = nil
+        var openListOnly = false
+        var openClarification = false
     }
     @Published var widgetNavigation: WidgetNavigation?
 
@@ -82,8 +85,20 @@ final class ShoppingStore: ObservableObject {
         fileURL = path
         journalURL = directory.appendingPathComponent("sync-journal.json")
         let loadedData: ShoppingData
+        #if targetEnvironment(simulator)
+        let fixture = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+            ? ProcessInfo.processInfo.environment["UITEST_FIXTURE_JSON"]?.data(using: .utf8) : nil
+        if fixture != nil {
+            UserDefaults.standard.set(true, forKey: "groupShoppingByCategory")
+            UserDefaults.standard.set("{}", forKey: "collapsedShoppingSections")
+        }
+        #else
+        let fixture: Data? = nil
+        #endif
         do {
-            if FileManager.default.fileExists(atPath: path.path) {
+            if let fixture {
+                loadedData = try JSONDecoder().decode(ShoppingData.self, from: fixture)
+            } else if FileManager.default.fileExists(atPath: path.path) {
                 loadedData = try JSONDecoder().decode(ShoppingData.self, from: Data(contentsOf: path))
             } else { loadedData = ShoppingData() }
         } catch {
@@ -99,6 +114,7 @@ final class ShoppingStore: ObservableObject {
         lastJournaledData = loadedData
         syncJournal = (try? Data(contentsOf: journalURL))
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
+        if fixture != nil { syncJournal = SyncJournal() }
         syncJournal.seed(loadedData)
         selectedListID = listID
         if !loadFailed { publishWidgetSnapshot() }
@@ -276,6 +292,53 @@ final class ShoppingStore: ObservableObject {
         data.items.removeAll { $0.id == item.id }
         if let name = item.photoFilename { try? FileManager.default.removeItem(at: photoDirectory.appendingPathComponent(name)) }
         persist()
+    }
+
+    func remove(_ item: ShoppingItem, undoManager: UndoManager?) {
+        remove(Set([item.id]), undoManager: undoManager)
+    }
+
+    func remove(_ ids: Set<UUID>, undoManager: UndoManager?) {
+        let originals = data.items.filter { ids.contains($0.id) }.map { item in
+            var saved = item
+            if saved.photoData == nil, let url = legacyPhotoURL(for: item) {
+                saved.photoData = try? Data(contentsOf: url)
+            }
+            return saved
+        }
+        guard !originals.isEmpty else { return }
+        let previousDeferrals = data.deferrals
+        remove(ids)
+        let removedDeferrals = data.deferrals
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            var restoredIDs: Set<UUID> = []
+            for var item in originals {
+                // Do not overwrite a newer row or restore into a deleted list.
+                guard target.data.lists.contains(where: { $0.id == item.listID }),
+                      !target.data.items.contains(where: { $0.id == item.id || ($0.listID == item.listID && $0.productID == item.productID) }),
+                      !target.data.purchases.contains(where: { $0.sourceItemID == item.id }) else { continue }
+                item.photoFilename = nil // Photo bytes above survive the removed legacy file.
+                target.data.items.append(item)
+                restoredIDs.insert(item.id)
+                let matches: (Deferral) -> Bool = { $0.listID == item.listID && $0.productID == item.productID }
+                // Only undo the deferral written by this deletion.
+                if target.data.deferrals.first(where: matches) == removedDeferrals.first(where: matches) {
+                    target.data.deferrals.removeAll(where: matches)
+                    if let previous = previousDeferrals.first(where: matches) { target.data.deferrals.append(previous) }
+                }
+            }
+            guard !restoredIDs.isEmpty else { return }
+            target.persist()
+            let restoredRows = target.data.items.filter { restoredIDs.contains($0.id) }
+            undoManager?.registerUndo(withTarget: target) { [weak undoManager] target in
+                guard restoredRows.allSatisfy({ row in
+                    target.data.items.first(where: { $0.id == row.id }) == row
+                }) else { return }
+                target.remove(Set(restoredRows.map(\.id)), undoManager: undoManager)
+            }
+            undoManager?.setActionName(NSLocalizedString("מחיקת מוצרים", comment: "Undo deletion"))
+        }
+        undoManager?.setActionName(NSLocalizedString("מחיקת מוצרים", comment: "Undo deletion"))
     }
 
     func updateNote(of item: ShoppingItem, to value: String) {
@@ -518,6 +581,18 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
+    func rename(_ item: ShoppingItem, to name: String, undoManager: UndoManager?) {
+        guard let previous = product(for: item.productID)?.name else { return }
+        rename(item, to: name)
+        guard let updated = product(for: item.productID)?.name, updated != previous else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] target in
+            guard target.product(for: item.productID)?.name == updated,
+                  target.data.items.contains(where: { $0.id == item.id }) else { return }
+            target.rename(item, to: previous, undoManager: undoManager)
+        }
+        undoManager?.setActionName(NSLocalizedString("שינוי שם מוצר", comment: "Undo rename"))
+    }
+
     func toggleUrgent(_ item: ShoppingItem) {
         guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
         data.items[index].isUrgent.toggle()
@@ -626,11 +701,13 @@ final class ShoppingStore: ObservableObject {
         guard let current = data.items.first(where: { $0.id == item.id }) else { return }
         retainSection(of: current)
         let route = orderedItems(in: current.listID)
-        let originalOrder = route.firstIndex(where: { $0.id == current.id })
-        // Freeze this item's list, even if a widget targets a different list.
-        for (order, visible) in route.enumerated() {
+        let frozen = ShoppingRouteOrder.frozenPositions(for: route)
+        let originalOrder = frozen[current.id]
+        // Assign only missing positions; existing rows keep their gaps and do
+        // not create unrelated CloudKit revisions on every check-off.
+        for visible in route where visible.manualOrder == nil {
             if let index = data.items.firstIndex(where: { $0.id == visible.id }) {
-                data.items[index].manualOrder = order
+                data.items[index].manualOrder = frozen[visible.id]
             }
         }
         data.items.removeAll { $0.id == current.id }
@@ -903,6 +980,7 @@ final class ShoppingStore: ObservableObject {
 
     func mergeRemote(_ revisions: [SyncRevision]) {
         guard !loadFailed else { return }
+        let before = data
         var changed = false
         for revision in revisions {
             changed = syncJournal.merge(revision, into: &data) || changed
@@ -913,6 +991,11 @@ final class ShoppingStore: ObservableObject {
             selectedListID = data.lists.first?.id ?? ShoppingList.defaultID
         }
         saveLocal()
+        if storageError == nil && ClarificationNotifications.enabled {
+            let notices = ClarificationNotice.changes(from: before, to: data,
+                sharedListIDs: Set(sharedLists.map(\.listID)))
+            ClarificationNotifications.enqueue(notices, products: data.products, items: data.items)
+        }
         ProductDecisionService.shared.schedule(store: self)
     }
 }
