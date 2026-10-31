@@ -30,6 +30,7 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 - [Data and architecture](docs/ARCHITECTURE.md)
 - [Prediction contract](docs/PREDICTION.md)
 - [Jev spike](docs/JEV.md)
+- [ChatGPT plan usage feasibility (#38; Phase 0 on hold)](docs/adr/0001-chatgpt-plan-usage.md)
 - [v1 dependency graph](docs/ROADMAP.md)
 - [First TestFlight install](docs/TESTFLIGHT.md)
 
