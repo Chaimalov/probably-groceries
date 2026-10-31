@@ -31,6 +31,9 @@ struct SharedListBinding: Codable, Equatable {
         result.formUnion(purchases.map { "purchase_\($0.id.uuidString)" })
         result.formUnion(deferrals.map { "deferral_\(listID.uuidString)_\($0.productID.uuidString)" })
         result.formUnion(products.map { "product_\($0.uuidString)" })
+        if data.decisionBatches.contains(where: { $0.listID == listID }) {
+            result.insert("decision_\(listID.uuidString)")
+        }
         return result
     }
 }

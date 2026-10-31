@@ -15,6 +15,7 @@ struct DraftEntry: Codable, Identifiable, Equatable {
     var reason: String?
     // Optional for drafts written before per-request timestamps existed.
     var requestedAt: Date? = nil
+    var isDecisionSuggestion: Bool? = nil
 }
 
 struct ShoppingDraft: Codable, Equatable {

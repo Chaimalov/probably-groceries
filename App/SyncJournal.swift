@@ -34,6 +34,7 @@ struct SyncJournal: Codable {
         for deferral in data.deferrals {
             insert(deferral, key: "deferral_\(deferral.listID.uuidString)_\(deferral.productID.uuidString)")
         }
+        for batch in data.decisionBatches { insert(batch, key: "decision_\(batch.listID.uuidString)") }
         return records
     }
 
@@ -107,6 +108,12 @@ struct SyncJournal: Codable {
                 data.deferrals.append(value)
             } else if revision.payload == nil {
                 data.deferrals.removeAll { key == "deferral_\($0.listID.uuidString)_\($0.productID.uuidString)" }
+            } else { return false }
+        } else if key.hasPrefix("decision_") {
+            if let value = decode(GroceryDecisionBatch.self), key == "decision_\(value.listID.uuidString)" {
+                data.decisionBatches.removeAll { $0.listID == value.listID }; data.decisionBatches.append(value)
+            } else if revision.payload == nil {
+                data.decisionBatches.removeAll { key == "decision_\($0.listID.uuidString)" }
             } else { return false }
         } else { return false }
         return true
