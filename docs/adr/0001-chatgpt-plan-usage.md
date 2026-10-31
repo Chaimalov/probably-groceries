@@ -3,7 +3,17 @@
 Date: 2026-10-30. Epic: [#38](https://github.com/Chaimalov/probably-groceries/issues/38).
 Baseline: `2a364e5` on main. Status: **HOLD at Phase 0; no production integration approved.**
 
-## Decision
+## Superseding clarification — 2026-10-31
+
+The owner explicitly selects **Decisions API**, with a single consenting household sponsor and shared recommendation results. The SIWC exploration below is historical and does not establish access to this endpoint. Do not implement Responses as a substitute.
+
+[Decisions documentation](https://developers.openai.com/api/docs/guides/decisions) identifies `gpt-6-luna` and bounded predicate/choice/score answers. Native code must construct candidates, validate results and own mutations. Update the contract accordingly; arbitrary prose/JSON generation is outside this decision boundary.
+
+[SIWC inference documentation](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) establishes Responses access only. Decisions authorization through that token remains unverified. [API subscription credits](https://developers.openai.com/api/docs/guides/chatgpt-api-credits) are a separate organization-key benefit for eligible Pro/Business subscriptions; Plus does not qualify. A funded API project behind the existing Worker is a candidate route, requiring an explicit billing choice and access verification. No spending or subscription upgrade is authorized.
+
+Share recommendation records through CloudKit, never credentials. Device-hosted calculations depend on sponsor availability. Offline intelligence remains disabled. See the updated [epic](https://github.com/Chaimalov/probably-groceries/issues/38) for current requirements. **Phase 0 remains HOLD on the Decisions authorization/funding route; the old SIWC-only gates below apply only if that route becomes supported.** No live provider test has been performed.
+
+## Original SIWC decision (2026-10-30)
 
 The official service exists and supports user-authorized inference. However, this audit does not establish that our native iOS distribution and callback flow are supported, or that the required structured output works on an eligible account. Keep the existing implementation until those gates have evidence. This is uncertainty, not a claim that iOS is prohibited.
 
