@@ -28,7 +28,10 @@ extension ShoppingStore {
                               quantity: suggestion.quantity, unit: suggestion.product.preferredUnit,
                               place: previous?.shoppingPlace,
                               note: previous?.note, photoData: previous?.photoData, section: previous?.sectionName,
-                              reason: predictionEvaluations.first { $0.id == suggestion.id }?.reason)
+                              reason: currentList.decisionRecommendations == true
+                                ? "הצעה לפי הקניות האחרונות"
+                                : predictionEvaluations.first { $0.id == suggestion.id }?.reason,
+                              isDecisionSuggestion: currentList.decisionRecommendations == true ? true : nil)
         })
         saveDraft(draft)
         return draft
@@ -49,7 +52,11 @@ extension ShoppingStore {
     func confirmDraft(_ draft: ShoppingDraft) -> Bool {
         guard draft.listID == selectedListID else { return false }
         let scope = Set(data.products.filter { productBelongsToCurrentScope($0) }.map(\.id))
-        let updated = draft.applying(to: data, productScope: scope)
+        var applicable = draft
+        let validSuggestions = Set(suggestions.map(\.id))
+        applicable.entries.removeAll { $0.isDecisionSuggestion == true &&
+            ($0.productID.map { !validSuggestions.contains($0) } ?? true) }
+        let updated = applicable.applying(to: data, productScope: scope)
         guard applyDraftData(updated) else { return false }
         UserDefaults.standard.removeObject(forKey: draftKey(draft.listID))
         return true

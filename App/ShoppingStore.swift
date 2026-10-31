@@ -19,6 +19,7 @@ final class ShoppingStore: ObservableObject {
     @Published private(set) var selectedListID: UUID
     @Published private(set) var storageError: String?
     private var loadFailed = false
+    private var decisionObservation: AnyCancellable?
     @Published private(set) var syncStatus: PersonalCloudSync.Status = .local
 
     private let fileURL: URL
@@ -118,6 +119,9 @@ final class ShoppingStore: ObservableObject {
         syncJournal.seed(loadedData)
         selectedListID = listID
         if !loadFailed { publishWidgetSnapshot() }
+        decisionObservation = GroceryDecisionService.shared.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.objectWillChange.send() }
+        }
         migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
@@ -136,6 +140,7 @@ final class ShoppingStore: ObservableObject {
         guard data.lists.contains(where: { $0.id == id }) else { return }
         selectedListID = id
         UserDefaults.standard.set(id.uuidString, forKey: "selectedShoppingListID")
+        GroceryDecisionService.shared.schedule(store: self)
         publishWidgetSnapshot()
         refreshBadge()
         PhoneWatchBridge.shared.publish(watchSnapshot())
@@ -168,6 +173,7 @@ final class ShoppingStore: ObservableObject {
         data.items.removeAll { $0.listID == id }
         data.purchases.removeAll { $0.listID == id }
         data.deferrals.removeAll { $0.listID == id }
+        data.decisionBatches.removeAll { $0.listID == id }
         data.lists.removeAll { $0.id == id }
         if data.lists.isEmpty {
             data.lists.append(ShoppingList(id: UUID(), name: "קניות"))
@@ -789,7 +795,9 @@ final class ShoppingStore: ObservableObject {
 
     var suggestions: [Suggestion] {
         let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
-        return predictionEvaluations.compactMap(\.suggestion).sorted { left, right in
+        let proposals = currentList.decisionRecommendations == true
+            ? decisionSuggestions : predictionEvaluations.compactMap(\.suggestion)
+        return proposals.sorted { left, right in
             switch (positions[left.id], positions[right.id]) {
             case let (a?, b?) where a != b: return a < b
             case (_?, nil): return true
@@ -839,6 +847,7 @@ final class ShoppingStore: ObservableObject {
         saveLocal()
         cloudSync.schedule()
         ProductDecisionService.shared.schedule(store: self)
+        GroceryDecisionService.shared.schedule(store: self)
     }
 
     func recordLearningLink(from source: Product, to target: Product, listID: UUID,
@@ -997,6 +1006,7 @@ final class ShoppingStore: ObservableObject {
             ClarificationNotifications.enqueue(notices, products: data.products, items: data.items)
         }
         ProductDecisionService.shared.schedule(store: self)
+        GroceryDecisionService.shared.schedule(store: self)
     }
 }
 
@@ -1005,3 +1015,39 @@ final class ShoppingStore: ObservableObject {
 
 
 
+
+extension ShoppingStore {
+    func enableDecisionRecommendations() {
+        guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }) else { return }
+        data.lists[index].decisionRecommendations = true
+        persist()
+    }
+
+    func saveDecisionBatch(_ batch: GroceryDecisionBatch) {
+        guard data.lists.contains(where: { $0.id == batch.listID }) else { return }
+        data.decisionBatches.removeAll { $0.listID == batch.listID }
+        data.decisionBatches.append(batch)
+        persist()
+    }
+
+    func clearDecisionBatches(sponsorID: String) {
+        data.decisionBatches.removeAll { $0.sponsorID == sponsorID }
+        persist()
+    }
+
+    private var decisionSuggestions: [Suggestion] {
+        let service = GroceryDecisionService.shared
+        let now = Date.now
+        guard service.online,
+              let batch = data.decisionBatches.first(where: { $0.listID == selectedListID }),
+              batch.generatedAt <= now, now.timeIntervalSince(batch.generatedAt) < GroceryDecisionContract.lifetime,
+              service.revision(data, listID: selectedListID, now: now) == batch.revision else { return [] }
+        let ids = Set(batch.recommendations)
+        // Re-evaluate native suppression and quantities even for synchronized proposals.
+        let candidates = GroceryDecisionContract.candidates(in: data, listID: selectedListID, now: now)
+        return candidates.filter { ids.contains($0.id) }.compactMap { candidate in
+            guard let product = product(for: candidate.id) else { return nil }
+            return Suggestion(product: product, quantity: candidate.quantity, tier: .likely, progress: 1)
+        }
+    }
+}

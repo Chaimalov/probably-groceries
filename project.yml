@@ -146,6 +146,9 @@ targets:
       - Tests/ShoppingDraftTests.swift
       - App/ShoppingDraft.swift
       - App/ShoppingSession.swift
+      - App/GroceryDecision.swift
+      - App/GroceryDecisionClient.swift
+      - Tests/GroceryDecisionTests.swift
       - Tests/PredictionEngineTests.swift
       - Tests/PredictionDiagnosticsTests.swift
       - App/PredictionDiagnostics.swift

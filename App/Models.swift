@@ -19,8 +19,9 @@ struct ShoppingList: Codable, Identifiable, Hashable {
     var symbolName: String = "cart"
     var sectionStyles: [String: SectionAppearance]? = nil
     var sectionAliases: [String: String]? = nil
+    var decisionRecommendations: Bool? = nil
 
-    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName, sectionStyles, sectionAliases }
+    enum CodingKeys: String, CodingKey { case id, name, sections, tintName, symbolName, sectionStyles, sectionAliases, decisionRecommendations }
     init(id: UUID, name: String, sections: [String] = [], tintName: String = "green", symbolName: String = "cart") {
         self.id = id; self.name = name; self.sections = sections
         self.tintName = tintName; self.symbolName = symbolName
@@ -34,6 +35,7 @@ struct ShoppingList: Codable, Identifiable, Hashable {
         symbolName = try c.decodeIfPresent(String.self, forKey: .symbolName) ?? "cart"
         sectionStyles = try c.decodeIfPresent([String: SectionAppearance].self, forKey: .sectionStyles)
         sectionAliases = try c.decodeIfPresent([String: String].self, forKey: .sectionAliases)
+        decisionRecommendations = try c.decodeIfPresent(Bool.self, forKey: .decisionRecommendations)
     }
 }
 
@@ -157,8 +159,9 @@ struct ShoppingData: Codable {
     var confirmedDrafts: [UUID] = []
 
     var watchReceipts: [UUID] = []
+    var decisionBatches: [GroceryDecisionBatch] = []
 
-    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts, watchReceipts }
+    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts, watchReceipts, decisionBatches }
     init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")],
          products: [Product] = [], items: [ShoppingItem] = [],
          purchases: [Purchase] = [], deferrals: [Deferral] = []) {
@@ -175,6 +178,7 @@ struct ShoppingData: Codable {
         deferrals = try c.decodeIfPresent([Deferral].self, forKey: .deferrals) ?? []
         confirmedDrafts = try c.decodeIfPresent([UUID].self, forKey: .confirmedDrafts) ?? []
         watchReceipts = try c.decodeIfPresent([UUID].self, forKey: .watchReceipts) ?? []
+        decisionBatches = try c.decodeIfPresent([GroceryDecisionBatch].self, forKey: .decisionBatches) ?? []
     }
 }
 
