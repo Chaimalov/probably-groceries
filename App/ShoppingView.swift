@@ -527,7 +527,11 @@ struct ShoppingView: View {
             store.cloudSync.start()
             #endif
         }
+        .onChange(of: GroceryDecisionService.shared.online) { _, online in
+            if online { GroceryDecisionService.shared.schedule(store: store) }
+        }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { GroceryDecisionService.shared.schedule(store: store) }
             if phase == .background { presentation.reset() }
             #if !targetEnvironment(simulator)
             if phase == .active { store.cloudSync.start() }

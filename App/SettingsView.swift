@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showingAppearance = false
     @State private var showingRename = false
     @State private var showingDecisions = false
+    @State private var showingIntelligence = false
     @State private var showingDiagnostics = false
     @State private var confirmingDelete = false
     @State private var deletingListID: UUID?
@@ -61,6 +62,7 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    Button("המלצות חכמות", systemImage: "sparkles") { showingIntelligence = true }
                     Button("זיהוי מוצרים", systemImage: "sparkles") { showingDecisions = true }
                     Label(LocalizedStringKey(syncLabel), systemImage: "icloud")
                     Text("הסנכרון פועל אוטומטית כשיש חיבור. אפשר להמשיך לקנות גם בלעדיו.")
@@ -100,6 +102,7 @@ struct SettingsView: View {
             }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("סיום") { dismiss() } } }
             .sheet(isPresented: $showingAppearance) { ListAppearanceEditor(store: store) }
+            .sheet(isPresented: $showingIntelligence) { GroceryDecisionSettings(store: store) }
             .sheet(isPresented: $showingDecisions) { ProductDecisionSettings(store: store) }
             .sheet(isPresented: $showingDiagnostics) { PredictionDebugView(store: store) }
             .alert("שינוי שם הרשימה", isPresented: $showingRename) {

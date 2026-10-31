@@ -47,9 +47,20 @@ struct ShoppingPreparationView: View {
                     }
                     if store.items.isEmpty { Text("אין מוצרים שנותרו").foregroundStyle(.secondary) }
                 }
+                if store.currentList.decisionRecommendations == true {
+                    Section {
+                        Text(GroceryDecisionService.shared.online ? GroceryDecisionService.shared.status : "המלצות זמינות כשיש חיבור לאינטרנט")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("רענון המלצות") {
+                            GroceryDecisionService.shared.schedule(store: store, force: true)
+                        }
+                        .disabled(!GroceryDecisionService.shared.online || GroceryDecisionService.shared.busy
+                                  || !GroceryDecisionService.shared.sponsors(store.selectedListID))
+                    }
+                }
                 Section("השלמות מוצעות") {
                     ForEach($draft.entries) { $entry in
-                        if visible(entry.place) {
+                        if visible(entry.place) && (entry.isDecisionSuggestion != true || store.suggestions.contains(where: { $0.id == entry.productID })) {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     TextField("שם המוצר", text: $entry.name)
@@ -115,7 +126,13 @@ struct ShoppingPreparationView: View {
                 draft.unfinishedName = value
                 store.saveDraft(draft)
             }
-            .onChange(of: draft) { _, value in store.saveDraft(value) }
+            .onChange(of: draft) { previous, value in
+                let explicit = value.preservingExplicitDecisionEdits(comparedTo: previous)
+                if explicit != value { draft = explicit }
+                store.saveDraft(explicit)
+            }
+            .onChange(of: store.data.decisionBatches) { _, _ in appendDecisionSuggestions() }
+            .task { appendDecisionSuggestions() }
             .sheet(item: $draftDetails) { selected in
                 if let index = draft.entries.firstIndex(where: { $0.id == selected.id }) {
                     DraftEntryDetails(entry: $draft.entries[index], sections: store.currentList.sections)
@@ -124,6 +141,16 @@ struct ShoppingPreparationView: View {
             .sheet(item: $details) { ItemDetailsSheet(store: store, item: $0) }
         }
     }
+    private func appendDecisionSuggestions() {
+        guard store.currentList.decisionRecommendations == true else { return }
+        let existing = Set(draft.entries.compactMap(\.productID))
+        for suggestion in store.suggestions where !existing.contains(suggestion.id) {
+            draft.entries.append(DraftEntry(productID: suggestion.id, originalName: suggestion.product.name,
+                name: suggestion.product.name, quantity: suggestion.quantity, unit: suggestion.product.preferredUnit,
+                reason: "הצעה לפי הקניות האחרונות", isDecisionSuggestion: true))
+        }
+    }
+
     private func addManual() {
         let parsed = ShoppingInputParser.parse(manualName)
         guard !parsed.name.isEmpty else { return }

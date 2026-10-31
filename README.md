@@ -30,6 +30,7 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 - [Data and architecture](docs/ARCHITECTURE.md)
 - [Prediction contract](docs/PREDICTION.md)
 - [Jev spike](docs/JEV.md)
+- [User-configured decision providers](docs/DECISION-PROVIDERS.md)
 - [v1 dependency graph](docs/ROADMAP.md)
 - [First TestFlight install](docs/TESTFLIGHT.md)
 

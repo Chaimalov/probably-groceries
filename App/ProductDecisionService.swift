@@ -127,12 +127,13 @@ final class ProductDecisionService: ObservableObject {
 
     private func process(store: ShoppingStore, credentials: Credentials, generation current: UUID) async {
         var calls = 0
-        let listIDs = store.data.lists.map(\.id)
+        let listIDs = store.data.lists.filter { $0.decisionRecommendations != true }.map(\.id)
         for listID in listIDs {
             let ids = Set(store.data.items.filter { $0.listID == listID }.map(\.productID)
                 + store.data.purchases.filter { $0.listID == listID }.map(\.productID))
             for id in ids.sorted(by: { $0.uuidString < $1.uuidString }) {
                 guard generation == current, !Task.isCancelled, calls < 20, store.storageError == nil else { return }
+                guard store.data.lists.first(where: { $0.id == listID })?.decisionRecommendations != true else { break }
                 guard let source = store.product(for: id) else { continue }
                 let candidates = ProductLearning.candidates(for: source, in: store.data, listID: listID)
                 guard !candidates.isEmpty else { continue }
@@ -161,7 +162,8 @@ final class ProductDecisionService: ObservableObject {
                         defaults.set(try JSONEncoder().encode(cache), forKey: "productDecisionCache")
                     }
                     guard generation == current, !Task.isCancelled else { return }
-                    if decision.learningEnabled, decision.decision == "same", decision.probability >= 0.98,
+                    if store.data.lists.first(where: { $0.id == listID })?.decisionRecommendations != true,
+                       decision.learningEnabled, decision.decision == "same", decision.probability >= 0.98,
                        decision.confidence >= 0.9, let target = candidates.first(where: { $0.id == decision.targetID }) {
                         store.recordLearningLink(from: source, to: target, listID: listID, decision: decision)
                     }
