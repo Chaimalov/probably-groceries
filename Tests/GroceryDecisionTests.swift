@@ -99,6 +99,19 @@ final class GroceryDecisionTests: XCTestCase {
         XCTAssertTrue(remoteJournal.merge(try XCTUnwrap(journal.revisions[key]), into: &receiver))
         XCTAssertTrue(receiver.decisionBatches.isEmpty)
     }
+
+    func testUserEditedProposalBecomesManualButExclusionIsPreserved() {
+        let entry = DraftEntry(productID: UUID(), name: "חלב", quantity: 1, isDecisionSuggestion: true)
+        let original = ShoppingDraft(listID: ShoppingList.defaultID, entries: [entry])
+        var edited = original
+        edited.entries[0].quantity = 3
+        XCTAssertNil(edited.preservingExplicitDecisionEdits(comparedTo: original).entries[0].isDecisionSuggestion)
+        edited = original; edited.entries[0].included = false
+        let excluded = edited.preservingExplicitDecisionEdits(comparedTo: original)
+        XCTAssertEqual(excluded.entries[0].isDecisionSuggestion, true)
+        XCTAssertFalse(excluded.entries[0].included)
+    }
+
     func testOlderDataDecodesWithoutDecisionFeature() throws {
         let data = try JSONDecoder().decode(ShoppingData.self, from: Data("{}".utf8))
         XCTAssertTrue(data.decisionBatches.isEmpty)
@@ -135,7 +148,18 @@ extension GroceryDecisionTests {
                 XCTAssertEqual(request.url, provider.endpoint)
                 XCTAssertEqual(request.httpMethod, "POST")
                 XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-key")
-                let body = try XCTUnwrap(request.httpBody)
+                var requestBytes = request.httpBody
+                if requestBytes == nil, let stream = request.httpBodyStream {
+                    stream.open(); defer { stream.close() }
+                    var bytes = Data(); var buffer = [UInt8](repeating: 0, count: 4096)
+                    while stream.hasBytesAvailable {
+                        let count = stream.read(&buffer, maxLength: buffer.count)
+                        guard count > 0 else { break }
+                        bytes.append(contentsOf: buffer.prefix(count))
+                    }
+                    requestBytes = bytes
+                }
+                let body = try XCTUnwrap(requestBytes)
                 let text = String(decoding: body, as: UTF8.self)
                 XCTAssertFalse(text.contains(values[0].id.uuidString))
                 let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])

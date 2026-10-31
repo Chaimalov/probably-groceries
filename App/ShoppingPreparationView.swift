@@ -126,7 +126,11 @@ struct ShoppingPreparationView: View {
                 draft.unfinishedName = value
                 store.saveDraft(draft)
             }
-            .onChange(of: draft) { _, value in store.saveDraft(value) }
+            .onChange(of: draft) { previous, value in
+                let explicit = value.preservingExplicitDecisionEdits(comparedTo: previous)
+                if explicit != value { draft = explicit }
+                store.saveDraft(explicit)
+            }
             .onChange(of: store.data.decisionBatches) { _, _ in appendDecisionSuggestions() }
             .task { appendDecisionSuggestions() }
             .sheet(item: $draftDetails) { selected in

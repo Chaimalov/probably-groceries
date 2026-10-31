@@ -103,3 +103,22 @@ enum ShoppingInputParser {
 }
 
 
+
+extension ShoppingDraft {
+    // Editing a proposal is an explicit user request; preserve it even if the
+    // provider later expires, disconnects or the device goes offline.
+    func preservingExplicitDecisionEdits(comparedTo previous: ShoppingDraft) -> ShoppingDraft {
+        var result = self
+        for index in result.entries.indices where result.entries[index].isDecisionSuggestion == true {
+            let current = result.entries[index]
+            guard let old = previous.entries.first(where: { $0.id == current.id }) else { continue }
+            if current.name != old.name || current.quantity != old.quantity || current.unit != old.unit ||
+                current.place != old.place || current.note != old.note || current.photoData != old.photoData ||
+                current.section != old.section || (!old.included && current.included) {
+                result.entries[index].isDecisionSuggestion = nil
+                result.entries[index].reason = nil
+            }
+        }
+        return result
+    }
+}
