@@ -80,7 +80,14 @@ struct SettingsView: View {
                 }
                 Section {
                     if store.canDeleteCurrentList {
-                        Button("מחיקת הרשימה", systemImage: "trash", role: .destructive) { deletingListID = store.selectedListID; confirmingDelete = true }
+                        Button(role: .destructive) {
+                            deletingListID = store.selectedListID
+                            confirmingDelete = true
+                        } label: {
+                            Label("מחיקת הרשימה", systemImage: "trash")
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(.red)
+                        }
                     } else {
                         Text("כדי לצאת מרשימה שמשותפת איתך, פתחו את ניהול השיתוף.")
                             .font(.footnote).foregroundStyle(.secondary)
