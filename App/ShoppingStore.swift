@@ -279,7 +279,7 @@ final class ShoppingStore: ObservableObject {
         guard let list = voiceWritableLists.first(where: { $0.id == listID }) else {
             throw CaptureError.listUnavailable
         }
-        let parsed = ShoppingInputParser.parse(rawName)
+        let parsed = quantity == nil ? ShoppingInputParser.parseDictation(rawName) : ShoppingInputParser.parse(rawName)
         let amount = quantity ?? parsed.quantity
         let rawUnit = unit?.trimmingCharacters(in: .whitespacesAndNewlines)
         let measuredIn = rawUnit.flatMap { $0.isEmpty ? nil : (ShoppingInputParser.unit(for: $0) ?? $0) } ?? parsed.unit

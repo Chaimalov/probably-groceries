@@ -36,6 +36,22 @@ final class GroceryCaptureTests: XCTestCase {
         }
     }
 
+    func testDictatedCountsNormalizeKnownProductsWithoutChangingTypedNames() {
+        for dictation in ["ארבע גמבות", "4 גמבות", "ארבעה גמבות"] {
+            XCTAssertEqual(ShoppingInputParser.parseDictation(dictation),
+                           .init(name: "גמבה", quantity: 4, unit: nil))
+        }
+        XCTAssertEqual(ShoppingInputParser.parseDictation("שני מלפפונים בייבי"),
+                       .init(name: "מלפפון בייבי", quantity: 2, unit: nil))
+        XCTAssertEqual(ShoppingInputParser.parseDictation("שלוש חבילות פסטה"),
+                       .init(name: "פסטה", quantity: 3, unit: "חבילות"))
+        for name in ["ארבע עונות", "7 Up", "חלב 3%", "0 גמבות", "גמבות"] {
+            XCTAssertEqual(ShoppingInputParser.parseDictation(name), .init(name: name, quantity: 1, unit: nil))
+        }
+        XCTAssertEqual(ShoppingInputParser.parse("ארבע גמבות"),
+                       .init(name: "ארבע גמבות", quantity: 1, unit: nil))
+    }
+
     func testOfflineInsertUsesListHistoryBeforeCatalogAndKeepsOneActiveRow() throws {
         let product = Product(id: UUID(), name: "שמן קנולה", usualQuantity: 1)
         var purchase = Purchase(id: UUID(), productID: product.id, quantity: 1, purchasedAt: .now,
