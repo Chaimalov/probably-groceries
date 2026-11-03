@@ -90,16 +90,41 @@ enum ShoppingInputParser {
     struct Result: Equatable { var name: String; var quantity: Int; var unit: String? }
     static func parse(_ raw: String) -> Result {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let parts = text.split(separator: " ").map(String.init)
-        let units = ["packs": "packs", "pack": "packs", "liters": "liters", "kg": "kg", "חב": "חבילות", "חבילות": "חבילות", "ליטר": "ליטרים", "ק״ג": "ק״ג", "יח׳": "יחידות", "יח'": "יחידות", "יח": "יחידות", "יחידות": "יחידות"]
-        // A number alone can be part of a product name (e.g. milk 3%). Only
-        // parse an explicit recognized trailing unit; keep all other text.
-        if parts.count >= 3, let unit = units[parts.last!],
-           let quantity = Int(parts[parts.count - 2]), (1...9999).contains(quantity) {
-            return Result(name: parts.dropLast(2).joined(separator: " "), quantity: quantity, unit: unit)
+        let parts = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        if parts.count >= 3 {
+            if let unit = unit(for: parts[1]), let quantity = number(parts[0]) {
+                return Result(name: parts.dropFirst(2).joined(separator: " "), quantity: quantity, unit: unit)
+            }
+            if let unit = unit(for: parts[parts.count - 1]), let quantity = number(parts[parts.count - 2]) {
+                return Result(name: parts.dropLast(2).joined(separator: " "), quantity: quantity, unit: unit)
+            }
         }
         return Result(name: text, quantity: 1, unit: nil)
     }
+    static func unit(for text: String) -> String? {
+        units[text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
+    }
+
+    private static func number(_ word: String) -> Int? {
+        guard let value = Int(word) ?? numbers[word.lowercased()], (1...9999).contains(value) else { return nil }
+        return value
+    }
+
+    private static let units = [
+        "pack": "packs", "packs": "packs", "liter": "liters", "liters": "liters", "kg": "kg",
+        "חב": "חבילות", "חב׳": "חבילות", "חבילה": "חבילות", "חבילות": "חבילות",
+        "ליטר": "ליטרים", "ליטרים": "ליטרים", "קילו": "ק״ג", "קילוגרם": "ק״ג", "ק״ג": "ק״ג",
+        "יח׳": "יחידות", "יח'": "יחידות", "יח": "יחידות", "יחידה": "יחידות", "יחידות": "יחידות",
+        "בקבוק": "בקבוקים", "בקבוקים": "בקבוקים"
+    ]
+    private static let numbers = [
+        "אחת": 1, "אחד": 1, "שתי": 2, "שני": 2, "שתיים": 2, "שניים": 2,
+        "שלוש": 3, "שלושה": 3, "ארבע": 4, "ארבעה": 4, "חמש": 5, "חמישה": 5,
+        "שש": 6, "שישה": 6, "שבע": 7, "שבעה": 7, "שמונה": 8,
+        "תשע": 9, "תשעה": 9, "עשר": 10, "עשרה": 10,
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5
+    ]
+
 }
 
 

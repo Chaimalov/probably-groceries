@@ -145,6 +145,8 @@ targets:
       - App/BadgePolicy.swift
       - Tests/ShoppingDraftTests.swift
       - App/ShoppingDraft.swift
+      - App/GroceryCapture.swift
+      - Tests/GroceryCaptureTests.swift
       - App/ShoppingSession.swift
       - App/GroceryDecision.swift
       - App/GroceryDecisionClient.swift

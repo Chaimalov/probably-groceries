@@ -1,0 +1,30 @@
+{
+  "sourceLanguage": "he",
+  "strings": {
+    "תוסיפי מוצר דרך ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Add a grocery item with ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "תוסיפי מוצר לרשימה ${list} דרך ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "Add a grocery item to ${list} with ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version": "1.1"
+}

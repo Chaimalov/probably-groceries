@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 import UIKit
 import WidgetKit
@@ -36,6 +37,7 @@ final class ShoppingStore: ObservableObject {
         if let index = bindings.firstIndex(where: { $0.listID == binding.listID }) {
             var updated = binding
             updated.keys.formUnion(bindings[index].keys)
+            updated.canWrite = binding.canWrite ?? bindings[index].canWrite
             bindings[index] = updated
         } else { bindings.append(binding) }
         guard bindings != sharedLists else { return }
@@ -74,6 +76,9 @@ final class ShoppingStore: ObservableObject {
                                         ownerName: ownerName, isOwner: true)
         binding.includeRecords(in: data)
         syncJournal.sharedLists = sharedLists + [binding]
+        if UserDefaults.standard.string(forKey: GroceryCapture.defaultListKey) == oldID.uuidString {
+            UserDefaults.standard.set(newID.uuidString, forKey: GroceryCapture.defaultListKey)
+        }
         selectedListID = newID
         UserDefaults.standard.set(newID.uuidString, forKey: "selectedShoppingListID")
         persist()
@@ -116,7 +121,12 @@ final class ShoppingStore: ObservableObject {
         syncJournal = (try? Data(contentsOf: journalURL))
             .flatMap { try? JSONDecoder().decode(SyncJournal.self, from: $0) } ?? SyncJournal()
         if fixture != nil { syncJournal = SyncJournal() }
+        syncJournal.recoverVoiceRevisions(in: loadedData)
         syncJournal.seed(loadedData)
+        if var bindings = syncJournal.sharedLists {
+            for index in bindings.indices { bindings[index].includeRecords(in: loadedData) }
+            syncJournal.sharedLists = bindings
+        }
         selectedListID = listID
         if !loadFailed { publishWidgetSnapshot() }
         decisionObservation = GroceryDecisionService.shared.objectWillChange.sink { [weak self] _ in
@@ -223,9 +233,17 @@ final class ShoppingStore: ObservableObject {
     func product(for id: UUID) -> Product? { data.products.first { $0.id == id } }
 
     func productBelongsToCurrentScope(_ product: Product) -> Bool {
+        productBelongsToScope(product, listID: selectedListID)
+    }
+
+    private func productBelongsToScope(_ product: Product, listID: UUID) -> Bool {
         let key = "product_\(product.id.uuidString)"
-        if let binding = currentShare { return binding.keys.contains(key) }
+        if let binding = sharedLists.first(where: { $0.listID == listID }) { return binding.keys.contains(key) }
         return !sharedLists.contains { $0.keys.contains(key) }
+    }
+
+    private func productScope(in listID: UUID) -> Set<UUID> {
+        Set(data.products.filter { productBelongsToScope($0, listID: listID) }.map(\.id))
     }
 
     func matchingProducts(_ query: String) -> [Product] {
@@ -241,45 +259,72 @@ final class ShoppingStore: ObservableObject {
     @discardableResult
     func add(name: String, quantity: Int, category: String? = nil,
              department: String? = nil, urgent: Bool = false) -> ShoppingItem? {
-        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !displayName.isEmpty else { return nil }
-        let normalized = Self.normalize(displayName)
-        let productID: UUID
-        if let existing = data.products.first(where: {
-            Self.normalize($0.name) == normalized &&
-            productBelongsToCurrentScope($0)
-        }) {
-            productID = existing.id
-            if let category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               let index = data.products.firstIndex(where: { $0.id == productID }) {
-                data.products[index].category = category.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        } else {
-            let product = Product(id: UUID(), name: displayName, usualQuantity: max(1, quantity),
-                                  category: category?.trimmingCharacters(in: .whitespacesAndNewlines),
-                                  department: nil)
-            data.products.append(product)
-            productID = product.id
-        }
-        if let index = data.items.firstIndex(where: {
-            $0.productID == productID && $0.listID == selectedListID
-        }) {
-            data.items[index].quantity += max(1, quantity)
-            data.items[index].isUrgent = data.items[index].isUrgent || urgent
-            if let department { data.items[index].sectionName = department.trimmingCharacters(in: .whitespacesAndNewlines) }
-        } else {
-            data.items.append(ShoppingItem(id: UUID(), productID: productID,
-                                           quantity: max(1, quantity), addedAt: .now,
-                                           listID: selectedListID, isUrgent: urgent))
-            data.items[data.items.count - 1].unit = product(for: productID)?.preferredUnit
-            data.items[data.items.count - 1].sectionName = department?.trimmingCharacters(in: .whitespacesAndNewlines)
-                ?? data.purchases.filter { $0.productID == productID && $0.listID == selectedListID }
-                    .max(by: { $0.purchasedAt < $1.purchasedAt })?.sectionName
-        }
-        data.deferrals.removeAll { $0.productID == productID && $0.listID == selectedListID }
+        let scope = productScope(in: selectedListID)
+        guard !loadFailed, let item = data.insertItem(name: name, quantity: quantity, category: category,
+                                                department: department, urgent: urgent, listID: selectedListID, productScope: scope) else { return nil }
         persist()
-        return items.first { $0.productID == productID }
+        return item
     }
+
+    var voiceWritableLists: [ShoppingList] {
+        guard !loadFailed, syncStatus != .accountChanged else { return [] }
+        return GroceryCapture.writableLists(in: data, bindings: sharedLists)
+    }
+
+    enum CaptureError: Error { case listUnavailable, invalidInput, saveFailed }
+
+    func captureGrocery(_ rawName: String, quantity: Int?, unit: String?, listID: UUID,
+                        requestID: UUID?, now: Date = .now) throws -> (item: String, list: String) {
+        guard !loadFailed else { throw CaptureError.saveFailed }
+        guard let list = voiceWritableLists.first(where: { $0.id == listID }) else {
+            throw CaptureError.listUnavailable
+        }
+        let parsed = ShoppingInputParser.parse(rawName)
+        let amount = quantity ?? parsed.quantity
+        let rawUnit = unit?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let measuredIn = rawUnit.flatMap { $0.isEmpty ? nil : (ShoppingInputParser.unit(for: $0) ?? $0) } ?? parsed.unit
+        guard !parsed.name.isEmpty, (1...9999).contains(amount), (measuredIn?.count ?? 0) <= 24 else {
+            throw CaptureError.invalidInput
+        }
+
+        // The system doesn't supply a stable invocation ID. Automations can
+        // supply one. Siri uses a short, input-specific replay window instead.
+        let signature = try JSONEncoder().encode([listID.uuidString, GroceryCapture.normalize(parsed.name),
+                                                  String(amount), measuredIn ?? ""])
+        let fingerprint = Data(SHA256.hash(data: signature)).base64EncodedString()
+        let key = requestID?.uuidString ?? fingerprint
+        let cutoff = now.addingTimeInterval(requestID == nil ? -2 : -86400)
+        if let receipt = GroceryCapture.receipt(for: key, in: data.voiceReceipts, since: cutoff) {
+            guard receipt.fingerprint == fingerprint else { throw CaptureError.invalidInput }
+            if storageError != nil { saveLocal() }
+            cloudSync.resumeAfterCapture()
+            return (parsed.name, list.name)
+        }
+
+        let previousData = data
+        let previousJournal = syncJournal
+        let scope = productScope(in: listID)
+        guard data.insertItem(name: parsed.name, quantity: amount, category: nil, department: nil, urgent: false,
+                         listID: listID, productScope: scope, voice: true, unit: measuredIn) != nil else { throw CaptureError.invalidInput }
+        recordLocalChanges(at: now)
+        let revisions = syncJournal.revisions.values.filter { previousJournal.revisions[$0.key] != $0 }
+        data.voiceReceipts.removeAll { $0.date < now.addingTimeInterval(-86400) }
+        data.voiceReceipts.append(GroceryCapture.Receipt(key: key, date: now, fingerprint: fingerprint, revisions: Array(revisions)))
+        // The item and replay receipt share one atomic write. If the second
+        // file write fails, the receipt can restore its journal revisions.
+        guard saveLocal() else {
+            data = previousData
+            syncJournal = previousJournal
+            lastJournaledData = previousData
+            throw CaptureError.saveFailed
+        }
+        lastJournaledData = data
+        cloudSync.resumeAfterCapture()
+        ProductDecisionService.shared.schedule(store: self)
+        GroceryDecisionService.shared.schedule(store: self)
+        return (parsed.name, list.name)
+    }
+
 
     func add(_ suggestion: Suggestion) {
         add(name: suggestion.product.name, quantity: suggestion.quantity)
@@ -519,6 +564,7 @@ final class ShoppingStore: ObservableObject {
         var ordered = items.map(\.id).filter { !requested.contains($0) }
         for index in data.items.indices
             where data.items[index].listID == selectedListID && requested.contains(data.items[index].id) {
+            data.items[index].needsVoiceAisle = nil
             if let destination {
                 data.items[index].sectionName = destination == "אחר" ? "" : destination
             }
@@ -838,16 +884,20 @@ final class ShoppingStore: ObservableObject {
 
     func persist() {
         guard !loadFailed else { return }
-        syncJournal.recordChanges(from: lastJournaledData, to: data)
-        if var bindings = syncJournal.sharedLists {
-            for index in bindings.indices { bindings[index].includeRecords(in: data) }
-            syncJournal.sharedLists = bindings
-        }
+        recordLocalChanges()
         lastJournaledData = data
         saveLocal()
         cloudSync.schedule()
         ProductDecisionService.shared.schedule(store: self)
         GroceryDecisionService.shared.schedule(store: self)
+    }
+
+    private func recordLocalChanges(at date: Date = .now) {
+        syncJournal.recordChanges(from: lastJournaledData, to: data, at: date)
+        if var bindings = syncJournal.sharedLists {
+            for index in bindings.indices { bindings[index].includeRecords(in: data) }
+            syncJournal.sharedLists = bindings
+        }
     }
 
     func recordLearningLink(from source: Product, to target: Product, listID: UUID,
@@ -860,16 +910,20 @@ final class ShoppingStore: ObservableObject {
               currentTarget.preferredUnit == target.preferredUnit,
               source.preferredUnit == target.preferredUnit else { return }
         var links = data.products[index].learningLinks ?? []
-        if links.contains(where: { $0.listID == listID && $0.targetID == target.id &&
+        let alreadyLearned = links.contains { $0.listID == listID && $0.targetID == target.id &&
             $0.sourceName == source.name && $0.targetName == target.name &&
-            $0.sourceUnit == source.preferredUnit && $0.targetUnit == target.preferredUnit }) { return }
-        links.removeAll { $0.listID == listID && $0.targetID == target.id }
-        links.append(ProductLearningLink(listID: listID, targetID: target.id, sourceName: source.name,
-            targetName: target.name, sourceUnit: source.preferredUnit, targetUnit: target.preferredUnit,
-            model: decision.model, policyVersion: decision.policyVersion,
-            probability: decision.probability, confidence: decision.confidence, createdAt: .now))
-        data.products[index].learningLinks = links
-        persist()
+            $0.sourceUnit == source.preferredUnit && $0.targetUnit == target.preferredUnit }
+        if !alreadyLearned {
+            links.removeAll { $0.listID == listID && $0.targetID == target.id }
+            links.append(ProductLearningLink(listID: listID, targetID: target.id, sourceName: source.name,
+                targetName: target.name, sourceUnit: source.preferredUnit, targetUnit: target.preferredUnit,
+                model: decision.model, policyVersion: decision.policyVersion,
+                probability: decision.probability, confidence: decision.confidence, createdAt: .now))
+            data.products[index].learningLinks = links
+        }
+        let refined = voiceWritableLists.contains { $0.id == listID } &&
+            data.refineVoiceAisle(for: source.id, listID: listID)
+        if !alreadyLearned || refined { persist() }
     }
 
     func resetProductLearning() {
@@ -877,20 +931,26 @@ final class ShoppingStore: ObservableObject {
         persist()
     }
 
-    private func saveLocal() {
-        guard !loadFailed else { return }
+    @discardableResult
+    private func saveLocal() -> Bool {
+        guard !loadFailed else { return false }
+        var snapshotSaved = false
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try JSONEncoder().encode(data).write(to: fileURL, options: .atomic)
+            snapshotSaved = true
             try JSONEncoder().encode(syncJournal).write(to: journalURL, options: .atomic)
             storageError = nil
-            publishWidgetSnapshot()
-            refreshBadge()
-            PhoneWatchBridge.shared.publish(watchSnapshot())
         } catch {
             storageError = "השינויים עדיין לא נשמרו במכשיר. נסה שוב."
         }
+        if snapshotSaved {
+            publishWidgetSnapshot()
+            refreshBadge()
+            PhoneWatchBridge.shared.publish(watchSnapshot())
+        }
+        return snapshotSaved
     }
 
     private func publishWidgetSnapshot() {

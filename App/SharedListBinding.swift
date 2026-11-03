@@ -9,6 +9,7 @@ struct SharedListBinding: Codable, Equatable {
     var isOwner: Bool
     var keys: Set<String> = []
     var accessible: Bool = true
+    var canWrite: Bool? = nil
 
     static func zoneName(for listID: UUID) -> String { "List_\(listID.uuidString)" }
 

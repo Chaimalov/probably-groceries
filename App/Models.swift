@@ -55,8 +55,9 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
     var photoData: Data? = nil
     var clarification: ItemClarification? = nil
     var unavailable: Bool? = nil
+    var needsVoiceAisle: Bool? = nil
 
-    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName, shoppingPlace, photoData, clarification, unavailable }
+    enum CodingKeys: String, CodingKey { case id, productID, quantity, addedAt, listID, isUrgent, manualOrder, note, photoFilename, unit, sectionName, shoppingPlace, photoData, clarification, unavailable, needsVoiceAisle }
     init(id: UUID, productID: UUID, quantity: Int, addedAt: Date,
          listID: UUID = ShoppingList.defaultID, isUrgent: Bool = false) {
         self.id = id; self.productID = productID; self.quantity = quantity
@@ -78,6 +79,7 @@ struct ShoppingItem: Codable, Identifiable, Hashable {
         shoppingPlace = try c.decodeIfPresent(String.self, forKey: .shoppingPlace)
         photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
         clarification = try c.decodeIfPresent(ItemClarification.self, forKey: .clarification)
+        needsVoiceAisle = try c.decodeIfPresent(Bool.self, forKey: .needsVoiceAisle)
         unavailable = try c.decodeIfPresent(Bool.self, forKey: .unavailable)
     }
 }
@@ -158,10 +160,11 @@ struct ShoppingData: Codable {
     // Device-local receipts, persisted atomically with confirmed additions.
     var confirmedDrafts: [UUID] = []
 
+    var voiceReceipts: [GroceryCapture.Receipt] = []
     var watchReceipts: [UUID] = []
     var decisionBatches: [GroceryDecisionBatch] = []
 
-    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts, watchReceipts, decisionBatches }
+    enum CodingKeys: String, CodingKey { case lists, products, items, purchases, deferrals, confirmedDrafts, watchReceipts, decisionBatches, voiceReceipts }
     init(lists: [ShoppingList] = [ShoppingList(id: ShoppingList.defaultID, name: "קניות")],
          products: [Product] = [], items: [ShoppingItem] = [],
          purchases: [Purchase] = [], deferrals: [Deferral] = []) {
@@ -177,6 +180,7 @@ struct ShoppingData: Codable {
         purchases = try c.decodeIfPresent([Purchase].self, forKey: .purchases) ?? []
         deferrals = try c.decodeIfPresent([Deferral].self, forKey: .deferrals) ?? []
         confirmedDrafts = try c.decodeIfPresent([UUID].self, forKey: .confirmedDrafts) ?? []
+        voiceReceipts = try c.decodeIfPresent([GroceryCapture.Receipt].self, forKey: .voiceReceipts) ?? []
         watchReceipts = try c.decodeIfPresent([UUID].self, forKey: .watchReceipts) ?? []
         decisionBatches = try c.decodeIfPresent([GroceryDecisionBatch].self, forKey: .decisionBatches) ?? []
     }
