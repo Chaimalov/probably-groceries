@@ -101,6 +101,29 @@ enum ShoppingInputParser {
         }
         return Result(name: text, quantity: 1, unit: nil)
     }
+    static func parseDictation(_ raw: String) -> Result {
+        let parsed = parse(raw)
+        guard parsed.unit == nil else { return parsed }
+        let words = parsed.name.split(whereSeparator: \.isWhitespace)
+        guard words.count >= 2,
+              let quantity = number(String(words[0])),
+              let noun = countedProducts[String(words[1])] else { return parsed }
+        // Normalize only known product nouns, preserving any variety or brand.
+        let name = ([noun] + words.dropFirst(2).map(String.init)).joined(separator: " ")
+        return Result(name: name, quantity: quantity, unit: nil)
+    }
+
+    private static let countedProducts = [
+        "גמבה": "גמבה", "גמבות": "גמבה", "פלפל": "פלפל", "פלפלים": "פלפל",
+        "עגבנייה": "עגבנייה", "עגבניה": "עגבנייה", "עגבניות": "עגבנייה",
+        "מלפפון": "מלפפון", "מלפפונים": "מלפפון", "גזר": "גזר", "גזרים": "גזר",
+        "בצל": "בצל", "בצלים": "בצל", "אבוקדו": "אבוקדו", "אבוקדואים": "אבוקדו",
+        "בננה": "בננה", "בננות": "בננה", "תפוח": "תפוח", "תפוחים": "תפוח",
+        "לימון": "לימון", "לימונים": "לימון", "תפוז": "תפוז", "תפוזים": "תפוז",
+        "ביצה": "ביצה", "ביצים": "ביצה", "חלה": "חלה", "חלות": "חלה",
+        "פיתה": "פיתה", "פיתות": "פיתה", "לחמנייה": "לחמנייה", "לחמניות": "לחמנייה"
+    ]
+
     static func unit(for text: String) -> String? {
         units[text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
     }
