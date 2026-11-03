@@ -46,6 +46,17 @@ struct SyncJournal: Codable {
         }
     }
 
+    mutating func recoverVoiceRevisions(in data: ShoppingData) {
+        guard !data.voiceReceipts.isEmpty else { return }
+        let records = Self.records(in: data)
+        for receipt in data.voiceReceipts {
+            for revision in receipt.revisions where records[revision.key] == revision.payload &&
+                (revisions[revision.key]?.modifiedAt ?? .distantPast) < revision.modifiedAt {
+                revisions[revision.key] = revision
+            }
+        }
+    }
+
     // Existing on-device data predates the journal. Give the built-in empty
     // default list a low priority so a second device can import its real list.
     mutating func seed(_ data: ShoppingData, at date: Date = .now) {

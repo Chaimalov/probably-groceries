@@ -26,6 +26,7 @@ struct ProbablyGroceriesApp: App {
     }
 
     init() {
+        GroceryAppShortcuts.updateAppShortcutParameters()
         if ShoppingStore.shared.storageError == nil {
             PhoneWatchBridge.shared.publish(ShoppingStore.shared.watchSnapshot())
         }

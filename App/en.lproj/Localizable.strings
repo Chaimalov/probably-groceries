@@ -286,3 +286,22 @@
 "יש תשובה לגבי %@" = "An answer about %@";
 
 "ארגון הרשימה" = "Organize List";
+
+"רשימת קניות" = "Grocery list";
+"הוספת מוצר לקניות" = "Add Grocery Item";
+"מוסיפה מוצר לרשימת קניות, גם כשהאפליקציה סגורה." = "Add an item to a grocery list in the background.";
+"מה להוסיף לקניות?" = "What should I add?";
+"מזהה בקשה (לאוטומציות)" = "Request identifier (for automations)";
+"הוספת %@ לרשימה %@" = "Add %@ to %@";
+"לאיזו רשימת קניות להוסיף?" = "Which grocery list should I add it to?";
+"הוספתי את %@ לרשימה ״%@״." = "Added %1$@ to “%2$@.”";
+"הרשימה אינה זמינה לעריכה. בחרו רשימה אחרת או בדקו את השיתוף באפליקציה." = "This list can't be edited. Choose another list or check sharing in the app.";
+"בדקו את שם המוצר, הכמות ויחידת המידה ונסו שוב." = "Check the item name, quantity, and unit, then try again.";
+"מזהה הבקשה צריך להיות UUID." = "The request identifier must be a UUID.";
+"המוצר לא נשמר. פתחו את האפליקציה ונסו שוב." = "The item wasn't saved. Open the app and try again.";
+"הוספה עם Siri" = "Add with Siri";
+"רשימת ברירת מחדל להוספה קולית" = "Default list for voice capture";
+"בחירת רשימה לפי הצורך" = "Choose a list when needed";
+"בקיצורים, צרו קיצור עם הפעולה ״הכתבת מלל״ והעבירו את התוצאה לשדה ״מוצר״ בפעולה ״הוספת מוצר לקניות״. בחרו רשימה לפי הצורך. הזמינות דרך Siri תלויה בשפה ובגרסת המכשיר." = "In Shortcuts, create a shortcut with Dictate Text and pass the result to the Item field in Add Grocery Item. Choose a list if needed. Siri availability depends on your language and OS version.";
+"מוצר" = "Item";
+"רשימה" = "List";

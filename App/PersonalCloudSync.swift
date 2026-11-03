@@ -38,6 +38,16 @@ final class PersonalCloudSync: ObservableObject {
 
     init(store: ShoppingStore) { self.store = store }
     func start() { started = true; schedule(after: 0) }
+    func resumeAfterCapture() {
+        #if !targetEnvironment(simulator)
+        let lease = CloudSyncBackgroundLease()
+        Task {
+            defer { lease.end() }
+            await synchronize()
+        }
+        #endif
+    }
+
     func schedule(after delay: TimeInterval = 0.2) {
         guard started else { return }
         if syncTask != nil { needsAnotherPass = true; return }
@@ -127,6 +137,7 @@ final class PersonalCloudSync: ObservableObject {
             for (zones, isOwner) in [(owned, true), (joined, false)] {
                 for zone in zones {
                     guard let listID = SharedListBinding.listID(fromZoneName: zone.zoneID.zoneName) else { continue }
+                    guard !store.sharedLists.contains(where: { $0.listID == listID }) else { continue }
                     store.registerSharedList(SharedListBinding(listID: listID,
                         zoneName: zone.zoneID.zoneName, ownerName: zone.zoneID.ownerName, isOwner: isOwner))
                 }
@@ -145,6 +156,13 @@ final class PersonalCloudSync: ObservableObject {
                     missingAccess = true
                     continue
                 }
+                if !binding.isOwner {
+                    let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+                    let share = try await database.record(for: shareID) as? CKShare
+                    binding.canWrite = share?.currentUserParticipant?.permission == .readWrite
+                    binding.accessible = true
+                    store.registerSharedList(binding)
+                }
                 let remote = try await fetchRecords(database: database, zoneID: zoneID)
                 binding.keys.formUnion(remote.keys)
                 binding.accessible = true
@@ -152,7 +170,9 @@ final class PersonalCloudSync: ObservableObject {
                 store.mergeRemote(remote.values.map(\.0))
                 binding.includeRecords(in: store.data)
                 store.registerSharedList(binding)
-                try await upload(database: database, zoneID: zoneID, remote: remote, keys: binding.keys)
+                if binding.isOwner || binding.canWrite == true {
+                    try await upload(database: database, zoneID: zoneID, remote: remote, keys: binding.keys)
+                }
             }
             // Joined records never upload into the participant's private DB.
             let fetchedPersonal = try await fetchRecords(database: privateDB, zoneID: personalZone.zoneID)

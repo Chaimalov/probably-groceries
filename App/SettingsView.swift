@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import UserNotifications
 
@@ -6,6 +7,7 @@ struct SettingsView: View {
     let onShare: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(GroceryCapture.defaultListKey) private var voiceListID = ""
     @AppStorage("groupShoppingByCategory") private var groupBySection = true
     @AppStorage("showRecentPurchases") private var showRecentPurchases = true
     @AppStorage("showProductCompletions") private var showProductCompletions = true
@@ -68,6 +70,17 @@ struct SettingsView: View {
                     Text("הסנכרון פועל אוטומטית כשיש חיבור. אפשר להמשיך לקנות גם בלעדיו.")
                         .font(.footnote).foregroundStyle(.secondary)
                 } header: { Text("עובד ברקע") }
+                Section("הוספה עם Siri") {
+                    Picker("רשימת ברירת מחדל להוספה קולית", selection: voiceListSelection) {
+                        Text("בחירת רשימה לפי הצורך").tag("")
+                        ForEach(store.voiceWritableLists) { list in
+                            Text(list.name).tag(list.id.uuidString)
+                        }
+                    }
+                    ShortcutsLink()
+                    Text("בקיצורים, צרו קיצור עם הפעולה ״הכתבת מלל״ והעבירו את התוצאה לשדה ״מוצר״ בפעולה ״הוספת מוצר לקניות״. בחרו רשימה לפי הצורך. הזמינות דרך Siri תלויה בשפה ובגרסת המכשיר.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("עזרה") {
                     Text("סימנת מוצר בטעות? אפשר לבטל דרך החץ בתפריט, בשקשוק האייפון או בקיצור ⌘Z. בזמן הקלדה הביטול חל על הטקסט.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -129,6 +142,13 @@ struct SettingsView: View {
                      : "הרשימה, הפריטים והיסטוריית הקניות שלה יימחקו גם אצל מי ששותף בה."))
             }
         }
+    }
+
+    private var voiceListSelection: Binding<String> {
+        Binding(
+            get: { store.voiceWritableLists.contains { $0.id.uuidString == voiceListID } ? voiceListID : "" },
+            set: { voiceListID = $0 }
+        )
     }
 
     private func readAlertPermission() async {
