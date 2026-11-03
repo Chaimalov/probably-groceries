@@ -280,8 +280,6 @@ struct ShoppingView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
-                .frame(maxWidth: .infinity)
                 .background { Theme.canvas.ignoresSafeArea() }
                 .listRowSeparator(.hidden, edges: .all)
                 .listSectionSeparator(.hidden, edges: .all)
