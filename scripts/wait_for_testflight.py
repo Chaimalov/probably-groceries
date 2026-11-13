@@ -5,6 +5,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import time
 import urllib.error
@@ -55,8 +56,19 @@ def get(path, query=None):
     if query:
         url += "?" + urllib.parse.urlencode(query)
     request = urllib.request.Request(url, headers={"Authorization": "Bearer " + token()})
-    with urllib.request.urlopen(request, timeout=45) as response:
-        return json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code in (401, 403) and path in ("/v1/apps", "/v1/profiles"):
+            try:
+                errors = json.loads(error.read(16384)).get("errors", [])
+                codes = [entry.get("code") for entry in errors[:5] if isinstance(entry, dict)]
+                codes = [code for code in codes if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_.]{0,79}", code)]
+            except (ValueError, TypeError, AttributeError):
+                codes = []
+            print(f"Apple authorization at {path}: HTTP {error.code}, codes={', '.join(codes) or 'unavailable'}", flush=True)
+        raise
 
 
 def main():
