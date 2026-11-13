@@ -5,6 +5,7 @@ import AVFoundation
 struct ShoppingPreparationView: View {
     @ObservedObject var store: ShoppingStore
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var decisions = GroceryDecisionService.shared
     @State private var draft: ShoppingDraft
     @State private var filter = "הכול"
     @State private var manualName = ""
@@ -47,20 +48,39 @@ struct ShoppingPreparationView: View {
                     }
                     if store.items.isEmpty { Text("אין מוצרים שנותרו").foregroundStyle(.secondary) }
                 }
-                if store.currentList.decisionRecommendations == true {
-                    Section {
-                        Text(GroceryDecisionService.shared.online ? GroceryDecisionService.shared.status : "המלצות זמינות כשיש חיבור לאינטרנט")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        Button("רענון המלצות") {
-                            GroceryDecisionService.shared.schedule(store: store, force: true)
-                        }
-                        .disabled(!GroceryDecisionService.shared.online || GroceryDecisionService.shared.busy
-                                  || !GroceryDecisionService.shared.sponsors(store.selectedListID))
-                    }
-                }
                 Section("השלמות מוצעות") {
+                    let proposals = store.suggestions
+                    let inDraft = Set(draft.entries.compactMap(\.productID))
+                    ForEach(proposals.filter { !inDraft.contains($0.id) }) { suggestion in
+                        let canEdit = store.canGenerateRecommendations(for: store.selectedListID)
+                        HStack {
+                            Button {
+                                store.add(suggestion)
+                            } label: {
+                                HStack {
+                                    Label(suggestion.product.name, systemImage: "plus.circle")
+                                    Spacer()
+                                    Text("×\(suggestion.quantity)")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("הוספת \(suggestion.product.name)")
+                            Button("דחיית \(suggestion.product.name)", systemImage: "minus.circle") {
+                                store.deferSuggestion(suggestion)
+                            }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.borderless)
+                            .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .disabled(!canEdit)
+                    }
+                    if proposals.isEmpty {
+                        Text(decisions.status(for: store))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     ForEach($draft.entries) { $entry in
-                        if visible(entry.place) && (entry.isDecisionSuggestion != true || store.suggestions.contains(where: { $0.id == entry.productID })) {
+                        if visible(entry.place) && entry.isDecisionSuggestion != true {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     TextField("שם המוצר", text: $entry.name)
@@ -87,10 +107,6 @@ struct ShoppingPreparationView: View {
                             }
                             .foregroundStyle(entry.included ? .primary : .secondary)
                         }
-                    }
-                    if draft.entries.isEmpty {
-                        Text("אפשר להוסיף מוצרים. הצעות יופיעו לאחר כמה קניות חוזרות.")
-                            .foregroundStyle(.secondary)
                     }
                 }
                 Section {
@@ -131,8 +147,7 @@ struct ShoppingPreparationView: View {
                 if explicit != value { draft = explicit }
                 store.saveDraft(explicit)
             }
-            .onChange(of: store.data.decisionBatches) { _, _ in appendDecisionSuggestions() }
-            .task { appendDecisionSuggestions() }
+            .task { decisions.schedule(store: store) }
             .sheet(item: $draftDetails) { selected in
                 if let index = draft.entries.firstIndex(where: { $0.id == selected.id }) {
                     DraftEntryDetails(entry: $draft.entries[index], sections: store.currentList.sections)
@@ -141,16 +156,6 @@ struct ShoppingPreparationView: View {
             .sheet(item: $details) { ItemDetailsSheet(store: store, item: $0) }
         }
     }
-    private func appendDecisionSuggestions() {
-        guard store.currentList.decisionRecommendations == true else { return }
-        let existing = Set(draft.entries.compactMap(\.productID))
-        for suggestion in store.suggestions where !existing.contains(suggestion.id) {
-            draft.entries.append(DraftEntry(productID: suggestion.id, originalName: suggestion.product.name,
-                name: suggestion.product.name, quantity: suggestion.quantity, unit: suggestion.product.preferredUnit,
-                reason: "הצעה לפי הקניות האחרונות", isDecisionSuggestion: true))
-        }
-    }
-
     private func addManual() {
         let parsed = ShoppingInputParser.parse(manualName)
         guard !parsed.name.isEmpty else { return }

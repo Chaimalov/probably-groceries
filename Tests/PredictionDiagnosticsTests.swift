@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 final class PredictionDiagnosticsTests: XCTestCase {
-    func testExportReplaysPredictionsAndOmitsUnrelatedPersonalData() throws {
+    func testExportPreservesEvidenceAndOmitsUnrelatedPersonalData() throws {
         let now = Date(timeIntervalSince1970: 1_780_000_000)
         let product = Product(id: UUID(), name: "חלב", usualQuantity: 2)
         var item = ShoppingItem(id: UUID(), productID: product.id, quantity: 2, addedAt: now)
@@ -39,12 +39,10 @@ final class PredictionDiagnosticsTests: XCTestCase {
         XCTAssertNil(replay.purchases.first?.photoData)
         XCTAssertTrue(replay.watchReceipts.isEmpty)
         XCTAssertTrue(replay.confirmedDrafts.isEmpty)
-        let evaluated = PredictionEngine.evaluate(replay, now: now)
-        XCTAssertEqual(evaluated.first?.reason, report.evaluations.first?.products.first?.reason)
-        XCTAssertEqual(evaluated.first?.distinctTripCount, 3)
-        XCTAssertEqual(evaluated.first?.reason, "כבר ברשימה")
-        XCTAssertEqual(evaluated.first?.intervalDays, 7)
-        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.evaluations.first?.productsInHistory, 1)
+        XCTAssertEqual(report.evaluations.first?.eligibleProducts, 0)
+        XCTAssertNil(report.evaluations.first?.cachedRecommendationCount)
+        XCTAssertEqual(report.schemaVersion, 2)
     }
 
     func testReportIncludesEachListAndEmptySavedDraftWithoutChangingInput() throws {
@@ -61,7 +59,7 @@ final class PredictionDiagnosticsTests: XCTestCase {
         XCTAssertEqual(report.cachedDrafts.first?.alreadyConfirmed, true)
         XCTAssertEqual(report.cachedDrafts.first?.entries.count, 0)
         XCTAssertEqual(data.confirmedDrafts, [draft.token])
-        XCTAssertEqual(report.evaluations[1].products.first?.reason, "נדרשות שלוש קניות נפרדות")
+        XCTAssertEqual(report.evaluations[1].productsInHistory, 0)
         XCTAssertNoThrow(try report.encoded())
     }
 }

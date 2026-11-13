@@ -2,33 +2,14 @@ import Foundation
 
 /// A replayable snapshot of prediction inputs. No photos, notes or account metadata.
 struct PredictionDiagnostics: Encodable {
-    struct Evaluation: Encodable {
-        let productID: UUID
-        let purchaseCount: Int
-        let distinctTripCount: Int
-        let intervalDays: Double?
-        let daysSincePurchase: Double?
-        let suggestedQuantity: Int
-        let progress: Double?
-        let tier: String?
-        let reason: String
-
-        init(_ value: PredictionEvaluation) {
-            productID = value.id
-            purchaseCount = value.purchaseCount
-            distinctTripCount = value.distinctTripCount
-            intervalDays = value.intervalDays
-            daysSincePurchase = value.daysSincePurchase
-            suggestedQuantity = value.quantity
-            progress = value.progress
-            tier = value.tier.map { $0 == .likely ? "likely" : "maybe" }
-            reason = value.reason
-        }
-    }
-
     struct ListEvaluation: Encodable {
         let listID: UUID
-        let products: [Evaluation]
+        let productsInHistory: Int
+        let eligibleProducts: Int
+        let cachedRecommendationCount: Int?
+        let provider: GroceryDecisionProvider?
+        let batchGeneratedAt: Date?
+        let lastOutcome: String?
     }
 
     struct DraftSummary: Encodable {
@@ -45,7 +26,7 @@ struct PredictionDiagnostics: Encodable {
         let entries: [Entry]
     }
 
-    let schemaVersion = 1
+    let schemaVersion = 2
     let generatedAt: Date
     let timeZoneIdentifier: String
     let appVersion: String
@@ -58,7 +39,7 @@ struct PredictionDiagnostics: Encodable {
 
     init(data: ShoppingData, selectedListID: UUID, drafts: [ShoppingDraft] = [],
          now: Date = .now, appVersion: String = "", buildNumber: String = "",
-         storageError: String? = nil) {
+         storageError: String? = nil, outcomes: [UUID: String] = [:]) {
         generatedAt = now
         timeZoneIdentifier = TimeZone.current.identifier
         self.appVersion = appVersion
@@ -85,8 +66,11 @@ struct PredictionDiagnostics: Encodable {
                 return purchase
             }, deferrals: data.deferrals)
         evaluations = data.lists.map { list in
-            ListEvaluation(listID: list.id,
-                products: PredictionEngine.evaluate(data, now: now, listID: list.id).map(Evaluation.init))
+            let context = GroceryDecisionContext(data: data, listID: list.id, now: now)
+            let batch = data.decisionBatches.first { $0.listID == list.id }
+            return ListEvaluation(listID: list.id, productsInHistory: context.state.products.count,
+                eligibleProducts: context.eligible.count, cachedRecommendationCount: batch?.recommendations.count,
+                provider: batch?.provider, batchGeneratedAt: batch?.generatedAt, lastOutcome: outcomes[list.id])
         }
         cachedDrafts = drafts.map { draft in
             DraftSummary(listID: draft.listID, createdAt: draft.createdAt,

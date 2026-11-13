@@ -20,7 +20,6 @@ final class ShoppingStore: ObservableObject {
     @Published private(set) var selectedListID: UUID
     @Published private(set) var storageError: String?
     private var loadFailed = false
-    private var decisionObservation: AnyCancellable?
     @Published private(set) var syncStatus: PersonalCloudSync.Status = .local
 
     private let fileURL: URL
@@ -129,9 +128,6 @@ final class ShoppingStore: ObservableObject {
         }
         selectedListID = listID
         if !loadFailed { publishWidgetSnapshot() }
-        decisionObservation = GroceryDecisionService.shared.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in self?.objectWillChange.send() }
-        }
         migrateLegacyPhotos()
         if let index = data.lists.firstIndex(where: {
             $0.id == ShoppingList.defaultID && $0.name == "Groceries"
@@ -327,7 +323,14 @@ final class ShoppingStore: ObservableObject {
 
 
     func add(_ suggestion: Suggestion) {
-        add(name: suggestion.product.name, quantity: suggestion.quantity)
+        guard canGenerateRecommendations(for: selectedListID),
+              let current = suggestions.first(where: { $0.id == suggestion.id }) else { return }
+        var item = ShoppingItem(id: UUID(), productID: current.id, quantity: current.quantity,
+            addedAt: .now, listID: selectedListID)
+        item.unit = current.product.preferredUnit
+        item.sectionName = purchases.first { $0.productID == current.id }?.sectionName
+        data.items.append(item)
+        persist()
     }
 
     private func recordRemoval(_ item: ShoppingItem) {
@@ -828,31 +831,23 @@ final class ShoppingStore: ObservableObject {
     }
 
     func deferSuggestion(_ suggestion: Suggestion) {
+        guard canGenerateRecommendations(for: selectedListID),
+              suggestions.contains(where: { $0.id == suggestion.id }) else { return }
         data.deferrals.removeAll { $0.productID == suggestion.id && $0.listID == selectedListID }
-        data.deferrals.append(Deferral(productID: suggestion.id,
-                                       until: Calendar.current.date(byAdding: .day, value: 3, to: .now)!,
-                                       listID: selectedListID))
+        let now = Date.now
+        var deferral = Deferral(productID: suggestion.id, until: now.addingTimeInterval(3 * 86400), listID: selectedListID)
+        deferral.recordedAt = now
+        data.deferrals.append(deferral)
         persist()
     }
 
-    var predictionEvaluations: [PredictionEvaluation] {
-        PredictionEngine.evaluate(data, listID: selectedListID)
-    }
-
     var suggestions: [Suggestion] {
-        let positions = ShoppingRouteOrder.positions(from: data.purchases.filter { $0.listID == selectedListID })
-        let proposals = currentList.decisionRecommendations == true
-            ? decisionSuggestions : predictionEvaluations.compactMap(\.suggestion)
-        return proposals.sorted { left, right in
-            switch (positions[left.id], positions[right.id]) {
-            case let (a?, b?) where a != b: return a < b
-            case (_?, nil): return true
-            case (nil, _?): return false
-            default:
-                if left.progress != right.progress { return left.progress > right.progress }
-                return left.product.name.localizedStandardCompare(right.product.name) == .orderedAscending
-            }
-        }
+        guard currentList.decisionRecommendations == true else { return [] }
+        let now = Date.now
+        let context = GroceryDecisionContext(data: data, listID: selectedListID, now: now)
+        guard let batch = GroceryDecisionService.shared.cachedBatch(in: data, listID: selectedListID,
+            context: context, now: now) else { return [] }
+        return context.suggestions(from: batch, in: data)
     }
 
     private static func normalize(_ name: String) -> String {
@@ -1077,17 +1072,23 @@ final class ShoppingStore: ObservableObject {
 
 
 extension ShoppingStore {
+    func canGenerateRecommendations(for listID: UUID) -> Bool {
+        !loadFailed && syncStatus != .accountChanged && data.lists.contains { $0.id == listID }
+            && !sharedLists.contains { $0.listID == listID && $0.canWrite == false }
+    }
+
     func enableDecisionRecommendations() {
         guard let index = data.lists.firstIndex(where: { $0.id == selectedListID }) else { return }
         data.lists[index].decisionRecommendations = true
         persist()
     }
 
-    func saveDecisionBatch(_ batch: GroceryDecisionBatch) {
-        guard data.lists.contains(where: { $0.id == batch.listID }) else { return }
+    func saveDecisionBatch(_ batch: GroceryDecisionBatch) -> Bool {
+        guard canGenerateRecommendations(for: batch.listID) else { return false }
         data.decisionBatches.removeAll { $0.listID == batch.listID }
         data.decisionBatches.append(batch)
         persist()
+        return storageError == nil
     }
 
     func clearDecisionBatches(sponsorID: String) {
@@ -1095,19 +1096,4 @@ extension ShoppingStore {
         persist()
     }
 
-    private var decisionSuggestions: [Suggestion] {
-        let service = GroceryDecisionService.shared
-        let now = Date.now
-        guard service.online,
-              let batch = data.decisionBatches.first(where: { $0.listID == selectedListID }),
-              batch.generatedAt <= now, now.timeIntervalSince(batch.generatedAt) < GroceryDecisionContract.lifetime,
-              service.revision(data, listID: selectedListID, now: now) == batch.revision else { return [] }
-        let ids = Set(batch.recommendations)
-        // Re-evaluate native suppression and quantities even for synchronized proposals.
-        let candidates = GroceryDecisionContract.candidates(in: data, listID: selectedListID, now: now)
-        return candidates.filter { ids.contains($0.id) }.compactMap { candidate in
-            guard let product = product(for: candidate.id) else { return nil }
-            return Suggestion(product: product, quantity: candidate.quantity, tier: .likely, progress: 1)
-        }
-    }
 }

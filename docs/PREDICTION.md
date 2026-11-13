@@ -1,3 +1,5 @@
+> Historical design. See [Decision-first grocery recommendations](DECISION-PROVIDERS.md) for the current implementation.
+
 # Prediction contract
 
 ## Baseline, all offline
