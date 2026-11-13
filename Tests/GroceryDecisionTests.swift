@@ -95,6 +95,30 @@ final class GroceryDecisionTests: XCTestCase {
         XCTAssertEqual(result, [input.productIDs[23], input.productIDs[0]])
     }
 
+    func testJevAcceptsDocumentedSnapshotAndRejectsOtherModels() async throws {
+        let input = context(fixture())
+        func response(model: String, choice: String = "p0") -> (Int, Data) {
+            let json = """
+            {"model":"\(model)","provider":"TypeSafe","answers":{"group0":{"type":"choice","choice":"\(choice)","probabilities":{"p0":1,"none":0},"confidence":1}},"usage":{"input_tokens":357,"output_tokens":38,"cost":0.000014994}}
+            """
+            return (200, Data(json.utf8))
+        }
+
+        let ids = try await evaluate(.jev, input) { _ in response(model: "typesafe/jev-1.13-20260917") }
+        XCTAssertEqual(ids, input.productIDs)
+        for (model, choice) in [
+            ("typesafe/jev-1.14-20261014", "p0"),
+            ("typesafe/jev-1.130-20260917", "p0"),
+            ("typesafe/jev-1.13-latest", "p0"),
+            ("typesafe/jev-1.13-20260917", "p99"),
+        ] {
+            do {
+                _ = try await evaluate(.jev, input) { _ in response(model: model, choice: choice) }
+                XCTFail("Expected invalid response")
+            } catch GroceryDecisionError.invalidResponse {}
+        }
+    }
+
     func testRevisionChangesOnPurchaseCorrectionButNotSyncArrivalOrder() throws {
         var data = fixture(products: 3)
         let first = try context(data).revisionData()

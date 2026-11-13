@@ -136,7 +136,14 @@ struct GroceryDecisionClient {
                 }
             } else {
                 let result = try decoder.decode(JevResponse.self, from: bytes)
-                guard result.model == provider.model else { throw GroceryDecisionError.invalidResponse }
+                // OpenRouter reports the exact Jev snapshot, including its date.
+                let snapshot = result.model.dropFirst(provider.model.count)
+                let isVersionedModel = result.model.hasPrefix(provider.model)
+                    && snapshot.utf8.count == 9 && snapshot.utf8.first == 45
+                    && snapshot.utf8.dropFirst().allSatisfy { (48...57).contains($0) }
+                guard result.model == provider.model || isVersionedModel else {
+                    throw GroceryDecisionError.invalidResponse
+                }
                 answers = result.answers
             }
             guard answers.count == questions.count else { throw GroceryDecisionError.invalidResponse }
