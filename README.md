@@ -1,12 +1,12 @@
 # Probably Groceries (working title)
 
-A personal iPhone shopping list that learns from purchases and quietly suggests what the household may need next. Native SwiftUI, interactive widgets, and an optional Jev judgment layer.
+A personal iPhone shopping list that learns from purchases and quietly suggests what the household may need next. Native SwiftUI, interactive widgets, and opt-in grocery recommendations from a decision model.
 
 ## The loop
 
 1. Open one calm list. Add items quickly or accept a suggestion.
 2. Check off items **when bought**. A check-off writes a purchase event with quantity and time.
-3. On the next visit, local predictions use purchase intervals and feedback to sort products into **You'll probably need** and **Maybe**.
+3. On the next visit, the configured decision model uses the selected list’s purchase history to choose what to add.
 4. Accept, defer, or ignore a suggestion. No inventory entry or stock counts.
 
 The app must be useful with zero history. Predictions improve through ordinary shopping. The user can always add, edit, undo, and override.
@@ -15,9 +15,9 @@ The app must be useful with zero history. Predictions improve through ordinary s
 
 - Native iPhone and iPad app in SwiftUI targeting iOS/iPadOS 27, with local persistence, fast add, shopping and purchased states, and purchase history.
 - iCloud sync across the user's iPhone and iPad, plus a shared household list with his wife's separate Apple Account. Local-first behavior keeps shopping usable offline.
-- Deterministic offline predictions with conservative cold-start behavior and transparent debug data.
+- Cached recommendations work offline while their purchase evidence remains current.
 - Small and medium WidgetKit widgets; one useful App Intent action (add or defer a suggestion) from the widget.
-- Optional Jev integration for a narrow judgment, guarded by a local fallback and an opt-in API key stored on device.
+- Opt-in OpenAI Decisions or Jev recommendations with an API key stored on device.
 - Household sharing uses a CloudKit share accepted by the wife's Apple Account; personal device sync and household sharing are separate implementation tasks.
 - Hebrew and English text with RTL support; design starts from the approved calm iOS prototype direction.
 
@@ -28,7 +28,7 @@ Out of scope for v1: pantry/inventory tracking, receipts, barcode scanning, reci
 - [Product and acceptance](docs/PRODUCT.md)
 - [Design direction](docs/DESIGN.md)
 - [Data and architecture](docs/ARCHITECTURE.md)
-- [Prediction contract](docs/PREDICTION.md)
+- [Historical prediction contract](docs/PREDICTION.md)
 - [Jev spike](docs/JEV.md)
 - [User-configured decision providers](docs/DECISION-PROVIDERS.md)
 - [v1 dependency graph](docs/ROADMAP.md)
@@ -38,7 +38,7 @@ The repository starts with decisions and issues. The Xcode project is the first 
 
 ## First device build
 
-The first SwiftUI slice is in `App/`: inline add with Enter, swipe actions, manual drag order, collapsible departments, local lists, purchase check-off, undo, and conservative recurring suggestions. Private CloudKit sync is being built in issue #11; it needs container/schema setup and a two-device check before it can be relied on. Household sharing with the wife's Apple Account remains issue #8.
+The first SwiftUI slice is in `App/`: inline add with Enter, swipe actions, manual drag order, collapsible departments, local lists, purchase check-off, undo, and model-selected suggestions. Private CloudKit sync is being built in issue #11; it needs container/schema setup and a two-device check before it can be relied on. Household sharing with the wife's Apple Account remains issue #8.
 
 The app targets iOS/iPadOS 27 and CI uses the Xcode 27 GitHub-hosted runner. On a compatible Mac with Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen generate`, open `ProbablyGroceries.xcodeproj`, set your signing team in the app target, and run on your iPhone or iPad. The generated project and Info.plist are ignored by git. GitHub Actions runs an unsigned iPhone simulator build after each push; it cannot produce an installable device build without signing.
 

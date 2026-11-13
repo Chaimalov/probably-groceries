@@ -18,12 +18,12 @@ final class ProductLearningTests: XCTestCase {
     }
 
     func testLinkedNamesLearnFromCombinedHistoryAndYieldOneSuggestion() throws {
-        let (data, a, b, now) = fixture()
+        let (data, a, _, now) = fixture()
         let restored = try JSONDecoder().decode(ShoppingData.self, from: JSONEncoder().encode(data))
-        let evaluations = PredictionEngine.evaluate(restored, now: now)
-        XCTAssertEqual(evaluations.filter { $0.tier != nil }.count, 1)
-        XCTAssertEqual(evaluations.first { $0.id == a }?.distinctTripCount, 3)
-        XCTAssertEqual(evaluations.first { $0.id == b }?.purchaseCount, 3)
+        let context = GroceryDecisionContext(data: restored, listID: ShoppingList.defaultID, now: now)
+        XCTAssertEqual(context.eligible.count, 1)
+        XCTAssertEqual(context.productIDs, [a])
+        XCTAssertEqual(context.state.products.first?.events.count, 3)
         XCTAssertEqual(restored.purchases.map(\.productID), data.purchases.map(\.productID))
         XCTAssertEqual(restored.products.map(\.name), ["ביצים", "בייצים"])
     }
@@ -31,10 +31,10 @@ final class ProductLearningTests: XCTestCase {
     func testActiveAliasOrDeferredAliasSuppressesWholeGroup() {
         var (data, _, b, now) = fixture()
         data.items = [ShoppingItem(id: UUID(), productID: b, quantity: 1, addedAt: now)]
-        XCTAssertTrue(PredictionEngine.evaluate(data, now: now).allSatisfy { $0.tier == nil })
+        XCTAssertTrue(GroceryDecisionContext(data: data, listID: ShoppingList.defaultID, now: now).eligible.isEmpty)
         data.items = []
         data.deferrals = [Deferral(productID: b, until: now.addingTimeInterval(86400))]
-        XCTAssertTrue(PredictionEngine.evaluate(data, now: now).allSatisfy { $0.tier == nil })
+        XCTAssertTrue(GroceryDecisionContext(data: data, listID: ShoppingList.defaultID, now: now).eligible.isEmpty)
     }
 
     func testRenameUnitChangeOrDifferentListInvalidatesLink() {
@@ -46,7 +46,7 @@ final class ProductLearningTests: XCTestCase {
         units.products[1].preferredUnit = "חבילות"
         XCTAssertEqual(ProductLearning.groups(in: units, listID: ShoppingList.defaultID)[a]?.count, 1)
         XCTAssertEqual(ProductLearning.groups(in: original, listID: UUID())[a]?.count, 1)
-        XCTAssertEqual(PredictionEngine.evaluate(renamed, now: now).filter { $0.tier != nil }.count, 0)
+        XCTAssertEqual(GroceryDecisionContext(data: renamed, listID: ShoppingList.defaultID, now: now).eligible.count, 2)
     }
 
     func testCyclesTerminateAndWeakLinksAreIgnored() {

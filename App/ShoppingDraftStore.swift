@@ -10,10 +10,14 @@ extension ShoppingStore {
                   draft.listID == list.id else { return nil }
             return draft
         }
+        let service = GroceryDecisionService.shared
+        var outcomes: [UUID: String] = [:]
+        for list in data.lists { outcomes[list.id] = service.diagnostic(for: list.id) }
+        outcomes[selectedListID] = outcomes[selectedListID] ?? service.status(for: self)
         return PredictionDiagnostics(data: data, selectedListID: selectedListID, drafts: drafts,
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
             buildNumber: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
-            storageError: storageError)
+            storageError: storageError, outcomes: outcomes)
     }
 
     func shoppingDraft() -> ShoppingDraft {
@@ -22,17 +26,7 @@ extension ShoppingStore {
            storageError != nil || !data.confirmedDrafts.contains(draft.token) {
             return draft
         }
-        let draft = ShoppingDraft(listID: selectedListID, entries: suggestions.map { suggestion in
-            let previous = purchases.first { $0.productID == suggestion.id }
-            return DraftEntry(productID: suggestion.id, originalName: suggestion.product.name, name: suggestion.product.name,
-                              quantity: suggestion.quantity, unit: suggestion.product.preferredUnit,
-                              place: previous?.shoppingPlace,
-                              note: previous?.note, photoData: previous?.photoData, section: previous?.sectionName,
-                              reason: currentList.decisionRecommendations == true
-                                ? "הצעה לפי הקניות האחרונות"
-                                : predictionEvaluations.first { $0.id == suggestion.id }?.reason,
-                              isDecisionSuggestion: currentList.decisionRecommendations == true ? true : nil)
-        })
+        let draft = ShoppingDraft(listID: selectedListID, entries: [])
         saveDraft(draft)
         return draft
     }
@@ -53,9 +47,7 @@ extension ShoppingStore {
         guard draft.listID == selectedListID else { return false }
         let scope = Set(data.products.filter { productBelongsToCurrentScope($0) }.map(\.id))
         var applicable = draft
-        let validSuggestions = Set(suggestions.map(\.id))
-        applicable.entries.removeAll { $0.isDecisionSuggestion == true &&
-            ($0.productID.map { !validSuggestions.contains($0) } ?? true) }
+        applicable.entries.removeAll { $0.isDecisionSuggestion == true }
         let updated = applicable.applying(to: data, productScope: scope)
         guard applyDraftData(updated) else { return false }
         UserDefaults.standard.removeObject(forKey: draftKey(draft.listID))

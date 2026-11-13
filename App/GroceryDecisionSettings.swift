@@ -16,12 +16,14 @@ struct GroceryDecisionSettings: View {
         NavigationStack {
             Form {
                 Section {
-                    Label(service.online ? service.status : "אין חיבור לאינטרנט", systemImage: "sparkles")
-                    if let batch = store.data.decisionBatches.first(where: { $0.listID == store.selectedListID }) {
+                    Label(service.status(for: store), systemImage: "sparkles")
+                    let now = Date.now
+                    let context = GroceryDecisionContext(data: store.data, listID: store.selectedListID, now: now)
+                    if let batch = service.cachedBatch(in: store.data, listID: store.selectedListID, context: context, now: now) {
                         Text("עודכן על ידי \(batch.sponsor) · \(batch.generatedAt.formatted(date: .abbreviated, time: .shortened))")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
-                    Text("אפשר להשתמש ברשימה גם בלי ספק. המלצות חכמות זמינות כשיש חיבור לאינטרנט.")
+                    Text("המלצות חדשות דורשות חיבור לאינטרנט. המלצות שמורות מוצגות כל עוד הן בתוקף.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("ספק החלטות") {
@@ -40,7 +42,7 @@ struct GroceryDecisionSettings: View {
                 Section {
                     Toggle("אני מאשר שימוש בחשבון שלי להמלצות עבור ״\(store.currentList.name)״", isOn: $consent)
                         .tint(.green)
-                    Text("לספק נשלחים שמות ויחידות של עד 32 מוצרים, ועד שש קניות אחרונות לכל מוצר עם כמות ומספר הימים שעברו. לא נשלחים תמונות, הערות או פרטי חשבון. יש לוודא שהשותפים מסכימים לשיתוף היסטוריית הקניות. הבדיקה משתמשת במידע לדוגמה בלבד. הבדיקה וההמלצות עשויות להיות בתשלום לפי החשבון שלך אצל הספק.")
+                    Text("לספק נשלחים שמות מוצרים, כמויות, יחידות, ימי קנייה ופרטי מוצרים פעילים או דחויים ברשימה זו. ההיסטוריה מוגבלת ל־500 קניות ב־180 ימים. יש לוודא שהשותפים מסכימים לשיתוף. בדיקת החיבור משתמשת בדוגמה. השימוש עשוי להיות בתשלום אצל הספק.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("בדיקת חיבור והפעלת המלצות") {
                         testing = true; message = nil
@@ -56,7 +58,7 @@ struct GroceryDecisionSettings: View {
                             }
                         }
                     }
-                    .disabled(testing || service.busy || !service.online || !consent || key.isEmpty)
+                    .disabled(testing || service.busy || !service.online || !consent || key.isEmpty || !store.canGenerateRecommendations(for: store.selectedListID))
                     if testing { ProgressView("בודק חיבור…") }
                     if let message { Text(message).font(.footnote) }
                 }
@@ -76,7 +78,7 @@ struct GroceryDecisionSettings: View {
                 Section {
                     Link("ניהול החשבון אצל הספק", destination: provider == .openAI
                          ? URL(string: "https://platform.openai.com/settings/organization/billing/overview")!
-                         : URL(string: "https://typesafe.ai")!)
+                         : URL(string: "https://openrouter.ai/settings/keys")!)
                     Text("עד 20 בקשות ביום במכשיר, כולל בדיקות חיבור. המכסה הזו אינה מגבלת חיוב כספית אצל הספק.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

@@ -12,8 +12,8 @@ struct PredictionDebugView: View {
         _report = State(initialValue: store.predictionDiagnostics())
     }
 
-    private var evaluations: [PredictionDiagnostics.Evaluation] {
-        report.evaluations.first { $0.listID == report.selectedListID }?.products ?? []
+    private var evaluation: PredictionDiagnostics.ListEvaluation? {
+        report.evaluations.first { $0.listID == report.selectedListID }
     }
 
     var body: some View {
@@ -30,30 +30,21 @@ struct PredictionDebugView: View {
                         Text(exportError).foregroundStyle(.red)
                         Button("ניסיון נוסף", action: prepareExport)
                     }
-                    Text("הקובץ כולל שמות מוצרים, כמויות, תאריכי קנייה וחישובי הצעות מכל הרשימות. ללא תמונות, הערות או פרטי חשבון.")
+                    Text("הקובץ כולל שמות מוצרים, כמויות, תאריכי קנייה ומצב ההמלצות מכל הרשימות. ללא תמונות, הערות או פרטי חשבון.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("ברשימה הנוכחית") {
-                    if evaluations.isEmpty {
-                        Text("אין עדיין היסטוריית קניות").foregroundStyle(.secondary)
-                    }
-                    ForEach(evaluations, id: \.productID) { evaluation in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(report.shoppingData.products.first { $0.id == evaluation.productID }?.name ?? "")
-                                .font(.headline)
-                            Text(evaluation.reason).foregroundStyle(.secondary)
-                            Text("\(evaluation.purchaseCount) רכישות ב־\(evaluation.distinctTripCount) קניות · כמות \(evaluation.suggestedQuantity)")
-                            if let interval = evaluation.intervalDays,
-                               let elapsed = evaluation.daysSincePurchase,
-                               let progress = evaluation.progress {
-                                Text(String(format: "חציון %.1f ימים · עברו %.1f ימים · ציון %.2f · %@",
-                                            interval, elapsed, progress,
-                                            evaluation.tier == "likely" ? "כנראה" : evaluation.tier == "maybe" ? "אולי" : "מוסתר"))
-                            }
-                            Text("מקור: היסטוריית הקניות במכשיר")
+                    if let evaluation {
+                        Text("\(evaluation.productsInHistory) מוצרים בהיסטוריה")
+                        Text("\(evaluation.eligibleProducts) מוצרים זמינים להצעה")
+                        if let count = evaluation.cachedRecommendationCount {
+                            Text("\(count) המלצות בתוצאה השמורה")
+                        } else {
+                            Text("אין תוצאה שמורה")
                         }
-                        .font(.caption)
-                        .accessibilityElement(children: .combine)
+                        if let outcome = evaluation.lastOutcome {
+                            Text(outcome).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }

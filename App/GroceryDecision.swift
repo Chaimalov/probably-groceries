@@ -1,23 +1,17 @@
 import Foundation
 
-// No chat/generation interface: adapters can only answer bounded yes/no questions.
 enum GroceryDecisionProvider: String, Codable, CaseIterable, Identifiable {
     case openAI, jev
-    var id: String { rawValue }
-    var title: String { self == .openAI ? "OpenAI Decisions" : "Jev · TypeSafe" }
-    var model: String { self == .openAI ? "gpt-6-luna" : "jev-latest" }
-    var endpoint: URL {
-        URL(string: self == .openAI ? "https://api.openai.com/v1/decisions" : "https://api.typesafe.ai/v1/systemone")!
-    }
-}
 
-struct GroceryDecisionCandidate: Codable, Equatable {
-    struct Event: Codable, Equatable { var daysAgo: Int; var quantity: Int }
-    var id: UUID
-    var name: String
-    var unit: String?
-    var quantity: Int
-    var events: [Event]
+    var id: String { rawValue }
+    var title: String { self == .openAI ? "OpenAI Decisions" : "Jev · OpenRouter" }
+    var model: String { self == .openAI ? "gpt-6-luna" : "typesafe/jev-1.13" }
+    var endpoint: URL {
+        URL(string: self == .openAI ? "https://api.openai.com/v1/decisions"
+            : "https://openrouter.ai/api/alpha/decisions")!
+    }
+    var choiceLimit: Int { self == .openAI ? 255 : 24 }
+    var questionLimit: Int { self == .openAI ? 400 : 20 }
 }
 
 struct GroceryDecisionBatch: Codable, Equatable {
@@ -28,83 +22,158 @@ struct GroceryDecisionBatch: Codable, Equatable {
     var sponsor: String
     var sponsorID: String
     var recommendations: [UUID]
+    // Old batches decode, but lack the evidence digest for this contract.
+    var historyRevision: String? = nil
 }
 
-enum GroceryDecisionContract {
-    static let maxCandidates = 32
-    static let threshold = 0.85 // Conservative starting policy, not calibrated accuracy.
+struct GroceryDecisionContext {
+    struct Event: Codable, Equatable {
+        var day: Int
+        var quantity: Int
+        var unit: String?
+    }
+    struct ProductEvidence: Codable, Equatable {
+        var label: String
+        var name: String
+        var unit: String?
+        var events: [Event]
+    }
+    struct State: Codable {
+        var today: Int
+        var products: [ProductEvidence]
+        var active: [String]
+        var deferred: [String]
+        var activeWithoutHistory: [String]
+        var deferredWithoutHistory: [String]
+    }
+    static let version = 2
+    static let maxRecommendations = 5
     static let lifetime: TimeInterval = 6 * 3600
 
-    static func candidates(in data: ShoppingData, listID: UUID, now: Date) -> [GroceryDecisionCandidate] {
+    let state: State
+    let productIDs: [UUID]
+    let eligible: [String]
+    private let quantities: [UUID: Int]
+
+    init(data: ShoppingData, listID: UUID, now: Date) {
+        // Date and event bounds limit payload size. Every identity with an
+        // event in the retained window is eligible, even after one purchase.
+        let cutoff = now.addingTimeInterval(-180 * 86400)
+        let purchases = data.purchases.filter {
+            $0.listID == listID && $0.purchasedAt >= cutoff && $0.purchasedAt <= now && (1...9999).contains($0.quantity)
+        }.sorted {
+            $0.purchasedAt == $1.purchasedAt ? $0.id.uuidString < $1.id.uuidString : $0.purchasedAt > $1.purchasedAt
+        }.prefix(500)
         let groups = ProductLearning.groups(in: data, listID: listID)
-        let evaluations = PredictionEngine.evaluate(data, now: now, listID: listID)
-        let active = Set(data.items.filter { $0.listID == listID }.map(\.productID))
-        let deferred = Set(data.deferrals.filter { $0.listID == listID && $0.until > now }.map(\.productID))
-        return evaluations.sorted { $0.id.uuidString < $1.id.uuidString }.compactMap { evaluation -> GroceryDecisionCandidate? in
-            let product = evaluation.product
-            let identities = groups[product.id] ?? [product.id]
-            guard evaluation.distinctTripCount >= 3,
-                  active.isDisjoint(with: identities), deferred.isDisjoint(with: identities),
-                  ProductLearning.representative(of: identities, in: data, listID: listID, now: now) == product.id
-            else { return nil }
-            let events = data.purchases.filter {
-                $0.listID == listID && identities.contains($0.productID) && $0.purchasedAt <= now
-            }.sorted { $0.purchasedAt < $1.purchasedAt }.suffix(6).map {
-                GroceryDecisionCandidate.Event(daysAgo: max(0, Int(now.timeIntervalSince($0.purchasedAt) / 86400)),
-                                               quantity: max(1, $0.quantity))
-            }
-            return GroceryDecisionCandidate(id: product.id, name: String(product.name.prefix(120)),
-                unit: product.preferredUnit.map { String($0.prefix(40)) },
-                quantity: evaluation.quantity, events: events)
-        }.prefix(maxCandidates).map { $0 }
+        let products = Dictionary(data.products.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var representatives: [UUID: UUID] = [:]
+        var history: [UUID: [Event]] = [:]
+        func day(_ date: Date) -> Int { Int(floor(date.timeIntervalSince1970 / 86400)) }
+        for purchase in purchases where products[purchase.productID] != nil {
+            let id = representatives[purchase.productID] ?? purchase.productID
+            for alias in groups[purchase.productID] ?? [purchase.productID] { representatives[alias] = id }
+            history[id, default: []].append(Event(day: day(purchase.purchasedAt),
+                quantity: purchase.quantity, unit: purchase.unit.map { String($0.prefix(16)) }))
+        }
+
+        let active = Set(data.items.filter { $0.listID == listID }.map { representatives[$0.productID] ?? $0.productID })
+        let activeNames = Set(active.compactMap { products[$0].map { GroceryCapture.normalize($0.name) } })
+        let deferred = Set(data.deferrals.filter { $0.listID == listID && $0.until > now }
+            .map { representatives[$0.productID] ?? $0.productID })
+        let ids = history.keys.sorted { $0.uuidString < $1.uuidString }
+        func namesWithoutHistory(_ ids: Set<UUID>) -> [String] {
+            Array(ids.filter { history[$0] == nil }.compactMap {
+                products[$0].map { String($0.name.prefix(48)) }
+            }.sorted().prefix(100))
+        }
+        var labels: [UUID: String] = [:]
+        var quantities: [UUID: Int] = [:]
+        let evidence = ids.enumerated().compactMap { index, id -> ProductEvidence? in
+            guard let product = products[id], let events = history[id] else { return nil }
+            let label = "p\(index)"
+            labels[id] = label
+            let unit = product.preferredUnit.map { String($0.prefix(16)) }
+            quantities[id] = events.first { $0.unit == unit }?.quantity ?? 1
+            return ProductEvidence(label: label, name: String(product.name.prefix(48)), unit: unit, events: events)
+        }
+        let activeLabels = active.compactMap { labels[$0] }.sorted()
+        let deferredLabels = deferred.compactMap { labels[$0] }.sorted()
+        let suppressed = active.union(deferred)
+        let deferredNames = Set(deferred.compactMap { products[$0].map { GroceryCapture.normalize($0.name) } })
+        self.state = State(today: day(now), products: evidence, active: activeLabels, deferred: deferredLabels,
+            activeWithoutHistory: namesWithoutHistory(active), deferredWithoutHistory: namesWithoutHistory(deferred))
+        self.productIDs = ids
+        self.eligible = ids.filter {
+            guard !suppressed.contains($0), let product = products[$0] else { return false }
+            let name = GroceryCapture.normalize(product.name)
+            return !activeNames.contains(name) && !deferredNames.contains(name)
+        }.compactMap { labels[$0] }
+        self.quantities = quantities
     }
 
-    // Local-only source revision includes corrections, aliases, active items and deferrals.
-    // Stable ordering prevents different CloudKit arrival order from invalidating results.
-    static func revisionData(_ data: ShoppingData, listID: UUID, now: Date) throws -> Data {
-        struct ProductRevision: Encodable {
-            var id: UUID; var name: String; var unit: String?; var quantity: Int
-            var links: [ProductLearningLink]
-        }
-        struct EventRevision: Encodable {
-            var id: UUID; var productID: UUID; var quantity: Int; var at: Date
-        }
+    func productID(for label: String) -> UUID? {
+        guard let index = Int(label.dropFirst()), label == "p\(index)", productIDs.indices.contains(index) else { return nil }
+        return productIDs[index]
+    }
+
+    func revisionData(includeSuppressions: Bool = true) throws -> Data {
         struct Revision: Encodable {
-            var day: Int; var products: [ProductRevision]; var items: [EventRevision]
-            var purchases: [EventRevision]; var deferrals: [Deferral]
+            let version = GroceryDecisionContext.version
+            var productIDs: [UUID]
+            var state: State
+            var eligible: [String]?
         }
-        let purchases = data.purchases.filter { $0.listID == listID }.sorted { $0.id.uuidString < $1.id.uuidString }
-        let items = data.items.filter { $0.listID == listID }.sorted { $0.id.uuidString < $1.id.uuidString }
-        let deferrals = data.deferrals.filter { $0.listID == listID }.sorted { $0.productID.uuidString < $1.productID.uuidString }
-        let ids = Set(purchases.map(\.productID) + items.map(\.productID) + deferrals.map(\.productID))
-        let products = data.products.filter { ids.contains($0.id) }.sorted { $0.id.uuidString < $1.id.uuidString }.map {
-            ProductRevision(id: $0.id, name: $0.name, unit: $0.preferredUnit, quantity: $0.usualQuantity,
-                links: ($0.learningLinks ?? []).filter { $0.listID == listID }.sorted { $0.targetID.uuidString < $1.targetID.uuidString })
+        var input = state
+        if !includeSuppressions {
+            input.active = []
+            input.deferred = []
+            input.activeWithoutHistory = []
+            input.deferredWithoutHistory = []
         }
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(Revision(day: Int(now.timeIntervalSince1970 / 86400), products: products,
-            items: items.map { EventRevision(id: $0.id, productID: $0.productID, quantity: $0.quantity, at: $0.addedAt) },
-            purchases: purchases.map { EventRevision(id: $0.id, productID: $0.productID, quantity: $0.quantity, at: $0.purchasedAt) },
-            deferrals: deferrals))
+        return try Self.encoder.encode(Revision(productIDs: productIDs, state: input, eligible: includeSuppressions ? eligible : nil))
     }
 
-    static func selected(_ probabilities: [UUID: Double], candidates: [GroceryDecisionCandidate]) throws -> [UUID] {
-        guard Set(probabilities.keys).isSubset(of: Set(candidates.map(\.id))),
-              probabilities.values.allSatisfy({ $0.isFinite && (0...1).contains($0) }) else {
-            throw GroceryDecisionError.invalidResponse
+    static var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }
+
+    func accepts(_ batch: GroceryDecisionBatch, listID: UUID, historyRevision: String?,
+                 provider: GroceryDecisionProvider?, now: Date) -> Bool {
+        batch.listID == listID && historyRevision != nil && batch.historyRevision == historyRevision
+            && (provider == nil || batch.provider == provider)
+            && batch.generatedAt <= now && now.timeIntervalSince(batch.generatedAt) < Self.lifetime
+    }
+
+    func suggestions(from batch: GroceryDecisionBatch, in data: ShoppingData) -> [Suggestion] {
+        let allowed = Set(eligible.compactMap(productID(for:)))
+        let products = Dictionary(data.products.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var names: Set<String> = []
+        return batch.recommendations.prefix(Self.maxRecommendations).compactMap { id in
+            guard allowed.contains(id), let product = products[id], let quantity = quantities[id],
+                  names.insert(GroceryCapture.normalize(product.name)).inserted else { return nil }
+            return Suggestion(product: product, quantity: quantity)
         }
-        return candidates.filter { (probabilities[$0.id] ?? 0) >= threshold }.map(\.id)
     }
 }
 
 enum GroceryDecisionError: Error, LocalizedError {
-    case invalidResponse, unauthorized, quota, unavailable, keyStorage, invalidKey
+    case invalidResponse, malformedResponse, refused, unauthorized, quota, rateLimited(TimeInterval?)
+    case rejectedRequest, inputTooLarge, network, unavailable, keyStorage, invalidKey
+
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: return "הספק החזיר תשובה שלא ניתן להשתמש בה."
-        case .unauthorized: return "המפתח אינו מורשה. כדאי לבדוק אותו ואת הגישה למודל אצל הספק."
-        case .quota: return "הגענו למגבלת השימוש. אפשר לבדוק את המכסה אצל הספק."
-        case .unavailable: return "לא הצלחנו להגיע לספק. אפשר לנסות שוב מאוחר יותר."
+        case .invalidResponse: return "התשובה מהספק לא תאמה את הבקשה."
+        case .malformedResponse: return "לא הצלחנו לקרוא את התשובה מהספק."
+        case .refused: return "הספק לא סיפק החלטה עבור הרשימה."
+        case .unauthorized: return "כדאי לבדוק את מפתח ה־API ואת הגישה למודל אצל הספק."
+        case .quota: return "מכסת הבקשות נוצלה. אפשר לנסות שוב מחר."
+        case .rateLimited: return "הספק הגביל את השימוש. אפשר לנסות שוב מאוחר יותר."
+        case .rejectedRequest: return "הספק דחה את הבקשה. כדאי לבדוק את הגדרות החיבור והחיוב."
+        case .inputTooLarge: return "היסטוריית הקניות גדולה מהמגבלה של הספק."
+        case .network: return "החיבור נקטע. ננסה שוב כשהרשת תהיה זמינה."
+        case .unavailable: return "הספק אינו זמין כרגע. אפשר לנסות שוב מאוחר יותר."
         case .keyStorage: return "לא הצלחנו לעדכן את המפתח המאובטח במכשיר."
         case .invalidKey: return "יש להזין מפתח API תקין ללא רווחים."
         }
