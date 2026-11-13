@@ -35,7 +35,7 @@ final class GroceryDecisionTests: XCTestCase {
                 XCTAssertEqual(request.url, provider.endpoint)
                 XCTAssertEqual(request.httpMethod, "POST")
                 XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-key")
-                let body = try XCTUnwrap(request.httpBody)
+                let body = try self.body(of: request)
                 let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
                 let state = try XCTUnwrap(json[provider == .openAI ? "input" : "state"] as? String)
                 XCTAssertFalse(state.contains(data.products[0].id.uuidString))
@@ -59,7 +59,7 @@ final class GroceryDecisionTests: XCTestCase {
         var data = fixture(products: 3)
         let input = context(data)
         let ids = try await evaluate(.openAI, input) { request in
-            let body = try XCTUnwrap(request.httpBody)
+            let body = try self.body(of: request)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
             let questions = try self.questions(json, provider: .openAI)
             return try self.reply(.openAI, choices: questions.mapValues { $0.filter { $0 != "none" }.sorted().last! })
@@ -84,7 +84,7 @@ final class GroceryDecisionTests: XCTestCase {
     func testJevFinalRoundComparesGroupWinners() async throws {
         let input = context(fixture(products: 25))
         let result = try await evaluate(.jev, input) { request in
-            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try self.body(of: request)) as? [String: Any])
             let questions = try self.questions(json, provider: .jev)
             return try self.reply(.jev, choices: questions.mapValues { labels in
                 if labels.contains("p23") { return "p23" }
@@ -209,6 +209,21 @@ final class GroceryDecisionTests: XCTestCase {
         defer { session.invalidateAndCancel(); GroceryDecisionMockProtocol.respond = nil }
         return try await GroceryDecisionClient(session: session).evaluate(provider: provider, key: "synthetic-key",
             context: context, reserveRequest: reservations)
+    }
+
+    private func body(of request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        let stream = try XCTUnwrap(request.httpBodyStream)
+        stream.open()
+        defer { stream.close() }
+        var body = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeContentData) }
+            if count == 0 { return body }
+            body.append(contentsOf: buffer.prefix(count))
+        }
     }
 
     private func questions(_ json: [String: Any], provider: GroceryDecisionProvider) throws -> [String: [String]] {
