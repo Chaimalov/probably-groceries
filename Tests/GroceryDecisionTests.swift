@@ -37,9 +37,14 @@ final class GroceryDecisionTests: XCTestCase {
                 XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-key")
                 let body = try self.body(of: request)
                 let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-                let state = try XCTUnwrap(json[provider == .openAI ? "input" : "state"] as? String)
-                XCTAssertFalse(state.contains(data.products[0].id.uuidString))
-                let wire = try JSONDecoder().decode(GroceryDecisionContext.State.self, from: Data(state.utf8))
+                let state: Data
+                if provider == .openAI {
+                    state = Data(try XCTUnwrap(json["input"] as? String).utf8)
+                } else {
+                    state = try JSONSerialization.data(withJSONObject: XCTUnwrap(json["state"] as? [String: Any]))
+                }
+                XCTAssertFalse(String(decoding: state, as: UTF8.self).contains(data.products[0].id.uuidString))
+                let wire = try JSONDecoder().decode(GroceryDecisionContext.State.self, from: state)
                 XCTAssertEqual(wire.products, input.state.products)
                 let questions = try self.questions(json, provider: provider)
                 XCTAssertLessThanOrEqual(questions.count, provider.questionLimit)
@@ -58,15 +63,15 @@ final class GroceryDecisionTests: XCTestCase {
     func testMockModelOrderDrivesVisibleResultsAndLiveSuppression() async throws {
         var data = fixture(products: 3)
         let input = context(data)
-        let ids = try await evaluate(.openAI, input) { request in
+        let ids = try await evaluate(.jev, input) { request in
             let body = try self.body(of: request)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-            let questions = try self.questions(json, provider: .openAI)
-            return try self.reply(.openAI, choices: questions.mapValues { $0.filter { $0 != "none" }.sorted().last! })
+            let questions = try self.questions(json, provider: .jev)
+            return try self.reply(.jev, choices: questions.mapValues { $0.filter { $0 != "none" }.sorted().last! })
         }
         XCTAssertEqual(ids, Array(input.productIDs.reversed()))
         let batch = GroceryDecisionBatch(listID: listID, revision: "r", generatedAt: now,
-            provider: .openAI, sponsor: "sample", sponsorID: "device", recommendations: ids)
+            provider: .jev, sponsor: "sample", sponsorID: "device", recommendations: ids)
         XCTAssertEqual(input.suggestions(from: batch, in: data).map(\.id), ids)
         XCTAssertEqual(input.suggestions(from: batch, in: data).map(\.quantity), [2, 2, 2])
 
@@ -135,8 +140,13 @@ final class GroceryDecisionTests: XCTestCase {
         let input = context(fixture())
         let cases: [(Int, String, String)] = [
             (401, "private", "unauthorized"),
+            (402, #"{"error":{"code":402,"message":"private"}}"#, "credits"),
+            (403, "private", "forbidden"),
             (429, "private", "rateLimited"),
+            (503, "private", "unavailable"),
+            (504, "private", "timeout"),
             (200, "{", "malformedResponse"),
+            (200, #"{"model":"gpt-6-luna","answers":false}"#, "invalidResponse"),
             (200, #"{"model":"gpt-6-luna","answers":[]}"#, "invalidResponse"),
             (200, #"{"model":"gpt-6-luna","answers":[{"type":"refusal","name":"group0"}]}"#, "refused"),
             (200, #"{"model":"gpt-6-luna","answers":[{"type":"choice","name":"group0","choice":"p9"}]}"#, "invalidResponse"),
@@ -155,15 +165,69 @@ final class GroceryDecisionTests: XCTestCase {
             _ = try await evaluate(.openAI, input) { _ in throw URLError(.notConnectedToInternet) }
             XCTFail("Expected a network error")
         } catch GroceryDecisionError.network {}
+        do {
+            _ = try await evaluate(.jev, input) { _ in throw URLError(.timedOut) }
+            XCTFail("Expected a timeout")
+        } catch GroceryDecisionError.timeout {}
         XCTAssertEqual(GroceryDecisionClient.retryDelay("120", now: now), 120)
     }
 
-    func testEmptyInputDoesNotReserveOrSendARequest() async throws {
-        let result = try await evaluate(.openAI, context(ShoppingData()), reservations: { XCTFail("Reserved quota") }) { _ in
+    func testEmptyInputDoesNotSendARequest() async throws {
+        let result = try await evaluate(.openAI, context(ShoppingData())) { _ in
             XCTFail("Sent a request")
             return (500, Data())
         }
         XCTAssertTrue(result.isEmpty)
+    }
+
+    func testJevHonorsTemporaryBillingAndProviderCooldowns() async throws {
+        let input = context(fixture())
+        let failures: [(Int, Data)] = [
+            (402, Data(#"{"error":{"code":402,"metadata":{"limit_source":"openrouter_in_flight_budget"}}}"#.utf8)),
+            (503, Data())
+        ]
+        for (status, bytes) in failures {
+            do {
+                _ = try await evaluate(.jev, input, headers: ["Retry-After": "90"]) { _ in (status, bytes) }
+                XCTFail("Expected a temporary provider cooldown")
+            } catch GroceryDecisionError.temporarilyUnavailable(let delay) {
+                XCTAssertEqual(delay, 90)
+            }
+        }
+    }
+
+    func testFailedJevRefreshLeavesCapacityForSuccessfulRetry() async throws {
+        let suite = "decision-usage-tests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let usage = GroceryDecisionUsage(defaults: defaults)
+        defaults.set(Int(now.timeIntervalSince1970 / 86400), forKey: "decisionRequestDay")
+        defaults.set(20, forKey: "decisionRequestCount")
+        for _ in 1..<GroceryDecisionUsage.dailyLimit { usage.recordSavedBatch(at: now) }
+
+        let input = context(fixture())
+        try usage.requireCapacity(at: now)
+        var requests = 0
+        do {
+            _ = try await evaluate(.jev, input, headers: ["Retry-After": "120"]) { _ in
+                requests += 1
+                return (429, Data())
+            }
+            XCTFail("Expected rate limit")
+        } catch GroceryDecisionError.rateLimited(let delay) {
+            XCTAssertEqual(delay, 120)
+        }
+        XCTAssertEqual(requests, 1)
+        try usage.requireCapacity(at: now.addingTimeInterval(120))
+        let ids = try await evaluate(.jev, input) { _ in
+            requests += 1
+            return try self.reply(.jev, choices: ["group0": "p0"])
+        }
+        XCTAssertEqual(ids, input.productIDs)
+        XCTAssertEqual(requests, 2)
+        usage.recordSavedBatch(at: now)
+        XCTAssertThrowsError(try usage.requireCapacity(at: now))
+        XCTAssertNoThrow(try usage.requireCapacity(at: now.addingTimeInterval(86400)))
     }
 
     func testResultSyncRoutingAndTombstone() throws {
@@ -224,15 +288,16 @@ final class GroceryDecisionTests: XCTestCase {
 
     @MainActor
     private func evaluate(_ provider: GroceryDecisionProvider, _ context: GroceryDecisionContext,
-                          reservations: () throws -> Void = {},
+                          headers: [String: String] = [:],
                           mock: @escaping (URLRequest) throws -> (Int, Data)) async throws -> [UUID] {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GroceryDecisionMockProtocol.self]
         let session = URLSession(configuration: configuration)
         GroceryDecisionMockProtocol.respond = mock
+        GroceryDecisionMockProtocol.headers = headers
         defer { session.invalidateAndCancel(); GroceryDecisionMockProtocol.respond = nil }
         return try await GroceryDecisionClient(session: session).evaluate(provider: provider, key: "synthetic-key",
-            context: context, reserveRequest: reservations)
+            context: context)
     }
 
     private func body(of request: URLRequest) throws -> Data {
@@ -274,6 +339,7 @@ final class GroceryDecisionTests: XCTestCase {
 }
 
 private final class GroceryDecisionMockProtocol: URLProtocol {
+    static var headers: [String: String] = [:]
     static var respond: ((URLRequest) throws -> (Int, Data))?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -283,7 +349,7 @@ private final class GroceryDecisionMockProtocol: URLProtocol {
         do {
             let (status, bytes) = try Self.respond!(request)
             let response = HTTPURLResponse(url: request.url!, statusCode: status,
-                httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+                httpVersion: "HTTP/1.1", headerFields: Self.headers.merging(["Content-Type": "application/json"]) { value, _ in value })!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: bytes)
             client?.urlProtocolDidFinishLoading(self)

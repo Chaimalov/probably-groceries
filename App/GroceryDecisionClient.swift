@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if canImport(OSLog)
+import OSLog
+#endif
 
 struct GroceryDecisionClient {
     var session: URLSession
@@ -10,15 +13,13 @@ struct GroceryDecisionClient {
     // the same evidence; a global round compares the winners. Refill only the
     // winning group to retain its next-best product in subsequent rounds.
     @MainActor
-    func evaluate(provider: GroceryDecisionProvider, key: String, context: GroceryDecisionContext,
-                  reserveRequest: () throws -> Void) async throws -> [UUID] {
+    func evaluate(provider: GroceryDecisionProvider, key: String, context: GroceryDecisionContext) async throws -> [UUID] {
         let state = try GroceryDecisionContext.encoder.encode(context.state)
         guard state.count <= 100_000 else { throw GroceryDecisionError.inputTooLarge }
-        let input = String(decoding: state, as: UTF8.self)
         func choose(_ questions: [Question]) async throws -> [String] {
             try Task.checkCancellation()
-            try reserveRequest()
-            return try await ask(provider: provider, key: key, input: input, questions: questions)
+            return try await ask(provider: provider, key: key, state: context.state, encodedState: state,
+                                 questions: questions)
         }
 
         let limit = provider.choiceLimit - 1
@@ -69,8 +70,8 @@ struct GroceryDecisionClient {
         }
     }
 
-    private func ask(provider: GroceryDecisionProvider, key: String, input: String,
-                     questions: [Question]) async throws -> [String] {
+    private func ask(provider: GroceryDecisionProvider, key: String, state: GroceryDecisionContext.State,
+                     encodedState: Data, questions: [Question]) async throws -> [String] {
         let body: Data
         let encoder = GroceryDecisionContext.encoder
         if provider == .openAI {
@@ -79,14 +80,14 @@ struct GroceryDecisionClient {
                 var type = "choice"; var name: String; var instructions: String; var choices: [Choice]
             }
             struct Request: Encodable { var model: String; var input: String; var questions: [WireQuestion] }
-            body = try encoder.encode(Request(model: provider.model, input: input, questions: questions.map { question in
+            body = try encoder.encode(Request(model: provider.model, input: String(decoding: encodedState, as: UTF8.self), questions: questions.map { question in
                 WireQuestion(name: question.name, instructions: question.instructions,
                              choices: question.options.map { Choice(value: $0, description: question.description(for: $0)) })
             }))
         } else {
             struct WireQuestion: Encodable { var type = "choice"; var instructions: String; var criteria: [String: String] }
-            struct Request: Encodable { var model: String; var state: String; var questions: [String: WireQuestion] }
-            body = try encoder.encode(Request(model: provider.model, state: input, questions: Dictionary(uniqueKeysWithValues:
+            struct Request: Encodable { var model: String; var state: GroceryDecisionContext.State; var questions: [String: WireQuestion] }
+            body = try encoder.encode(Request(model: provider.model, state: state, questions: Dictionary(uniqueKeysWithValues:
                 questions.map { question in
                     (question.name, WireQuestion(instructions: question.instructions, criteria: Dictionary(uniqueKeysWithValues:
                         question.options.map { ($0, question.description(for: $0)) })))
@@ -105,26 +106,38 @@ struct GroceryDecisionClient {
             (bytes, response) = try await session.data(for: request)
         } catch {
             try Task.checkCancellation()
-            throw GroceryDecisionError.network
+            let failure: GroceryDecisionError = (error as? URLError)?.code == .timedOut ? .timeout : .network
+            Self.logFailure(failure, provider: provider)
+            throw failure
         }
         guard let http = response as? HTTPURLResponse else { throw GroceryDecisionError.invalidResponse }
-        switch http.statusCode {
-        case 200: break
-        case 401, 403: throw GroceryDecisionError.unauthorized
-        case 429:
-            let header = http.value(forHTTPHeaderField: "Retry-After")
-            throw GroceryDecisionError.rateLimited(Self.retryDelay(header, now: .now))
-        case 413: throw GroceryDecisionError.inputTooLarge
-        case 400...499: throw GroceryDecisionError.rejectedRequest
-        default: throw GroceryDecisionError.unavailable
+        if http.statusCode != 200 {
+            let failure: GroceryDecisionError
+            let retry = Self.retryDelay(http.value(forHTTPHeaderField: "Retry-After"), now: .now)
+            let metadata = Self.metadata(from: bytes)
+            switch http.statusCode {
+            case 401: failure = .unauthorized
+            case 402:
+                failure = metadata?.error?.metadata?.limit_source == "openrouter_in_flight_budget"
+                    ? .temporarilyUnavailable(retry ?? 60) : .credits
+            case 403: failure = .forbidden
+            case 408, 504, 524: failure = .timeout
+            case 429: failure = .rateLimited(retry)
+            case 503, 529: failure = retry.map(GroceryDecisionError.temporarilyUnavailable) ?? .unavailable
+            case 413: failure = .inputTooLarge
+            case 400...499: failure = .rejectedRequest
+            default: failure = .unavailable
+            }
+            Self.logFailure(failure, provider: provider, response: http, bytes: bytes)
+            throw failure
         }
-        guard bytes.count <= 2 * 1024 * 1024 else { throw GroceryDecisionError.invalidResponse }
 
         struct Answer: Decodable { var type: String; var name: String?; var choice: String? }
         struct OpenAIResponse: Decodable { var model: String; var answers: [Answer] }
         struct JevResponse: Decodable { var model: String; var answers: [String: Answer] }
         let decoder = JSONDecoder()
         do {
+            guard bytes.count <= 2 * 1024 * 1024 else { throw GroceryDecisionError.invalidResponse }
             var answers: [String: Answer] = [:]
             if provider == .openAI {
                 let result = try decoder.decode(OpenAIResponse.self, from: bytes)
@@ -155,9 +168,52 @@ struct GroceryDecisionClient {
                 }
                 return choice
             }
-        } catch is DecodingError {
-            throw GroceryDecisionError.malformedResponse
+        } catch {
+            let failure = error as? GroceryDecisionError
+                ?? ((try? JSONSerialization.jsonObject(with: bytes, options: .fragmentsAllowed)) == nil
+                    ? .malformedResponse : .invalidResponse)
+            Self.logFailure(failure, provider: provider, response: http, bytes: bytes)
+            throw failure
         }
+    }
+
+    private struct Metadata: Decodable {
+        struct Failure: Decodable {
+            struct Details: Decodable { var limit_source: String? }
+            let code: String?
+            let metadata: Details?
+
+            private enum Key: String, CodingKey { case code, metadata }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: Key.self)
+                code = (try? container.decode(Int.self, forKey: .code)).map(String.init)
+                    ?? (try? container.decode(String.self, forKey: .code))
+                metadata = try? container.decode(Details.self, forKey: .metadata)
+            }
+        }
+        var id: String?
+        var error: Failure?
+    }
+
+    private static func metadata(from bytes: Data) -> Metadata? {
+        guard bytes.count <= 64 * 1024 else { return nil }
+        return try? JSONDecoder().decode(Metadata.self, from: bytes)
+    }
+
+    private static func logFailure(_ failure: GroceryDecisionError, provider: GroceryDecisionProvider,
+                                   response: HTTPURLResponse? = nil, bytes: Data = Data()) {
+        #if canImport(OSLog)
+        let metadata = metadata(from: bytes)
+        let requestID = response?.value(forHTTPHeaderField: "X-Request-ID")
+            ?? response?.value(forHTTPHeaderField: "X-OpenRouter-Request-ID")
+            ?? response?.value(forHTTPHeaderField: "X-Generation-ID") ?? metadata?.id
+        let category = String(describing: failure).prefix(while: { $0 != "(" })
+        let status = response?.statusCode ?? 0
+        let code = String((metadata?.error?.code ?? "-").prefix(64))
+        Logger(subsystem: "com.chaimalov.probablygroceries", category: "Recommendations")
+            .error("provider=\(provider.rawValue, privacy: .public) status=\(status) code=\(code, privacy: .private) requestID=\(String((requestID ?? "-").prefix(128)), privacy: .private(mask: .hash)) category=\(String(category), privacy: .public)")
+        #endif
     }
 
     static func retryDelay(_ header: String?, now: Date) -> TimeInterval? {
