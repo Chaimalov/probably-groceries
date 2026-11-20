@@ -158,22 +158,53 @@ struct GroceryDecisionContext {
     }
 }
 
+struct GroceryDecisionUsage {
+    static let dailyLimit = 20
+    private let key = "decisionSuccessfulBatchUsage"
+    var defaults: UserDefaults
+
+    func requireCapacity(at now: Date) throws {
+        guard count(at: now) < Self.dailyLimit else { throw GroceryDecisionError.quota }
+    }
+
+    func recordSavedBatch(at now: Date) {
+        defaults.set([day(at: now), count(at: now) + 1], forKey: key)
+    }
+
+    private func count(at now: Date) -> Int {
+        guard let entry = defaults.array(forKey: key) as? [Int],
+              entry.count == 2, entry[0] == day(at: now) else { return 0 }
+        return entry[1]
+    }
+
+    private func day(at now: Date) -> Int {
+        Int(floor(now.timeIntervalSince1970 / 86400))
+    }
+}
+
 enum GroceryDecisionError: Error, LocalizedError {
-    case invalidResponse, malformedResponse, refused, unauthorized, quota, rateLimited(TimeInterval?)
-    case rejectedRequest, inputTooLarge, network, unavailable, keyStorage, invalidKey
+    case invalidResponse, malformedResponse, refused, unauthorized, forbidden, credits, quota, rateLimited(TimeInterval?)
+    case rejectedRequest, inputTooLarge, network, timeout, unavailable, temporarilyUnavailable(TimeInterval), keyStorage, invalidKey
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse: return "התשובה מהספק לא תאמה את הבקשה."
         case .malformedResponse: return "לא הצלחנו לקרוא את התשובה מהספק."
         case .refused: return "הספק לא סיפק החלטה עבור הרשימה."
-        case .unauthorized: return "כדאי לבדוק את מפתח ה־API ואת הגישה למודל אצל הספק."
-        case .quota: return "מכסת הבקשות נוצלה. אפשר לנסות שוב מחר."
-        case .rateLimited: return "הספק הגביל את השימוש. אפשר לנסות שוב מאוחר יותר."
-        case .rejectedRequest: return "הספק דחה את הבקשה. כדאי לבדוק את הגדרות החיבור והחיוב."
+        case .unauthorized: return "הספק לא קיבל את מפתח ה־API. כדאי לבדוק שהוא פעיל ולעדכן אותו בהגדרות."
+        case .forbidden: return "הספק חסם את הגישה. כדאי לבדוק את ההרשאות והגדרות החשבון אצל הספק."
+        case .credits: return "הספק דחה את החיוב. כדאי לבדוק את היתרה ואת מגבלת התקציב של מפתח ה־API."
+        case .quota: return "נוצלה מכסת עדכוני ההמלצות היומית של האפליקציה במכשיר הזה."
+        case .rateLimited(let delay):
+            if let delay, delay >= 60, delay <= 86400 {
+                return "הספק הגביל את קצב הבקשות. אפשר לנסות שוב בעוד כ־\(Int(ceil(delay / 60))) דקות."
+            }
+            return "הספק הגביל את קצב הבקשות. אפשר לנסות שוב מאוחר יותר."
+        case .rejectedRequest: return "הספק דחה את הבקשה. כדאי לבדוק את הגדרות הספק והמודל."
         case .inputTooLarge: return "היסטוריית הקניות גדולה מהמגבלה של הספק."
-        case .network: return "החיבור נקטע. ננסה שוב כשהרשת תהיה זמינה."
-        case .unavailable: return "הספק אינו זמין כרגע. אפשר לנסות שוב מאוחר יותר."
+        case .network: return "החיבור לספק נקטע. כדאי לבדוק את האינטרנט ולרענן שוב."
+        case .timeout: return "הספק לא ענה בזמן. אפשר לרענן שוב."
+        case .unavailable, .temporarilyUnavailable: return "הספק אינו זמין כרגע. אפשר לנסות שוב מאוחר יותר."
         case .keyStorage: return "לא הצלחנו לעדכן את המפתח המאובטח במכשיר."
         case .invalidKey: return "יש להזין מפתח API תקין ללא רווחים."
         }

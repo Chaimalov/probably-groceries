@@ -29,7 +29,7 @@ final class GroceryDecisionService: ObservableObject {
     private weak var resumedStore: ShoppingStore?
     private var connecting = false
     private var lastRequestAt: [UUID: Date] = [:]
-    private var providerRetryAt = Date.distantPast
+    private var providerCooldowns: [GroceryDecisionProvider: (until: Date, rateLimited: Bool)] = [:]
     private let monitor = NWPathMonitor()
     private let defaults = UserDefaults.standard
     private let sponsorID: String
@@ -89,6 +89,9 @@ final class GroceryDecisionService: ObservableObject {
         let listID = store.selectedListID
         if connecting { return "בודק חיבור…" }
         if busy && activeListID == listID { return "מכין המלצות…" }
+        if let provider, sponsors(listID), let error = providerCooldown(for: provider, now: now) {
+            return message(for: error)
+        }
         if let outcome = outcomes[listID], outcome.retryAt > now { return outcome.message }
         let context = GroceryDecisionContext(data: store.data, listID: listID, now: now)
         if let batch = cachedBatch(in: store.data, listID: listID, context: context, now: now) {
@@ -111,15 +114,20 @@ final class GroceryDecisionService: ObservableObject {
         outcomes[listID]?.message
     }
 
-    private func reserveRequest() throws {
-        let day = Int(Date.now.timeIntervalSince1970 / 86400)
-        if defaults.integer(forKey: "decisionRequestDay") != day {
-            defaults.set(day, forKey: "decisionRequestDay"); defaults.set(0, forKey: "decisionRequestCount")
+    private func providerCooldown(for provider: GroceryDecisionProvider, now: Date) -> GroceryDecisionError? {
+        guard let cooldown = providerCooldowns[provider], cooldown.until > now else { return nil }
+        let remaining = cooldown.until.timeIntervalSince(now)
+        return cooldown.rateLimited ? .rateLimited(remaining) : .temporarilyUnavailable(remaining)
+    }
+
+    private func recordProviderCooldown(_ error: Error, provider: GroceryDecisionProvider, now: Date) {
+        switch error as? GroceryDecisionError {
+        case .rateLimited(let delay):
+            providerCooldowns[provider] = (now.addingTimeInterval(max(1, delay ?? 60)), true)
+        case .temporarilyUnavailable(let delay):
+            providerCooldowns[provider] = (now.addingTimeInterval(max(1, delay)), false)
+        default: break
         }
-        let count = defaults.integer(forKey: "decisionRequestCount")
-        guard count < 20 else { throw GroceryDecisionError.quota }
-        // Includes failures and synthetic tests. Never persist the API key here.
-        defaults.set(count + 1, forKey: "decisionRequestCount")
     }
 
     func connect(provider: GroceryDecisionProvider, key text: String, sponsor: String,
@@ -130,7 +138,9 @@ final class GroceryDecisionService: ObservableObject {
             throw GroceryDecisionError.invalidKey
         }
         let listID = store.selectedListID
+        guard !connecting else { throw CancellationError() }
         guard online, store.canGenerateRecommendations(for: listID) else { throw GroceryDecisionError.unavailable }
+        if let error = providerCooldown(for: provider, now: .now) { throw error }
         generation = UUID(); task?.cancel(); task = nil
         activeListID = nil
         let current = generation
@@ -147,7 +157,7 @@ final class GroceryDecisionService: ObservableObject {
             let sample = GroceryDecisionContext(data: ShoppingData(products: [milk], purchases: [purchase]),
                 listID: ShoppingList.defaultID, now: now)
             _ = try await GroceryDecisionClient(session: session).evaluate(provider: provider, key: key,
-                context: sample, reserveRequest: reserveRequest)
+                context: sample)
             try Task.checkCancellation()
             guard generation == current, store.selectedListID == listID,
                   store.canGenerateRecommendations(for: listID) else { throw CancellationError() }
@@ -163,11 +173,12 @@ final class GroceryDecisionService: ObservableObject {
             connection = next; self.provider = provider
             outcomes.removeAll()
             lastRequestAt.removeAll()
-            providerRetryAt = .distantPast
             store.clearDecisionBatches(sponsorID: sponsorID)
             store.enableDecisionRecommendations()
         } catch {
-            if generation == current { outcomes[listID] = Outcome(message: message(for: error)) }
+            if generation == current, !(error is CancellationError) {
+                recordProviderCooldown(error, provider: provider, now: .now)
+            }
             throw error
         }
     }
@@ -190,7 +201,8 @@ final class GroceryDecisionService: ObservableObject {
               store.canGenerateRecommendations(for: listID), online, !connecting, task == nil,
               !ProcessInfo.processInfo.arguments.contains("-ui-testing") else { return }
         let now = Date.now
-        guard providerRetryAt <= now, (outcomes[listID]?.retryAt ?? .distantPast) <= now else { return }
+        guard providerCooldown(for: connection.provider, now: now) == nil else { return }
+        guard force || (outcomes[listID]?.retryAt ?? .distantPast) <= now else { return }
         guard force || now.timeIntervalSince(lastRequestAt[listID] ?? .distantPast) >= 60 else { return }
         let context = GroceryDecisionContext(data: store.data, listID: listID, now: now)
         guard !context.eligible.isEmpty, let revision = digest(context),
@@ -215,15 +227,17 @@ final class GroceryDecisionService: ObservableObject {
                 guard let store, self.isCurrent(store, listID: listID, revision: revision) else { return }
                 self.busy = true
                 self.lastRequestAt[listID] = .now
+                let usage = GroceryDecisionUsage(defaults: self.defaults)
+                try usage.requireCapacity(at: .now)
                 let ids = try await GroceryDecisionClient(session: self.session).evaluate(
-                    provider: connection.provider, key: connection.key, context: context,
-                    reserveRequest: self.reserveRequest)
+                    provider: connection.provider, key: connection.key, context: context)
                 try Task.checkCancellation()
                 guard self.generation == current, self.isCurrent(store, listID: listID, revision: revision) else { return }
                 let saved = store.saveDecisionBatch(GroceryDecisionBatch(listID: listID, revision: revision,
                     generatedAt: .now, provider: connection.provider,
                     sponsor: connection.sponsor.isEmpty ? "שותף ברשימה" : connection.sponsor,
                     sponsorID: self.sponsorID, recommendations: ids, historyRevision: historyRevision))
+                if saved { usage.recordSavedBatch(at: .now) }
                 self.outcomes[listID] = saved
                     ? Outcome(message: ids.isEmpty ? "הספק לא הציע מוצרים הפעם" : "המלצות עודכנו")
                     : Outcome(message: "ההמלצות לא נשמרו במכשיר", retryAt: .now.addingTimeInterval(60))
@@ -231,12 +245,12 @@ final class GroceryDecisionService: ObservableObject {
                 guard self.generation == current else { return }
                 let failures = min(6, (self.outcomes[listID]?.failures ?? 0) + 1)
                 let retry: TimeInterval
+                self.recordProviderCooldown(error, provider: connection.provider, now: .now)
                 switch error as? GroceryDecisionError {
-                case .rateLimited(let delay):
-                    retry = max(60, delay ?? 60 * pow(2, Double(failures)))
-                    self.providerRetryAt = .now.addingTimeInterval(retry)
+                case .rateLimited, .temporarilyUnavailable:
+                    retry = self.providerCooldowns[connection.provider]?.until.timeIntervalSinceNow ?? 60
                 case .quota: retry = 86400 - Date.now.timeIntervalSince1970.truncatingRemainder(dividingBy: 86400)
-                case .unauthorized, .rejectedRequest, .invalidResponse, .malformedResponse, .refused, .inputTooLarge:
+                case .unauthorized, .forbidden, .credits, .rejectedRequest, .invalidResponse, .malformedResponse, .refused, .inputTooLarge:
                     retry = 3600
                 default: retry = 60 * pow(2, Double(failures - 1))
                 }

@@ -47,9 +47,10 @@ struct GroceryDecisionSettings: View {
                     Button("בדיקת חיבור והפעלת המלצות") {
                         testing = true; message = nil
                         operation = Task { @MainActor in
-                            defer { testing = false; key = "" }
+                            defer { testing = false }
                             do {
                                 try await service.connect(provider: provider, key: key, sponsor: sponsor, store: store)
+                                key = ""
                                 service.schedule(store: store)
                                 message = "החיבור נבדק ונשמר."
                             } catch is CancellationError { } catch {
@@ -79,7 +80,7 @@ struct GroceryDecisionSettings: View {
                     Link("ניהול החשבון אצל הספק", destination: provider == .openAI
                          ? URL(string: "https://platform.openai.com/settings/organization/billing/overview")!
                          : URL(string: "https://openrouter.ai/settings/keys")!)
-                    Text("עד 20 בקשות ביום במכשיר, כולל בדיקות חיבור. המכסה הזו אינה מגבלת חיוב כספית אצל הספק.")
+                    Text("עד 20 עדכוני המלצות שנשמרו ביום במכשיר. הספק מחיל בנפרד את מגבלות החיוב והקצב שלו.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
