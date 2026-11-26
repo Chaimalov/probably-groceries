@@ -72,7 +72,7 @@ struct RecipeIngredientImportView: View {
     @State private var selectedIngredients: Set<UUID> = []
     @State private var search = ""
     @State private var unavailable: Availability?
-    @State private var error: String?
+    @State private var importError: String?
 
     private enum Availability: Equatable {
         case appMissing, openRecipes, fileUnavailable
@@ -137,8 +137,8 @@ struct RecipeIngredientImportView: View {
             selectedIngredients = Set(ingredients.filter { !$0.optional && $0.uncertainty.isEmpty }.map(\.id))
         }
         .alert("ייבוא המרכיבים", isPresented: Binding(
-            get: { error != nil }, set: { if !$0 { error = nil } }
-        )) { Button("אישור", role: .cancel) {} } message: { Text(error ?? "") }
+            get: { importError != nil }, set: { if !$0 { importError = nil } }
+        )) { Button("אישור", role: .cancel) {} } message: { Text(importError ?? "") }
     }
 
     private func ingredients(_ entry: RecipeIngredientExchange.Entry) -> some View {
@@ -188,7 +188,7 @@ struct RecipeIngredientImportView: View {
         guard let current = entries.first(where: { $0.id == shown.id }),
               current.updatedAt == shown.updatedAt else {
             selectedIngredients = []
-            error = "המתכון השתנה. בחר שוב את המרכיבים העדכניים."
+            importError = "המתכון השתנה. בחר שוב את המרכיבים העדכניים."
             return
         }
         let chosen = current.ingredients.filter { selectedIngredients.contains($0.id) }
@@ -197,11 +197,11 @@ struct RecipeIngredientImportView: View {
             try store.importRecipeIngredients(chosen, listID: list.id)
             dismiss()
         } catch ShoppingStore.RecipeImportError.incompatibleItem(let name) {
-            error = "\(name) כבר ברשימה בכמות או ביחידה שונה. יש להתאים את הפריט הקיים או לבטל את בחירת המרכיב."
+            importError = "\(name) כבר ברשימה בכמות או ביחידה שונה. יש להתאים את הפריט הקיים או לבטל את בחירת המרכיב."
         } catch ShoppingStore.RecipeImportError.listUnavailable {
-            error = "אין אפשרות להוסיף פריטים לרשימה הזו."
+            importError = "אין אפשרות להוסיף פריטים לרשימה הזו."
         } catch {
-            error = "שמירת המרכיבים נכשלה. אפשר לנסות שוב."
+            importError = "שמירת המרכיבים נכשלה. אפשר לנסות שוב."
         }
     }
 
