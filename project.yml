@@ -26,6 +26,7 @@ targets:
           - CloudKit
         com.apple.security.application-groups:
           - group.com.chaimalov.probablygroceries
+          - group.com.chaimalov.recipes.exchange
     info:
       path: App/Info.plist
       properties:
@@ -37,6 +38,7 @@ targets:
         UILaunchScreen: {}
         NSCameraUsageDescription: צילום מוצר כדי לעזור לזהות אותו ברשימת הקניות
         CKSharingSupported: true
+        LSApplicationQueriesSchemes: [chaimalov-recipes]
         UIBackgroundModes: [remote-notification, fetch]
         CFBundleURLTypes:
           - CFBundleURLSchemes:

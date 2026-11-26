@@ -322,6 +322,55 @@ final class ShoppingStore: ObservableObject {
     }
 
 
+    enum RecipeImportError: Error {
+        case listUnavailable, incompatibleItem(String), saveFailed
+    }
+
+    func importRecipeIngredients(_ ingredients: [RecipeIngredientExchange.Ingredient], listID: UUID) throws {
+        guard voiceWritableLists.contains(where: { $0.id == listID }) else {
+            throw RecipeImportError.listUnavailable
+        }
+        let previous = data
+        let previousJournal = syncJournal
+        var updated = previous
+        var scope = productScope(in: listID)
+        for ingredient in ingredients {
+            let amount = ingredient.shoppingQuantity ?? 1
+            let unit = ingredient.shoppingUnit
+            let normalized = GroceryCapture.normalize(ingredient.name)
+            let product = updated.products.first { scope.contains($0.id) && GroceryCapture.normalize($0.name) == normalized }
+            let existing = updated.items.first { $0.listID == listID && $0.productID == product?.id }
+            if let existing {
+                guard ingredient.shoppingQuantity != nil, existing.unit == unit,
+                      !(unit == nil && !ingredient.unit.isEmpty), existing.quantity <= 9999 - amount else {
+                    throw RecipeImportError.incompatibleItem(ingredient.name)
+                }
+            }
+            guard let item = updated.insertItem(name: ingredient.name, quantity: amount, category: nil,
+                                                department: nil, urgent: false, listID: listID, productScope: scope),
+                  let index = updated.items.firstIndex(where: { $0.id == item.id }) else {
+                throw RecipeImportError.incompatibleItem(ingredient.name)
+            }
+            scope.insert(item.productID)
+            updated.items[index].unit = unit
+            let note = ingredient.shoppingNote
+            if !note.isEmpty && updated.items[index].note != note {
+                updated.items[index].note = [updated.items[index].note, note].compactMap { $0 }.joined(separator: "\n")
+            }
+        }
+        data = updated
+        recordLocalChanges()
+        guard saveLocal() else {
+            data = previous
+            syncJournal = previousJournal
+            throw RecipeImportError.saveFailed
+        }
+        lastJournaledData = data
+        cloudSync.schedule()
+        ProductDecisionService.shared.schedule(store: self)
+        GroceryDecisionService.shared.schedule(store: self)
+    }
+
     func add(_ suggestion: Suggestion) {
         guard canGenerateRecommendations(for: selectedListID),
               let current = suggestions.first(where: { $0.id == suggestion.id }) else { return }
