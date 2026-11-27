@@ -27,6 +27,7 @@ struct ShoppingView: View {
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
     @State private var showingPreparation = false
+    @State private var incomingRecipe: UUID?
     @State private var recipeImportList: ShoppingList?
     @State private var showingSettings = false
     @State private var shareAfterSettings = false
@@ -484,7 +485,14 @@ struct ShoppingView: View {
                     reordering = false
                 }
             }
-            .sheet(item: $recipeImportList) { list in RecipeIngredientImportView(store: store, list: list) }
+            .onOpenURL { url in
+                guard url.scheme == "probablygroceries", url.host == "recipe",
+                      let id = UUID(uuidString: url.lastPathComponent) else { return }
+                openRecipeImport(recipeID: id)
+            }
+            .sheet(item: $recipeImportList) { list in
+                RecipeIngredientImportView(store: store, list: list, incomingRecipe: incomingRecipe)
+            }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
             .sheet(isPresented: $showingSettings, onDismiss: {
@@ -1206,7 +1214,8 @@ if reordering {
         }
     }
 
-    private func openRecipeImport() {
+    private func openRecipeImport(recipeID: UUID? = nil) {
+        incomingRecipe = recipeID
         closeEditor()
         presentation.reset()
         recipeImportList = store.currentList

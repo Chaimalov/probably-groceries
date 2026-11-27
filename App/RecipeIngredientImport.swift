@@ -64,6 +64,7 @@ struct RecipeIngredientExchange: Decodable {
 struct RecipeIngredientImportView: View {
     let store: ShoppingStore
     let list: ShoppingList
+    var incomingRecipe: UUID? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var phase
@@ -131,6 +132,9 @@ struct RecipeIngredientImportView: View {
             }
         }
         .onChange(of: phase, initial: true) { _, state in if state == .active { refresh() } }
+        .onChange(of: incomingRecipe, initial: true) { _, id in
+            if let id { refresh(); selectedRecipe = id }
+        }
         .onChange(of: selectedRecipe) { _, id in
             refresh()
             let ingredients = entries.first(where: { $0.id == id })?.ingredients ?? []
@@ -158,15 +162,16 @@ struct RecipeIngredientImportView: View {
             Button {
                 confirm(entry)
             } label: {
-                Text("הוספת מצרכים")
+                Text("הוספה לרשימה \(list.name) (\(selectedIngredients.count))")
                     .font(.headline)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(.white)
             .buttonBorderShape(.capsule)
-            .tint(Theme.tint(for: list.tintName))
+            .tint(Color(red: 0.16, green: 0.29, blue: 0.20))
             .disabled(selectedIngredients.isDisjoint(with: entry.ingredients.map(\.id)))
             .accessibilityHint("הוספה לרשימת \(list.name)")
             .frame(maxWidth: 540)
