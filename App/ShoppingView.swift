@@ -27,6 +27,8 @@ struct ShoppingView: View {
     @State private var editingNameID: UUID?
     @State private var showingHistory = false
     @State private var showingPreparation = false
+    @State private var incomingRecipe: UUID?
+    @State private var recipeImportList: ShoppingList?
     @State private var showingSettings = false
     @State private var shareAfterSettings = false
     @State private var detailItem: ShoppingItem?
@@ -333,6 +335,10 @@ struct ShoppingView: View {
                                 .buttonBorderShape(.circle)
                                 .tint(listTint)
                                 .accessibilityLabel("הוספת מוצר")
+                                .contextMenu {
+                                    Button("ייבוא מרכיבים ממתכון", systemImage: "book") { openRecipeImport() }
+                                }
+                                .accessibilityAction(named: Text("ייבוא מרכיבים ממתכון")) { openRecipeImport() }
                                 .keyboardShortcut("n", modifiers: .command)
                         }
                         .padding(.horizontal, 20)
@@ -478,6 +484,14 @@ struct ShoppingView: View {
                     selectedItemIDs.removeAll()
                     reordering = false
                 }
+            }
+            .onOpenURL { url in
+                guard url.scheme == "probablygroceries", url.host == "recipe",
+                      let id = UUID(uuidString: url.lastPathComponent) else { return }
+                openRecipeImport(recipeID: id)
+            }
+            .sheet(item: $recipeImportList) { list in
+                RecipeIngredientImportView(store: store, list: list, incomingRecipe: incomingRecipe)
             }
             .sheet(isPresented: $showingPreparation) { ShoppingPreparationView(store: store) }
             .sheet(isPresented: $showingHistory) { PurchaseHistoryView(store: store) }
@@ -1198,6 +1212,13 @@ if reordering {
             isAdding = true; addingToSection = nil; addingAfterID = nil; composerSection = nil; quantityExpanded = false
             requestAddFocus()
         }
+    }
+
+    private func openRecipeImport(recipeID: UUID? = nil) {
+        incomingRecipe = recipeID
+        closeEditor()
+        presentation.reset()
+        recipeImportList = store.currentList
     }
 
     private func addInline(continueAdding: Bool = true) {
